@@ -1,6 +1,11 @@
 package config
 
-import "os"
+import (
+	"os"
+	"path/filepath"
+
+	"github.com/joho/godotenv"
+)
 
 type Config struct {
 	Port      string
@@ -13,9 +18,62 @@ type Config struct {
 	JWTSecret string
 }
 
+func init() {
+	loadEnvFiles()
+}
+
+func loadEnvFiles() {
+	root := findProjectRoot()
+	if root == "" {
+		return
+	}
+
+	loadIfExists := func(name string) {
+		path := filepath.Join(root, name)
+		if _, err := os.Stat(path); err != nil {
+			return
+		}
+		envMap, err := godotenv.Read(path)
+		if err != nil {
+			return
+		}
+		for key, val := range envMap {
+			if os.Getenv(key) == "" {
+				os.Setenv(key, val)
+			}
+		}
+	}
+
+	loadIfExists(".env")
+
+	goEnv := os.Getenv("GO_ENV")
+	if goEnv == "production" {
+		loadIfExists(".env.production")
+	} else {
+		loadIfExists(".env.local")
+	}
+}
+
+func findProjectRoot() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return ""
+		}
+		dir = parent
+	}
+}
+
 func Load() *Config {
 	return &Config{
-		Port:      getEnv("PORT", "5000"),
+		Port:      getEnv("API_PORT", "5000"),
 		DBHost:    getEnv("DB_HOST", "localhost"),
 		DBPort:    getEnv("DB_PORT", "5432"),
 		DBUser:    getEnv("DB_USER", "shakil"),

@@ -8,7 +8,9 @@ export function proxy(request: NextRequest) {
   const basePath = request.nextUrl.basePath || ""
   const token = request.cookies.get("auth_token")?.value
 
-  if (publicPaths.some((p) => pathname.startsWith(p))) {
+  const isPublic = publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))
+
+  if (isPublic) {
     if (token) {
       return NextResponse.redirect(new URL(`${basePath}/`, request.url))
     }

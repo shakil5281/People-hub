@@ -11,3 +11,19 @@
 2026/07/24 12:09:01   /peoplehub/*   → http://localhost:3000 (Next.js)
 2026/07/24 12:09:01   /peoplehub/api/* → http://localhost:5000
 2026/07/24 12:09:01   /contact/* → http://localhost:8082 (IIS)
+2026/07/26 10:49:02 Gateway listening on :8081
+2026/07/26 10:49:02   /people-hub/*   → http://localhost:3050 (Next.js)
+2026/07/26 10:49:02   /people-hub/api/* → http://localhost:5050
+2026/07/26 10:49:02   /contact/* → http://localhost:8082 (IIS)
+2026/07/26 11:18:08 Gateway listening on :8081
+2026/07/26 11:18:08   /people-hub/*   → http://localhost:3050 (Next.js)
+2026/07/26 11:18:08   /people-hub/api/* → http://localhost:5050
+2026/07/26 11:18:08   /contact/* → http://localhost:8082 (IIS)
+2026/07/26 11:42:24 Gateway listening on :8081
+2026/07/26 11:42:24   /people-hub/*   → http://localhost:3050 (Next.js)
+2026/07/26 11:42:24   /people-hub/api/* → http://localhost:5050
+2026/07/26 11:42:24   /contact/* → http://localhost:8082 (IIS)
+2026/07/26 11:44:27 Gateway listening on :8081
+2026/07/26 11:44:27   /people-hub/*   → http://localhost:3050 (Next.js)
+2026/07/26 11:44:27   /people-hub/api/* → http://localhost:5050
+2026/07/26 11:44:27   /contact/* → http://localhost:8082 (IIS)

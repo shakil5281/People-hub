@@ -12,8 +12,9 @@
   <onfailure action="restart" delay="10 sec"/>
   <delayedAutoStart>true</delayedAutoStart>
   <startmode>Automatic</startmode>
-  <env name="PORT" value="3000"/>
+  <env name="PORT" value="3050"/>
+  <env name="HOSTNAME" value="127.0.0.1"/>
   <env name="NODE_ENV" value="production"/>
-  <env name="NEXT_PUBLIC_API_URL" value="http://localhost:5000/api/v1"/>
-  <env name="NEXT_PUBLIC_BASE_PATH" value="/peoplehub"/>
+  <env name="NEXT_PUBLIC_API_URL" value="http://localhost:8081/api/v1"/>
+  <env name="NEXT_PUBLIC_BASE_PATH" value="/people-hub"/>
 </service>

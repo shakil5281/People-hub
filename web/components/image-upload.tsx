@@ -4,6 +4,7 @@ import * as React from "react"
 import { UploadIcon, XIcon, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { uploadApi } from "@/lib/api"
+import { getUploadBaseUrl } from "@/lib/utils"
 
 interface ImageUploadProps {
   value?: string
@@ -45,7 +46,7 @@ export function ImageUpload({ value, onChange, label = "Upload Image", accept = 
     setError("")
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+  const baseUrl = getUploadBaseUrl()
   const imageUrl = value?.startsWith("/uploads") ? `${baseUrl}${value}` : value
 
   return (

@@ -154,3 +154,87 @@
 2026-07-24 11:52:54,712 INFO  - Starting F:\\softwer\\hrhub\peoplehub.exe 
 2026-07-24 11:52:54,749 INFO  - Started process 6676
 2026-07-24 11:52:54,763 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 10:47:31,377 DEBUG - Starting WinSW in console mode
+2026-07-26 10:47:39,653 DEBUG - Starting WinSW in console mode
+2026-07-26 10:47:39,711 INFO  - Installing service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 10:47:39,811 INFO  - Service 'PeopleHub API Server (PeopleHubAPI)' was installed successfully.
+2026-07-26 10:48:44,481 DEBUG - Starting WinSW in console mode
+2026-07-26 10:48:48,724 DEBUG - Starting WinSW in console mode
+2026-07-26 10:48:48,782 INFO  - Starting service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 10:48:49,306 DEBUG - Starting WinSW in service mode
+2026-07-26 10:48:49,351 INFO  - Service 'PeopleHub API Server (PeopleHubAPI)' started successfully.
+2026-07-26 10:48:49,590 INFO  - Starting G:\\softwer\\People-hub\peoplehub.exe 
+2026-07-26 10:48:49,723 INFO  - Started process 3748
+2026-07-26 10:48:49,738 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:17:53,912 DEBUG - Starting WinSW in console mode
+2026-07-26 11:17:58,390 DEBUG - Starting WinSW in console mode
+2026-07-26 11:17:58,455 INFO  - Stopping service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:17:58,639 INFO  - Stopping PeopleHubAPI
+2026-07-26 11:17:58,639 DEBUG - ProcessKill 3748
+2026-07-26 11:17:58,644 DEBUG - Stopping process 3748...
+2026-07-26 11:17:58,685 DEBUG - Process 3748 canceled with code 0.
+2026-07-26 11:17:58,690 INFO  - Finished PeopleHubAPI
+2026-07-26 11:17:58,903 INFO  - Starting service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:17:59,392 DEBUG - Starting WinSW in service mode
+2026-07-26 11:17:59,586 INFO  - Starting G:\\softwer\\People-hub\peoplehub.exe 
+2026-07-26 11:17:59,636 INFO  - Started process 15940
+2026-07-26 11:17:59,650 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:17:59,701 INFO  - Service 'PeopleHub API Server (PeopleHubAPI)' restarted successfully.
+2026-07-26 11:34:53,465 DEBUG - Starting WinSW in console mode
+2026-07-26 11:34:55,896 DEBUG - Starting WinSW in console mode
+2026-07-26 11:34:55,975 INFO  - Stopping service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:34:56,149 INFO  - Stopping PeopleHubAPI
+2026-07-26 11:34:56,150 DEBUG - ProcessKill 15940
+2026-07-26 11:34:56,155 DEBUG - Stopping process 15940...
+2026-07-26 11:34:56,246 DEBUG - Process 15940 canceled with code 0.
+2026-07-26 11:34:56,252 INFO  - Finished PeopleHubAPI
+2026-07-26 11:34:56,405 INFO  - Starting service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:34:56,922 DEBUG - Starting WinSW in service mode
+2026-07-26 11:34:57,121 INFO  - Starting G:\\softwer\\People-hub\peoplehub.exe 
+2026-07-26 11:34:58,785 INFO  - Started process 10568
+2026-07-26 11:34:58,800 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:34:59,048 INFO  - Service 'PeopleHub API Server (PeopleHubAPI)' restarted successfully.
+2026-07-26 11:36:25,580 DEBUG - Starting WinSW in console mode
+2026-07-26 11:36:27,726 FATAL - An error occurred trying to start process 'G:\softwer\People-hub\deploy\PeopleHubAPI-service.exe' with working directory 'G:\softwer\People-hub'. The operation was canceled by the user.
+2026-07-26 11:39:14,396 DEBUG - Starting WinSW in console mode
+2026-07-26 11:39:17,171 DEBUG - Starting WinSW in console mode
+2026-07-26 11:39:17,250 INFO  - Stopping service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:39:17,307 INFO  - Stopping PeopleHubAPI
+2026-07-26 11:39:17,308 DEBUG - ProcessKill 10568
+2026-07-26 11:39:17,311 DEBUG - Stopping process 10568...
+2026-07-26 11:39:17,365 DEBUG - Process 10568 canceled with code 0.
+2026-07-26 11:39:17,372 INFO  - Finished PeopleHubAPI
+2026-07-26 11:39:17,576 INFO  - Starting service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:39:18,089 DEBUG - Starting WinSW in service mode
+2026-07-26 11:39:18,287 INFO  - Starting G:\\softwer\\People-hub\peoplehub.exe 
+2026-07-26 11:39:20,016 INFO  - Started process 14628
+2026-07-26 11:39:20,032 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:39:20,188 INFO  - Service 'PeopleHub API Server (PeopleHubAPI)' restarted successfully.
+2026-07-26 11:41:56,047 DEBUG - Starting WinSW in console mode
+2026-07-26 11:42:09,750 DEBUG - Starting WinSW in console mode
+2026-07-26 11:42:09,825 INFO  - Stopping service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:42:09,870 INFO  - Stopping PeopleHubAPI
+2026-07-26 11:42:09,871 DEBUG - ProcessKill 14628
+2026-07-26 11:42:09,874 DEBUG - Stopping process 14628...
+2026-07-26 11:42:09,918 DEBUG - Process 14628 canceled with code 0.
+2026-07-26 11:42:09,924 INFO  - Finished PeopleHubAPI
+2026-07-26 11:42:10,131 INFO  - Starting service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:42:10,668 DEBUG - Starting WinSW in service mode
+2026-07-26 11:42:10,857 INFO  - Starting G:\\softwer\\People-hub\peoplehub.exe 
+2026-07-26 11:42:10,943 INFO  - Started process 12136
+2026-07-26 11:42:10,958 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:42:10,967 INFO  - Service 'PeopleHub API Server (PeopleHubAPI)' restarted successfully.
+2026-07-26 11:44:15,891 DEBUG - Starting WinSW in console mode
+2026-07-26 11:44:18,825 DEBUG - Starting WinSW in console mode
+2026-07-26 11:44:18,892 INFO  - Stopping service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:44:18,941 INFO  - Stopping PeopleHubAPI
+2026-07-26 11:44:18,941 DEBUG - ProcessKill 12136
+2026-07-26 11:44:18,945 DEBUG - Stopping process 12136...
+2026-07-26 11:44:19,189 DEBUG - Process 12136 canceled with code 0.
+2026-07-26 11:44:19,194 INFO  - Finished PeopleHubAPI
+2026-07-26 11:44:19,208 INFO  - Starting service 'PeopleHub API Server (PeopleHubAPI)'...
+2026-07-26 11:44:19,720 DEBUG - Starting WinSW in service mode
+2026-07-26 11:44:19,947 INFO  - Starting G:\\softwer\\People-hub\peoplehub.exe 
+2026-07-26 11:44:19,999 INFO  - Started process 2432
+2026-07-26 11:44:20,015 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:44:20,300 INFO  - Service 'PeopleHub API Server (PeopleHubAPI)' restarted successfully.

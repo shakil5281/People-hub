@@ -4,6 +4,7 @@
 .DESCRIPTION
   This script builds the Go backend, Next.js frontend, and a Go reverse proxy gateway,
   then configures IIS, installs WinSW services, and starts everything.
+  SAFETY: Does NOT stop/remove Default Web Site or existing IIS app pools on port 80.
 .PARAMETER NoIIS
   Skip IIS configuration
 .PARAMETER NoServices
@@ -24,7 +25,7 @@ $BINARY = "$ROOT\peoplehub.exe"
 $GATEWAY = "$ROOT\peoplehub-gateway.exe"
 $DEPLOY = "$ROOT\deploy"
 $WWWROOT = "$ROOT\wwwroot"
-$WINSW_URL = "https://github.com/winsw/winsw/releases/download/v3.1.0/WinSW-x64.exe"
+$WINSW_URL = "https://github.com/winsw/winsw/releases/download/v2.12.0/WinSW-x64.exe"
 $WINSW_EXE = "$DEPLOY\WinSW-x64.exe"
 
 # --- 1. Prerequisites --------------------------------------------------------
@@ -53,7 +54,7 @@ if (-not $psql) { Write-Warning "  psql not in PATH. Ensure PostgreSQL is runnin
 # IIS
 $iis = Get-Service W3SVC -ErrorAction SilentlyContinue
 if ($iis -and $iis.Status -eq "Running") {
-  Write-Host "  IIS: Running"
+  Write-Host "  IIS: Running (WARNING: Default Web Site on :80 will NOT be modified)"
 } else {
   Write-Warning "  IIS W3SVC is not running."
 }
@@ -76,6 +77,7 @@ if ($rewriteModule) {
 }
 
 # --- 1.5 Clean Old Binaries --------------------------------------------------
+Write-Host "`n=== Cleaning Old Binaries ===" -ForegroundColor Cyan
 $oldBinaries = @(
     "$ROOT\hrhub.exe",
     "$ROOT\hub.exe",
@@ -88,13 +90,7 @@ foreach ($f in $oldBinaries) {
     if (Test-Path $f) { Remove-Item $f -Force; Write-Host "  Removed old: $(Split-Path $f -Leaf)" }
 }
 
-# Remove old IIS sites and services
-@("ERPHub", "HubSite") | ForEach-Object {
-    $site = Get-Website -Name $_ -ErrorAction SilentlyContinue
-    if ($site) { Remove-Website -Name $_; Write-Host "  Removed old IIS site: $_" }
-}
-
-# Stop and remove old services
+# Clean old Hub-renamed services (HubAPI, HubWeb, HubGateway) if lingering
 @("HubAPI", "HubWeb", "HubGateway") | ForEach-Object {
     $svc = Get-Service $_ -ErrorAction SilentlyContinue
     if ($svc) {
@@ -103,6 +99,10 @@ foreach ($f in $oldBinaries) {
         Write-Host "  Removed old service: $_"
     }
 }
+
+# NOTE: We do NOT remove any IIS sites or app pools. Default Web Site on port 80
+#       and all existing app pools (contactDB, ERPHubPool, HRMSAppPool, HubAppPool)
+#       are left untouched for production coexistence.
 
 # --- 2. Build ----------------------------------------------------------------
 if (-not $SkipBuild) {
@@ -119,7 +119,8 @@ if (-not $SkipBuild) {
 
   Write-Host "`n=== Building Frontend (Next.js) ===" -ForegroundColor Cyan
   Set-Location "$ROOT\web"
-  $env:NEXT_PUBLIC_BASE_PATH = "/peoplehub"
+  $env:NEXT_PUBLIC_BASE_PATH = "/people-hub"
+  $env:NEXT_PUBLIC_API_URL = "http://localhost:8081/api/v1"
   npm install --silent 2>$null
   npm run build
   if ($LASTEXITCODE -ne 0) { Write-Error "Frontend build failed"; return }
@@ -159,7 +160,7 @@ if (-not $NoServices) {
     Invoke-WebRequest -Uri $WINSW_URL -OutFile $WINSW_EXE -UseBasicParsing
   }
 
-  # Stop existing services if any
+  # Stop existing PeopleHub services if running (prep for reinstall)
   @("PeopleHubAPI", "PeopleHubWeb", "PeopleHubGateway") | ForEach-Object {
     $svc = Get-Service $_ -ErrorAction SilentlyContinue
     if ($svc -and $svc.Status -eq "Running") {
@@ -179,7 +180,7 @@ if (-not $NoServices) {
     $svcExe = "$DEPLOY\$($svc.Name)-service.exe"
     $svcXml = "$DEPLOY\$($svc.Xml)"
 
-    # Remove old service if exists
+    # Remove old service if exists (clean install)
     $existing = Get-Service $svc.Name -ErrorAction SilentlyContinue
     if ($existing) {
       sc.exe delete $svc.Name 2>$null
@@ -214,48 +215,42 @@ if (-not $NoServices) {
   Write-Host "`n=== Skipping Service Installation ===" -ForegroundColor Yellow
 }
 
-# --- 4. IIS Configuration ---------------------------------------------------
+# --- 4. IIS Configuration (SAFE: Does NOT touch existing IIS sites/pools) ---
 if (-not $NoIIS) {
   Write-Host "`n=== Configuring IIS ===" -ForegroundColor Cyan
 
   Import-Module WebAdministration -Force -ErrorAction SilentlyContinue
 
-  # Stop Default Web Site if using port 80 (gateway handles port 80 now)
-  $defaultSite = Get-Website -Name "Default Web Site" -ErrorAction SilentlyContinue
-  if ($defaultSite) {
-    $defaultBindings = $defaultSite.bindings.Collection
-    $hasPort80 = $defaultBindings | Where-Object { $_.bindingInformation -match ":80:" }
-    if ($hasPort80 -and (Get-Service -Name PeopleHubGateway -ErrorAction SilentlyContinue).Status -eq "Running") {
-      Write-Host "  Stopping Default Web Site (port 80 used by gateway)..."
-      Stop-Website -Name "Default Web Site"
-    }
-  }
+  # ===== CRITICAL: Default Web Site (port 80) is NOT modified =====
+  # Other production apps run on it. PeopleHub uses its own port 8081 gateway.
+  Write-Host "  Default Web Site on :80 preserved (other production apps)."
+  Write-Host "  Existing App Pools preserved (contactDB, ERPHubPool, HRMSAppPool, HubAppPool)."
 
   # Create PeopleHub App Pool
   $appPoolName = "PeopleHubAppPool"
   $existingPool = Get-ChildItem "IIS:\AppPools\$appPoolName" -ErrorAction SilentlyContinue
   if (-not $existingPool) {
     New-Item "IIS:\AppPools\$appPoolName" -Force | Out-Null
-    Set-ItemProperty "IIS:\AppPools\$appPoolName" -Name managedRuntimeVersion -Value ""
-    Set-ItemProperty "IIS:\AppPools\$appPoolName" -Name startMode -Value "AlwaysRunning"
     Write-Host "  App Pool '$appPoolName' created."
   } else {
     Write-Host "  App Pool '$appPoolName' already exists."
   }
+  Set-ItemProperty "IIS:\AppPools\$appPoolName" -Name managedRuntimeVersion -Value ""
+  Set-ItemProperty "IIS:\AppPools\$appPoolName" -Name startMode -Value "AlwaysRunning"
 
-  # Create/Update PeopleHub Site on port 8081
+  # Create/Update PeopleHub IIS site on port 8083 (admin/status page only)
+  # Main traffic routes through the Go gateway on :8081
   $siteName = "PeopleHubSite"
   $existingSite = Get-Website -Name $siteName -ErrorAction SilentlyContinue
   if (-not $existingSite) {
-    New-Website -Name $siteName -PhysicalPath $WWWROOT -Port 8081 -ApplicationPool $appPoolName -Force
-    Write-Host "  Site '$siteName' created on :8081."
+    New-Website -Name $siteName -PhysicalPath $WWWROOT -Port 8083 -ApplicationPool $appPoolName -Force
+    Write-Host "  Site '$siteName' created on :8083 (admin/status)."
   } else {
     Set-ItemProperty "IIS:\Sites\$siteName" -Name physicalPath -Value $WWWROOT
     Set-ItemProperty "IIS:\Sites\$siteName" -Name applicationPool -Value $appPoolName
     Write-Host "  Site '$siteName' updated."
   }
 
-  # Start the site
   Start-Website -Name $siteName
 
   Write-Host "  IIS Configuration complete." -ForegroundColor Green
@@ -265,29 +260,35 @@ if (-not $NoIIS) {
 
 # --- 5. Firewall Rules ------------------------------------------------------
 Write-Host "`n=== Configuring Firewall ===" -ForegroundColor Cyan
-$fwRuleName = "PeopleHub-Gateway-80"
+$fwRuleName = "PeopleHub-Gateway-8081"
 $existingRule = netsh advfirewall firewall show rule name="$fwRuleName" 2>$null
 if (-not $existingRule) {
-  netsh advfirewall firewall add rule name="$fwRuleName" dir=in action=allow protocol=TCP localport=80 profile=any
-  Write-Host "  Firewall rule '$fwRuleName' created."
+  netsh advfirewall firewall add rule name="$fwRuleName" dir=in action=allow protocol=TCP localport=8081 profile=any
+  Write-Host "  Firewall rule '$fwRuleName' created for port 8081."
 } else {
   Write-Host "  Firewall rule '$fwRuleName' already exists."
 }
+
+# Remove old port-80 firewall rule if exists (no longer needed, port 80 is for Default Web Site)
+netsh advfirewall firewall delete rule name="PeopleHub-Gateway-80" 2>$null
 
 # --- 6. Summary ---------------------------------------------------------------
 Write-Host "`n============================================" -ForegroundColor Green
 Write-Host "  PeopleHub Deployment Complete!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
-Write-Host "  Frontend:  http://localhost:80/peoplehub/ (via gateway)"
-Write-Host "  API:       http://localhost:80/peoplehub/api/v1 (-> :5000)"
-Write-Host "  Swagger:   http://localhost:80/peoplehub/swagger/index.html"
-Write-Host "  IIS Admin: http://localhost:8081"
+Write-Host "  Frontend:  http://localhost:8081/people-hub (via gateway)"
+Write-Host "  API:       http://localhost:8081/api/v1 (gateway → :5050)"
+Write-Host "  Swagger:   http://localhost:8081/swagger/index.html"
+Write-Host "  Health:    http://localhost:8081/health"
+Write-Host ""
+Write-Host "  IIS Admin Status: http://localhost:8083 (PeopleHub status page)"
+Write-Host "  Default Web Site: http://localhost:80 (unchanged, other apps)"
 Write-Host ""
 Write-Host "  Services:"
-Write-Host "    PeopleHubAPI     -> $ROOT\peoplehub.exe"
-Write-Host "    PeopleHubWeb     -> Next.js on port 3000"
-Write-Host "    PeopleHubGateway -> $ROOT\peoplehub-gateway.exe on port 80"
+Write-Host "    PeopleHubAPI     -> $ROOT\peoplehub.exe                (:5050)"
+Write-Host "    PeopleHubWeb     -> Next.js on port 3050              (:3050)"
+Write-Host "    PeopleHubGateway -> $ROOT\peoplehub-gateway.exe       (:8081)"
 Write-Host ""
-Write-Host "  Logs: $DEPLOY\*.log"
+Write-Host "  Logs: $DEPLOY\PeopleHub*-service.*.log"
 Write-Host "============================================" -ForegroundColor Green

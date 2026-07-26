@@ -2,8 +2,8 @@
   <id>PeopleHubAPI</id>
   <name>PeopleHub API Server</name>
   <description>PeopleHub Go Backend API Server</description>
-  <executable>F:\\softwer\\hrhub\peoplehub.exe</executable>
-  <workingdirectory>F:\\softwer\\hrhub</workingdirectory>
+  <executable>G:\\softwer\\People-hub\peoplehub.exe</executable>
+  <workingdirectory>G:\\softwer\\People-hub</workingdirectory>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>8</keepFiles>
@@ -11,7 +11,7 @@
   <onfailure action="restart" delay="10 sec"/>
   <delayedAutoStart>true</delayedAutoStart>
   <startmode>Automatic</startmode>
-  <env name="PORT" value="5000"/>
+  <env name="API_PORT" value="5050"/>
   <env name="DB_HOST" value="localhost"/>
   <env name="DB_PORT" value="5432"/>
   <env name="DB_USER" value="shakil"/>
@@ -19,5 +19,6 @@
   <env name="DB_NAME" value="hrhub"/>
   <env name="DB_SSLMODE" value="disable"/>
   <env name="JWT_SECRET" value="peoplehub-secret-key-change-in-production-2025"/>
-  <prestart-command>powershell -Command "if (-not (Test-Path 'F:\\softwer\\hrhub\uploads')) { New-Item -ItemType Directory -Path 'F:\\softwer\\hrhub\uploads' -Force }"</prestart-command>
+  <env name="GO_ENV" value="production"/>
+  <prestart-command>powershell -Command "if (-not (Test-Path 'G:\\softwer\\People-hub\uploads')) { New-Item -ItemType Directory -Path 'G:\\softwer\\People-hub\uploads' -Force }"</prestart-command>
 </service>

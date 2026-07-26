@@ -11,7 +11,7 @@
   <onfailure action="restart" delay="10 sec"/>
   <delayedAutoStart>true</delayedAutoStart>
   <startmode>Automatic</startmode>
-  <env name="PORT" value="5000"/>
+  <env name="API_PORT" value="5050"/>
   <env name="DB_HOST" value="localhost"/>
   <env name="DB_PORT" value="5432"/>
   <env name="DB_USER" value="shakil"/>
@@ -19,5 +19,6 @@
   <env name="DB_NAME" value="hrhub"/>
   <env name="DB_SSLMODE" value="disable"/>
   <env name="JWT_SECRET" value="peoplehub-secret-key-change-in-production-2025"/>
+  <env name="GO_ENV" value="production"/>
   <prestart-command>powershell -Command "if (-not (Test-Path '%BASE%\uploads')) { New-Item -ItemType Directory -Path '%BASE%\uploads' -Force }"</prestart-command>
 </service>

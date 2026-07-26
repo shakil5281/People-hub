@@ -23,3 +23,56 @@
 2026-07-24 12:09:00,656 INFO  - Starting F:\\softwer\\hrhub\peoplehub-gateway.exe 
 2026-07-24 12:09:01,247 INFO  - Started process 14888
 2026-07-24 12:09:01,263 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub-gateway) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 10:48:02,317 DEBUG - Starting WinSW in console mode
+2026-07-26 10:48:08,324 DEBUG - Starting WinSW in console mode
+2026-07-26 10:48:08,381 INFO  - Installing service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)'...
+2026-07-26 10:48:08,484 INFO  - Service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)' was installed successfully.
+2026-07-26 10:48:59,515 DEBUG - Starting WinSW in console mode
+2026-07-26 10:49:01,951 DEBUG - Starting WinSW in console mode
+2026-07-26 10:49:02,025 INFO  - Starting service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)'...
+2026-07-26 10:49:02,640 DEBUG - Starting WinSW in service mode
+2026-07-26 10:49:02,688 INFO  - Service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)' started successfully.
+2026-07-26 10:49:02,859 INFO  - Starting G:\\softwer\\People-hub\peoplehub-gateway.exe 
+2026-07-26 10:49:02,926 INFO  - Started process 12076
+2026-07-26 10:49:02,942 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub-gateway) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:18:03,544 DEBUG - Starting WinSW in console mode
+2026-07-26 11:18:06,886 DEBUG - Starting WinSW in console mode
+2026-07-26 11:18:06,954 INFO  - Stopping service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)'...
+2026-07-26 11:18:07,279 INFO  - Stopping PeopleHubGateway
+2026-07-26 11:18:07,280 DEBUG - ProcessKill 12076
+2026-07-26 11:18:07,285 DEBUG - Stopping process 12076...
+2026-07-26 11:18:07,295 INFO  - Finished PeopleHubGateway
+2026-07-26 11:18:07,535 INFO  - Starting service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)'...
+2026-07-26 11:18:08,017 DEBUG - Starting WinSW in service mode
+2026-07-26 11:18:08,234 INFO  - Starting G:\\softwer\\People-hub\peoplehub-gateway.exe 
+2026-07-26 11:18:08,356 INFO  - Started process 6844
+2026-07-26 11:18:08,371 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub-gateway) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:18:08,580 INFO  - Service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)' restarted successfully.
+2026-07-26 11:42:15,047 DEBUG - Starting WinSW in console mode
+2026-07-26 11:42:22,861 DEBUG - Starting WinSW in console mode
+2026-07-26 11:42:22,933 INFO  - Stopping service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)'...
+2026-07-26 11:42:23,007 INFO  - Stopping PeopleHubGateway
+2026-07-26 11:42:23,009 DEBUG - ProcessKill 6844
+2026-07-26 11:42:23,014 DEBUG - Stopping process 6844...
+2026-07-26 11:42:23,053 DEBUG - Process 6844 canceled with code -1073741510.
+2026-07-26 11:42:23,058 INFO  - Finished PeopleHubGateway
+2026-07-26 11:42:23,260 INFO  - Starting service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)'...
+2026-07-26 11:42:23,810 DEBUG - Starting WinSW in service mode
+2026-07-26 11:42:24,001 INFO  - Starting G:\\softwer\\People-hub\peoplehub-gateway.exe 
+2026-07-26 11:42:24,053 INFO  - Started process 7116
+2026-07-26 11:42:24,068 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub-gateway) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:42:24,109 INFO  - Service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)' restarted successfully.
+2026-07-26 11:44:23,851 DEBUG - Starting WinSW in console mode
+2026-07-26 11:44:25,875 DEBUG - Starting WinSW in console mode
+2026-07-26 11:44:25,955 INFO  - Stopping service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)'...
+2026-07-26 11:44:26,025 INFO  - Stopping PeopleHubGateway
+2026-07-26 11:44:26,025 DEBUG - ProcessKill 7116
+2026-07-26 11:44:26,030 DEBUG - Stopping process 7116...
+2026-07-26 11:44:26,038 DEBUG - Process 7116 canceled with code -1073741510.
+2026-07-26 11:44:26,059 INFO  - Finished PeopleHubGateway
+2026-07-26 11:44:26,285 INFO  - Starting service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)'...
+2026-07-26 11:44:26,806 DEBUG - Starting WinSW in service mode
+2026-07-26 11:44:27,105 INFO  - Starting G:\\softwer\\People-hub\peoplehub-gateway.exe 
+2026-07-26 11:44:27,144 INFO  - Started process 9592
+2026-07-26 11:44:27,161 DEBUG - Forwarding logs of the process System.Diagnostics.Process (peoplehub-gateway) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:44:27,378 INFO  - Service 'PeopleHub Gateway (Reverse Proxy) (PeopleHubGateway)' restarted successfully.

@@ -1,9 +1,9 @@
 <service>
   <id>PeopleHubGateway</id>
   <name>PeopleHub Gateway (Reverse Proxy)</name>
-  <description>Reverse proxy routing /peoplehub/* to backend and frontend</description>
-  <executable>F:\\softwer\\hrhub\peoplehub-gateway.exe</executable>
-  <workingdirectory>F:\\softwer\\hrhub</workingdirectory>
+  <description>Reverse proxy routing PeopleHub traffic on port 8081</description>
+  <executable>G:\\softwer\\People-hub\peoplehub-gateway.exe</executable>
+  <workingdirectory>G:\\softwer\\People-hub</workingdirectory>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>8</keepFiles>
@@ -11,8 +11,8 @@
   <onfailure action="restart" delay="10 sec"/>
   <delayedAutoStart>true</delayedAutoStart>
   <startmode>Automatic</startmode>
-  <env name="GATEWAY_PORT" value="80"/>
-  <env name="API_TARGET" value="http://localhost:5000"/>
-  <env name="WEB_TARGET" value="http://localhost:3000"/>
+  <env name="GATEWAY_PORT" value="8081"/>
+  <env name="API_TARGET" value="http://localhost:5050"/>
+  <env name="WEB_TARGET" value="http://localhost:3050"/>
   <env name="IIS_TARGET" value="http://localhost:8082"/>
 </service>

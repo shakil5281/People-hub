@@ -56,3 +56,82 @@ System.ComponentModel.Win32Exception (6): The handle is invalid.
 2026-07-24 12:07:31,349 INFO  - Starting node F:\\softwer\\hrhub\web\build\standalone\server.js
 2026-07-24 12:07:31,391 INFO  - Started process 13804
 2026-07-24 12:07:31,407 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 10:47:43,274 DEBUG - Starting WinSW in console mode
+2026-07-26 10:47:58,694 DEBUG - Starting WinSW in console mode
+2026-07-26 10:47:58,751 INFO  - Installing service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 10:47:58,838 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' was installed successfully.
+2026-07-26 10:48:52,026 DEBUG - Starting WinSW in console mode
+2026-07-26 10:48:56,172 DEBUG - Starting WinSW in console mode
+2026-07-26 10:48:56,238 INFO  - Starting service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 10:48:56,801 DEBUG - Starting WinSW in service mode
+2026-07-26 10:48:56,850 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' started successfully.
+2026-07-26 10:48:57,095 INFO  - Starting node G:\\softwer\\People-hub\web\build\standalone\server.js
+2026-07-26 10:48:57,138 INFO  - Started process 11760
+2026-07-26 10:48:57,154 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 10:55:32,434 DEBUG - Starting WinSW in console mode
+2026-07-26 10:55:38,902 DEBUG - Starting WinSW in console mode
+2026-07-26 10:55:38,962 INFO  - Stopping service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 10:55:39,013 INFO  - Stopping PeopleHubWeb
+2026-07-26 10:55:39,013 DEBUG - ProcessKill 11760
+2026-07-26 10:55:39,012 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' stopped successfully.
+2026-07-26 10:55:39,017 DEBUG - Stopping process 11760...
+2026-07-26 10:55:39,060 DEBUG - Process 11760 canceled with code 130.
+2026-07-26 10:55:39,065 INFO  - Finished PeopleHubWeb
+2026-07-26 10:57:18,280 DEBUG - Starting WinSW in console mode
+2026-07-26 10:57:22,110 DEBUG - Starting WinSW in console mode
+2026-07-26 10:57:22,174 INFO  - Starting service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 10:57:22,739 DEBUG - Starting WinSW in service mode
+2026-07-26 10:57:22,784 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' started successfully.
+2026-07-26 10:57:22,956 INFO  - Starting node G:\\softwer\\People-hub\web\build\standalone\server.js
+2026-07-26 10:57:22,995 INFO  - Started process 3552
+2026-07-26 10:57:23,011 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:16:18,970 DEBUG - Starting WinSW in console mode
+2026-07-26 11:16:24,305 DEBUG - Starting WinSW in console mode
+2026-07-26 11:16:24,365 INFO  - Stopping service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 11:16:24,415 INFO  - Stopping PeopleHubWeb
+2026-07-26 11:16:24,416 DEBUG - ProcessKill 3552
+2026-07-26 11:16:24,413 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' stopped successfully.
+2026-07-26 11:16:24,420 DEBUG - Stopping process 3552...
+2026-07-26 11:16:24,545 DEBUG - Process 3552 canceled with code 130.
+2026-07-26 11:16:24,550 INFO  - Finished PeopleHubWeb
+2026-07-26 11:18:11,558 DEBUG - Starting WinSW in console mode
+2026-07-26 11:18:14,619 DEBUG - Starting WinSW in console mode
+2026-07-26 11:18:14,688 INFO  - Starting service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 11:18:15,217 DEBUG - Starting WinSW in service mode
+2026-07-26 11:18:15,260 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' started successfully.
+2026-07-26 11:18:15,413 INFO  - Starting node G:\\softwer\\People-hub\web\build\standalone\server.js
+2026-07-26 11:18:15,452 INFO  - Started process 4080
+2026-07-26 11:18:15,469 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:24:36,913 DEBUG - Starting WinSW in console mode
+2026-07-26 11:24:40,902 DEBUG - Starting WinSW in console mode
+2026-07-26 11:24:40,985 INFO  - Stopping service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 11:24:41,145 INFO  - Stopping PeopleHubWeb
+2026-07-26 11:24:41,145 DEBUG - ProcessKill 4080
+2026-07-26 11:24:41,149 DEBUG - Stopping process 4080...
+2026-07-26 11:24:41,195 DEBUG - Process 4080 canceled with code 130.
+2026-07-26 11:24:41,201 INFO  - Finished PeopleHubWeb
+2026-07-26 11:28:14,467 DEBUG - Starting WinSW in console mode
+2026-07-26 11:28:17,407 DEBUG - Starting WinSW in console mode
+2026-07-26 11:28:17,508 INFO  - Starting service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 11:28:18,261 DEBUG - Starting WinSW in service mode
+2026-07-26 11:28:18,328 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' started successfully.
+2026-07-26 11:28:18,556 INFO  - Starting node G:\\softwer\\People-hub\web\build\standalone\server.js
+2026-07-26 11:28:18,612 INFO  - Started process 12164
+2026-07-26 11:28:18,637 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.SizeBasedRollingLogAppender
+2026-07-26 11:40:25,459 DEBUG - Starting WinSW in console mode
+2026-07-26 11:40:29,977 DEBUG - Starting WinSW in console mode
+2026-07-26 11:40:30,050 INFO  - Stopping service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 11:40:30,109 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' stopped successfully.
+2026-07-26 11:40:30,112 INFO  - Stopping PeopleHubWeb
+2026-07-26 11:40:30,113 DEBUG - ProcessKill 12164
+2026-07-26 11:40:30,118 DEBUG - Stopping process 12164...
+2026-07-26 11:40:30,178 DEBUG - Process 12164 canceled with code 130.
+2026-07-26 11:40:30,184 INFO  - Finished PeopleHubWeb
+2026-07-26 11:42:26,644 DEBUG - Starting WinSW in console mode
+2026-07-26 11:42:30,642 DEBUG - Starting WinSW in console mode
+2026-07-26 11:42:30,702 INFO  - Starting service 'PeopleHub Web Frontend (PeopleHubWeb)'...
+2026-07-26 11:42:31,235 DEBUG - Starting WinSW in service mode
+2026-07-26 11:42:31,280 INFO  - Service 'PeopleHub Web Frontend (PeopleHubWeb)' started successfully.
+2026-07-26 11:42:31,435 INFO  - Starting node G:\\softwer\\People-hub\web\build\standalone\server.js
+2026-07-26 11:42:31,477 INFO  - Started process 17848
+2026-07-26 11:42:31,493 DEBUG - Forwarding logs of the process System.Diagnostics.Process (node) to WinSW.SizeBasedRollingLogAppender
