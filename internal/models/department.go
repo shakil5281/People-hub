@@ -8,7 +8,7 @@ import (
 
 type Department struct {
 	ID        string         `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	CompanyID *string         `json:"company_id" gorm:"type:uuid"`
+	CompanyID *string        `json:"company_id" gorm:"type:uuid"`
 	Name      string         `json:"name" gorm:"type:varchar(255);not null"`
 	NameBn    string         `json:"name_bn" gorm:"type:varchar(255);default:''"`
 	HeadID    *string        `json:"head_id" gorm:"type:uuid"`

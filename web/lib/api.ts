@@ -94,6 +94,7 @@ export const employeeApi = {
   list: (params?: Record<string, string>) => api.get("/employees", { params }),
   get: (id: string) => api.get(`/employees/${id}`),
   getByCode: (code: string) => api.get(`/employees/by-code/${code}`),
+  getProfile: (id: string, params?: { month?: number; year?: number }) => api.get(`/employees/${id}/profile`, { params }),
   create: (data: Record<string, unknown>) => api.post("/employees", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/employees/${id}`, data),
   delete: (id: string) => api.delete(`/employees/${id}`),
@@ -306,6 +307,14 @@ export const leaveBalanceApi = {
 
 export const leaveReportApi = {
   monthly: (params?: Record<string, string>) => api.get("/leave-reports/monthly", { params }),
+}
+
+export const holidayApi = {
+  list: (params?: Record<string, string>) => api.get("/holidays", { params }),
+  get: (id: string) => api.get(`/holidays/${id}`),
+  create: (data: Record<string, unknown>) => api.post("/holidays", data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/holidays/${id}`, data),
+  delete: (id: string) => api.delete(`/holidays/${id}`),
 }
 
 export const salaryApi = {

@@ -42,6 +42,7 @@ func Setup(
 	dailyScheduleHandler *handlers.DailyScheduleHandler,
 	nightBillHandler *handlers.NightBillHandler,
 	tiffinBillHandler *handlers.TiffinBillHandler,
+	holidayHandler *handlers.HolidayHandler,
 	jwtSecret string,
 ) {
 	r.GET("/health", handlers.HealthCheck)
@@ -87,6 +88,7 @@ func Setup(
 	{
 		employee.GET("", employeeHandler.GetEmployees)
 		employee.GET("/:id", employeeHandler.GetEmployee)
+		employee.GET("/:id/profile", employeeHandler.GetEmployeeProfile)
 		employee.POST("", employeeHandler.CreateEmployee)
 		employee.PUT("/:id", employeeHandler.UpdateEmployee)
 		employee.DELETE("/:id", employeeHandler.DeleteEmployee)
@@ -402,6 +404,17 @@ func Setup(
 	leaveReport.Use(middleware.AuthMiddleware(jwtSecret))
 	{
 		leaveReport.GET("/monthly", leaveHandler.MonthlyLeaveReport)
+	}
+
+	// Protected holiday routes
+	holiday := api.Group("/holidays")
+	holiday.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		holiday.GET("", holidayHandler.List)
+		holiday.GET("/:id", holidayHandler.GetByID)
+		holiday.POST("", holidayHandler.Create)
+		holiday.PUT("/:id", holidayHandler.Update)
+		holiday.DELETE("/:id", holidayHandler.Delete)
 	}
 
 	// Protected salary routes

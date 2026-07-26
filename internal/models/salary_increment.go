@@ -7,8 +7,8 @@ import (
 )
 
 type SalaryIncrement struct {
-	ID        string `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	CompanyID string `json:"company_id" gorm:"type:uuid;not null"`
+	ID         string `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CompanyID  string `json:"company_id" gorm:"type:uuid;not null"`
 	EmployeeID string `json:"employee_id" gorm:"type:varchar(50);not null"`
 
 	PreviousGross   float64 `json:"previous_gross" gorm:"type:decimal(12,2);default:0"`
@@ -22,15 +22,15 @@ type SalaryIncrement struct {
 	NewHouse        float64 `json:"new_house_rent" gorm:"type:decimal(12,2);default:0"`
 	NewMedical      float64 `json:"new_medical" gorm:"type:decimal(12,2);default:0"`
 
-	EffectiveDate   string `json:"effective_date" gorm:"type:date;not null"`
-	Status          string `json:"status" gorm:"type:varchar(20);default:pending"`
-	Remarks         string `json:"remarks" gorm:"type:text"`
+	EffectiveDate string `json:"effective_date" gorm:"type:date;not null"`
+	Status        string `json:"status" gorm:"type:varchar(20);default:pending"`
+	Remarks       string `json:"remarks" gorm:"type:text"`
 
-	ApprovedBy *string    `json:"approved_by" gorm:"type:uuid"`
-	ApprovedAt *time.Time `json:"approved_at"`
-	RejectedBy *string    `json:"rejected_by" gorm:"type:uuid"`
-	RejectedAt *time.Time `json:"rejected_at"`
-	RejectionReason string `json:"rejection_reason" gorm:"type:text"`
+	ApprovedBy      *string    `json:"approved_by" gorm:"type:uuid"`
+	ApprovedAt      *time.Time `json:"approved_at"`
+	RejectedBy      *string    `json:"rejected_by" gorm:"type:uuid"`
+	RejectedAt      *time.Time `json:"rejected_at"`
+	RejectionReason string     `json:"rejection_reason" gorm:"type:text"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

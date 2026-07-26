@@ -378,7 +378,7 @@ func (h *NightBillHandler) Process(c *gin.Context) {
 	_ = h.nightBillRepo.CreateProcess(process)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":      "Night bills processed successfully",
+		"message":       "Night bills processed successfully",
 		"total_created": createdCount,
 		"total_skipped": len(skipped),
 		"total_amount":  totalAmount,
@@ -705,10 +705,10 @@ func (h *NightBillHandler) CalculateRate(c *gin.Context) {
 	amount := math.Round(hours*rate*100) / 100
 
 	c.JSON(http.StatusOK, gin.H{
-		"employee_id":  req.EmployeeID,
-		"date":         req.Date,
-		"night_hours":  hours,
-		"rate":         rate,
-		"amount":       amount,
+		"employee_id": req.EmployeeID,
+		"date":        req.Date,
+		"night_hours": hours,
+		"rate":        rate,
+		"amount":      amount,
 	})
 }

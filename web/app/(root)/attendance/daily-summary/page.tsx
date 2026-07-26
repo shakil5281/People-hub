@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileTextIcon, DownloadIcon, Loader2 } from "lucide-react"
+import { FileTextIcon, DownloadIcon, Loader2, ClipboardCheckIcon } from "lucide-react"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
@@ -51,15 +51,13 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
   }
 
   if (data.length === 0) {
-    const activeKeys = activeFilters ? Object.entries(activeFilters).filter(([_, v]) => v && v !== today) : []
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-        <div className="text-base font-medium">No records found for the selected period</div>
-        {activeKeys.length > 0 && (
-          <div className="text-xs text-muted-foreground/80 max-w-md text-center">
-            Active filters: {activeKeys.map(([k, v]) => `${k.replace(/_/g, " ")}=${v}`).join(", ")}
-          </div>
-        )}
+      <div className="flex flex-col items-center justify-center rounded-md border border-dashed py-12 text-center mx-4 my-6">
+        <ClipboardCheckIcon className="mb-3 h-10 w-10 text-muted-foreground/60" />
+        <h3 className="text-lg font-semibold text-foreground">No attendance summary</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          No attendance data found for the selected period. Try a different date range or process data logs.
+        </p>
       </div>
     )
   }
@@ -150,9 +148,9 @@ export default function DailySummaryPage() {
     { key: "date", label: "Date", type: "datepicker" },
     { key: "company_id", label: "Company", type: "select", options: companies.map((c) => ({ value: c.id, label: c.company_name_en })) },
     { key: "department_id", label: "Department", type: "select", options: departments.map((d) => ({ value: d.id, label: d.name })) },
-    { key: "section_id", label: "Section", type: "select", options: sections.map((s) => ({ value: s.id, label: s.name })) },
-    { key: "designation_id", label: "Designation", type: "select", options: designations.map((d) => ({ value: d.id, label: d.name })) },
-    { key: "line_id", label: "Line", type: "select", options: lines.map((l) => ({ value: l.id, label: l.name })) },
+    { key: "section_id", label: "Section", type: "select", options: sections.map((s) => ({ value: s.id, label: s.name })), disabled: !filters.department_id },
+    { key: "designation_id", label: "Designation", type: "select", options: designations.map((d) => ({ value: d.id, label: d.name })), disabled: !filters.section_id },
+    { key: "line_id", label: "Line", type: "select", options: lines.map((l) => ({ value: l.id, label: l.name })), disabled: !filters.section_id },
     { key: "group_id", label: "Group", type: "select", options: groups.map((g) => ({ value: g.id, label: g.name })) },
     { key: "shift_id", label: "Shift", type: "select", options: shifts.map((s) => ({ value: s.id, label: s.name })) },
     { key: "status", label: "Status", type: "select", options: [
@@ -161,7 +159,7 @@ export default function DailySummaryPage() {
       { value: "on_leave", label: "On Leave" }, { value: "weekend", label: "Weekend" },
     ] },
     { key: "employee_id", label: "Employee ID", type: "text", placeholder: "Enter employee code..." },
-  ], [companies, departments, sections, designations, lines, groups, shifts])
+  ], [companies, departments, sections, designations, lines, groups, shifts, filters.department_id, filters.section_id])
 
   const loadSections = React.useCallback(async (departmentId: string) => {
     if (!departmentId) { setSections([]); return }

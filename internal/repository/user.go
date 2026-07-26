@@ -58,10 +58,10 @@ func (r *UserRepository) LockAccount(userID string, lockedBy string) error {
 func (r *UserRepository) UnlockAccount(userID string) error {
 	return r.db.Model(&models.User{}).Where("id = ?", userID).
 		Updates(map[string]any{
-			"locked_at":     nil,
-			"locked_by":     nil,
+			"locked_at":       nil,
+			"locked_by":       nil,
 			"failed_attempts": 0,
-			"status":        "active",
+			"status":          "active",
 		}).Error
 }
 

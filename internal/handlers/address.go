@@ -11,7 +11,9 @@ import (
 
 // --- Division ---
 
-type DivisionHandler struct{ repo *repository.DivisionRepository }
+type DivisionHandler struct {
+	repo *repository.DivisionRepository
+}
 
 func NewDivisionHandler(repo *repository.DivisionRepository) *DivisionHandler {
 	return &DivisionHandler{repo: repo}
@@ -94,7 +96,9 @@ func (h *DivisionHandler) Delete(c *gin.Context) {
 
 // --- District ---
 
-type DistrictHandler struct{ repo *repository.DistrictRepository }
+type DistrictHandler struct {
+	repo *repository.DistrictRepository
+}
 
 func NewDistrictHandler(repo *repository.DistrictRepository) *DistrictHandler {
 	return &DistrictHandler{repo: repo}

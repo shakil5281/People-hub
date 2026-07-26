@@ -23,6 +23,8 @@ interface Shift { id: string; name: string }
 interface AttendanceRecord {
   id: string
   employee_id: string
+  employee_name: string
+  designation: string
   company_id: string
   date: string
   check_in: string | null
@@ -31,36 +33,27 @@ interface AttendanceRecord {
   over_time: string | null
   status: string
   late_minutes: number
-  employee?: { employee_id: string; name_en: string; designation_ref?: { name: string } }
+  shift_name: string
+  punch_number: string | null
 }
 
 const columns: ColumnDef<AttendanceRecord>[] = [
   { id: "sl", header: "Sl", cell: ({ row }) => row.index + 1 },
-  {
-    accessorKey: "employee_id",
-    header: "Employee ID",
-    cell: ({ row }) => row.original.employee?.employee_id || row.original.employee_id.slice(0, 8),
-  },
-  {
-    accessorKey: "employee.name_en",
-    header: "Name",
-    cell: ({ row }) => row.original.employee?.name_en || "-",
-  },
-  {
-    accessorKey: "employee.designation_ref.name",
-    header: "Designation",
-    cell: ({ row }) => row.original.employee?.designation_ref?.name || "-",
-  },
+  { accessorKey: "employee_id", header: "Employee ID" },
+  { accessorKey: "employee_name", header: "Name", cell: ({ row }) => row.original.employee_name || "-" },
+  { accessorKey: "designation", header: "Designation", cell: ({ row }) => row.original.designation || "-" },
   { accessorKey: "check_in", header: "Check In", cell: ({ row }) => formatCheck(row.original.check_in) },
   { accessorKey: "check_out", header: "Check Out", cell: ({ row }) => formatCheck(row.original.check_out) },
+  { accessorKey: "total_hours", header: "Total Hours", cell: ({ row }) => row.original.total_hours || "-" },
   { accessorKey: "over_time", header: "Over Time", cell: ({ row }) => row.original.over_time || "-" },
   { accessorKey: "late_minutes", header: "Late (min)" },
+  { accessorKey: "shift_name", header: "Shift", cell: ({ row }) => row.original.shift_name || "-" },
   {
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => {
       const variant = row.original.status === "present" ? "default" : row.original.status === "late" ? "destructive" : "secondary"
-      return <Badge variant={variant} className="capitalize">{row.original.status}</Badge>
+      return <Badge variant={variant} className="capitalize">{row.original.status.replace("_", " ")}</Badge>
     },
   },
 ]
@@ -102,14 +95,17 @@ export default function DailyAttendancePage() {
     {
       key: "section_id", label: "Section", type: "select",
       options: sections.map((s) => ({ value: s.id, label: s.name })),
+      disabled: !filters.department_id,
     },
     {
       key: "designation_id", label: "Designation", type: "select",
       options: designations.map((d) => ({ value: d.id, label: d.name })),
+      disabled: !filters.section_id,
     },
     {
       key: "line_id", label: "Line", type: "select",
       options: lines.map((l) => ({ value: l.id, label: l.name })),
+      disabled: !filters.section_id,
     },
     {
       key: "group_id", label: "Group", type: "select",
@@ -129,7 +125,7 @@ export default function DailyAttendancePage() {
       ],
     },
     { key: "employee_id", label: "Employee ID", type: "text", placeholder: "Enter employee code..." },
-  ], [companies, departments, sections, designations, lines, groups, shifts])
+  ], [companies, departments, sections, designations, lines, groups, shifts, filters.department_id, filters.section_id])
 
   const fetchData = React.useCallback(async (params: Record<string, string>, p?: number, l?: number) => {
     setLoading(true)
@@ -147,28 +143,82 @@ export default function DailyAttendancePage() {
     }
   }, [page, limit])
 
+  const loadSections = React.useCallback(async (departmentId: string) => {
+    try {
+      const res = await sectionApi.list(departmentId, { limit: "100" })
+      setSections(Array.isArray(res.data?.data) ? res.data.data : [])
+    } catch {
+      setSections([])
+    }
+  }, [])
+
+  const loadDesignations = React.useCallback(async (sectionId: string) => {
+    try {
+      const res = await designationApi.list(sectionId, { limit: "100" })
+      setDesignations(Array.isArray(res.data?.data) ? res.data.data : [])
+    } catch {
+      setDesignations([])
+    }
+  }, [])
+
+  const loadLines = React.useCallback(async (sectionId: string) => {
+    try {
+      const res = await lineApi.list(sectionId, { limit: "100" })
+      setLines(Array.isArray(res.data?.data) ? res.data.data : [])
+    } catch {
+      setLines([])
+    }
+  }, [])
+
   React.useEffect(() => {
     const init = async () => {
-      const [cRes, dRes, secRes, desRes, lRes, gRes, sRes] = await Promise.all([
+      const [cRes, dRes, gRes, sRes] = await Promise.all([
         companyApi.list({ limit: "100" }),
         departmentApi.list({ limit: "100" }),
-        sectionApi.list(undefined, { limit: "100" }),
-        designationApi.list(undefined, { limit: "100" }),
-        lineApi.list(undefined, { limit: "100" }),
         groupApi.list({ limit: "100" }),
         shiftApi.list({ limit: "100" }),
       ])
       setCompanies(Array.isArray(cRes.data?.data) ? cRes.data.data : [])
       setDepartments(Array.isArray(dRes.data?.data) ? dRes.data.data : [])
-      setSections(Array.isArray(secRes.data?.data) ? secRes.data.data : [])
-      setDesignations(Array.isArray(desRes.data?.data) ? desRes.data.data : [])
-      setLines(Array.isArray(lRes.data?.data) ? lRes.data.data : [])
       setGroups(Array.isArray(gRes.data?.data) ? gRes.data.data : [])
       setShifts(Array.isArray(sRes.data?.data) ? sRes.data.data : [])
     }
     init()
     fetchData({ date: today }, 1, 20)
   }, [])
+
+  React.useEffect(() => {
+    if (!filters.department_id) {
+      setSections([])
+      setDesignations([])
+      setLines([])
+      setFilters((prev) => {
+        const next = { ...prev }
+        delete next.section_id
+        delete next.designation_id
+        delete next.line_id
+        return next
+      })
+      return
+    }
+    loadSections(filters.department_id)
+  }, [filters.department_id])
+
+  React.useEffect(() => {
+    if (!filters.section_id) {
+      setDesignations([])
+      setLines([])
+      setFilters((prev) => {
+        const next = { ...prev }
+        delete next.designation_id
+        delete next.line_id
+        return next
+      })
+      return
+    }
+    loadDesignations(filters.section_id)
+    loadLines(filters.section_id)
+  }, [filters.section_id])
 
   React.useEffect(() => {
     const active: Record<string, string> = {}
@@ -194,6 +244,10 @@ export default function DailyAttendancePage() {
   const handleReset = () => {
     setPage(1)
     setLimit(20)
+    setDepartments([])
+    setSections([])
+    setDesignations([])
+    setLines([])
     setFilters({ date: today })
     fetchData({ date: today }, 1, 20)
   }
@@ -287,19 +341,31 @@ export default function DailyAttendancePage() {
         </h2>
       </div>
 
-      <DataTable
-        data={data}
-        columns={columns}
-        enableSelection={false}
-        serverSide={true}
-        page={page}
-        pageSize={limit}
-        pageCount={totalPages}
-        total={total}
-        onPageChange={setPage}
-        onPageSizeChange={(size) => { setLimit(size); setPage(1); }}
-        loading={loading}
-      />
+      {loading || data.length > 0 ? (
+        <DataTable
+          data={data}
+          columns={columns}
+          enableSelection={false}
+          serverSide={true}
+          page={page}
+          pageSize={limit}
+          pageCount={totalPages}
+          total={total}
+          onPageChange={setPage}
+          onPageSizeChange={(size) => { setLimit(size); setPage(1); }}
+          loading={loading}
+        />
+      ) : (
+        <div className="px-4 lg:px-6">
+          <div className="flex flex-col items-center justify-center rounded-md border border-dashed py-12 text-center">
+            <ClipboardCheckIcon className="mb-3 h-10 w-10 text-muted-foreground/60" />
+            <h3 className="text-lg font-semibold">No attendance records</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              No attendance data found for the selected date. Try a different date or process data logs.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

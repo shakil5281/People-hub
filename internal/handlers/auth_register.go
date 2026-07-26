@@ -4,9 +4,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shakil5281/peoplehub-api/internal/auth"
 	"github.com/shakil5281/peoplehub-api/internal/database"
 	"github.com/shakil5281/peoplehub-api/internal/models"
-	"github.com/shakil5281/peoplehub-api/internal/auth"
 )
 
 // RegisterRequest represents the request body for user registration

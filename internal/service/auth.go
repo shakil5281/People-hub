@@ -39,11 +39,11 @@ type LoginResponse struct {
 }
 
 type UserResponse struct {
-	ID                 string `json:"id"`
-	Email              string `json:"email"`
-	Name               string `json:"name"`
-	Status             string `json:"status"`
-	ForcePasswordChange bool  `json:"force_password_change"`
+	ID                  string `json:"id"`
+	Email               string `json:"email"`
+	Name                string `json:"name"`
+	Status              string `json:"status"`
+	ForcePasswordChange bool   `json:"force_password_change"`
 }
 
 type RegisterRequest struct {
@@ -309,13 +309,13 @@ func (s *AuthService) ChangePassword(userID, currentPassword, newPassword string
 }
 
 type ProfileResponse struct {
-	ID                 string     `json:"id"`
-	Email              string     `json:"email"`
-	Name               string     `json:"name"`
-	Status             string     `json:"status"`
-	ForcePasswordChange bool      `json:"force_password_change"`
-	Roles              []RoleInfo `json:"roles,omitempty"`
-	CreatedAt          string     `json:"created_at"`
+	ID                  string     `json:"id"`
+	Email               string     `json:"email"`
+	Name                string     `json:"name"`
+	Status              string     `json:"status"`
+	ForcePasswordChange bool       `json:"force_password_change"`
+	Roles               []RoleInfo `json:"roles,omitempty"`
+	CreatedAt           string     `json:"created_at"`
 }
 
 type RoleInfo struct {
@@ -353,7 +353,7 @@ func (s *AuthService) GetProfile(userID string) (*ProfileResponse, error) {
 }
 
 type UpdateProfileRequest struct {
-	Name  string `json:"name"`
+	Name string `json:"name"`
 }
 
 func (s *AuthService) UpdateProfile(userID string, req UpdateProfileRequest) (*ProfileResponse, error) {

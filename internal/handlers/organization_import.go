@@ -56,7 +56,7 @@ func (h *OrganizationImportHandler) DownloadTemplate(c *gin.Context) {
 		Alignment: &excelize.Alignment{
 			Horizontal: "center",
 			Vertical:   "center",
-			WrapText:  true,
+			WrapText:   true,
 		},
 		Fill: excelize.Fill{
 			Type:    "pattern",
@@ -426,5 +426,3 @@ func allEmptyOrg(row []string) bool {
 	}
 	return true
 }
-
-

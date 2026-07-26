@@ -28,13 +28,13 @@ func AuditMiddleware() gin.HandlerFunc {
 			return
 		}
 
-	// Capture request body (up to 16KB) for audit
-	// Skip for multipart/form-data (file uploads) — body must remain intact for FormFile parsing
-	var reqBody []byte
-	if c.Request.Body != nil && !strings.HasPrefix(c.GetHeader("Content-Type"), "multipart/form-data") {
-		reqBody, _ = io.ReadAll(io.LimitReader(c.Request.Body, 16*1024))
-		c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
-	}
+		// Capture request body (up to 16KB) for audit
+		// Skip for multipart/form-data (file uploads) — body must remain intact for FormFile parsing
+		var reqBody []byte
+		if c.Request.Body != nil && !strings.HasPrefix(c.GetHeader("Content-Type"), "multipart/form-data") {
+			reqBody, _ = io.ReadAll(io.LimitReader(c.Request.Body, 16*1024))
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(reqBody))
+		}
 
 		// Execute handler and capture response status
 		c.Next()
@@ -101,8 +101,8 @@ func extractResourceID(path string) string {
 	if len(matches) > 2 && matches[2] != "" {
 		// Check if second segment is a UUID or ID; skip if it looks like a sub-resource action
 		if matches[2] == "approve" || matches[2] == "reject" || matches[2] == "template" || matches[2] == "import" || matches[2] == "export" || matches[2] == "process" || matches[2] == "stats" || matches[2] == "backup" || matches[2] == "backups" || matches[2] == "reset" || matches[2] == "sheet" || matches[2] == "payslip" || matches[2] == "list" || matches[2] == "summary" || matches[2] == "monthly" || matches[2] == "monthly-report" || matches[2] == "overtime" || matches[2] == "overtime-summary" || matches[2] == "job-card" || matches[2] == "missing" || matches[2] == "absent" {
-		return ""
-	}
+			return ""
+		}
 		return matches[2]
 	}
 	return ""

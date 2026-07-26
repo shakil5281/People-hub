@@ -39,7 +39,7 @@ func (r *RequirementRepository) List(page, limit int) ([]models.Requirement, int
 		return nil, 0, err
 	}
 	var reqs []models.Requirement
-	err := base.Preload("Department").Preload("Section").Preload("Designation").Order("created_at DESC").Offset((page-1)*limit).Limit(limit).Find(&reqs).Error
+	err := base.Preload("Department").Preload("Section").Preload("Designation").Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&reqs).Error
 	return reqs, total, err
 }
 
@@ -62,7 +62,7 @@ func (r *RequirementRepository) ListFiltered(departmentID, status, priority, pos
 		return nil, 0, err
 	}
 	var reqs []models.Requirement
-	err := base.Preload("Department").Preload("Section").Preload("Designation").Offset((page-1)*limit).Limit(limit).Find(&reqs).Error
+	err := base.Preload("Department").Preload("Section").Preload("Designation").Offset((page - 1) * limit).Limit(limit).Find(&reqs).Error
 	return reqs, total, err
 }
 

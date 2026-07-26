@@ -103,13 +103,13 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"id":                   user.ID,
-		"email":                user.Email,
-		"name":                 user.Name,
-		"status":               user.Status,
-		"generated_password":   password,
+		"id":                    user.ID,
+		"email":                 user.Email,
+		"name":                  user.Name,
+		"status":                user.Status,
+		"generated_password":    password,
 		"force_password_change": true,
-		"message":              "User created. Share the generated password securely; user must change it on first login.",
+		"message":               "User created. Share the generated password securely; user must change it on first login.",
 	})
 }
 
@@ -273,9 +273,9 @@ func (h *UserHandler) AdminResetPassword(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"generated_password":     password,
-		"force_password_change":  true,
-		"message":                "Password reset. Share the new password securely; user must change it on next login.",
+		"generated_password":    password,
+		"force_password_change": true,
+		"message":               "Password reset. Share the new password securely; user must change it on next login.",
 	})
 }
 

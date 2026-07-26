@@ -22,8 +22,8 @@ type importLookups struct {
 	shifts       map[string]string
 	departments  map[string]string
 	sections     map[string]string
-	designations map[string]string
-	lines        map[string]string
+	designations map[string]string // key: sectionID|name
+	lines        map[string]string // key: sectionID|name
 	groups       map[string]string
 	floors       map[string]string
 	divisions    map[string]string
@@ -90,8 +90,8 @@ func loadImportLookups(db *gorm.DB) *importLookups {
 	db.Find(&desigs)
 	for _, d := range desigs {
 		name := strings.TrimSpace(strings.ToLower(d.Name))
-		if name != "" {
-			l.designations[name] = d.ID
+		if name != "" && d.SectionID != "" {
+			l.designations[d.SectionID+"|"+name] = d.ID
 		}
 	}
 
@@ -99,8 +99,8 @@ func loadImportLookups(db *gorm.DB) *importLookups {
 	db.Find(&lines)
 	for _, li := range lines {
 		name := strings.TrimSpace(strings.ToLower(li.Name))
-		if name != "" {
-			l.lines[name] = li.ID
+		if name != "" && li.SectionID != "" {
+			l.lines[li.SectionID+"|"+name] = li.ID
 		}
 	}
 
@@ -191,7 +191,7 @@ var importHeaders = []string{
 	"CompanyName", "EmployeeType", "JoiningDate",
 	"shiftName", "Department", "Section", "Designation", "ReportsTo", "Line", "Group", "Floor",
 	"Grade", "Status", "OverTimeStatus",
-	"Gross_Salary", "BasicSalary", "HouseRent", "TransportAllowance", "FoodAllowance", "MedicalAllowance", "OtherAllowance",
+	"Gross_Salary", "Basic_Salary", "House_Rent", "Transport_Allowance", "Food_Allowance", "Medical_Allowance", "Other_Allowance",
 	"accountType", "AccountNumber",
 }
 
@@ -443,11 +443,11 @@ func (h *EmployeeImportHandler) ImportExcel(c *gin.Context) {
 		}
 
 		parsed = append(parsed, parsedRow{
-			row:      row,
-			index:    rowIdx + 1,
-			code:     empID,
-			colMap:   colMap,
-			lookups:  lookups,
+			row:     row,
+			index:   rowIdx + 1,
+			code:    empID,
+			colMap:  colMap,
+			lookups: lookups,
 		})
 	}
 
@@ -538,7 +538,11 @@ func getCellFloat(row []string, colMap map[string]int, key string) float64 {
 	if s == "" {
 		return 0
 	}
-	v, _ := strconv.ParseFloat(s, 64)
+	s = strings.ReplaceAll(s, ",", "")
+	v, err := strconv.ParseFloat(s, 64)
+	if err != nil {
+		return 0
+	}
 	return v
 }
 
@@ -579,9 +583,30 @@ func rowToEmployee(row []string, colMap map[string]int, companyID, userID string
 	dependentsStr := getCell(row, colMap, "NumberOfDependents")
 	dependents, _ := strconv.Atoi(dependentsStr)
 
+	sectionID := lookupID(lookups.sections, getCell(row, colMap, "Section"))
+
+	desigName := getCell(row, colMap, "Designation")
+	lineName := getCell(row, colMap, "Line")
+
+	var desigID, lineID *string
+	if sectionID != nil {
+		if desigName != "" {
+			key := *sectionID + "|" + strings.TrimSpace(strings.ToLower(desigName))
+			if id, ok := lookups.designations[key]; ok {
+				desigID = &id
+			}
+		}
+		if lineName != "" {
+			key := *sectionID + "|" + strings.TrimSpace(strings.ToLower(lineName))
+			if id, ok := lookups.lines[key]; ok {
+				lineID = &id
+			}
+		}
+	}
+
 	return models.Employee{
 		CompanyID:           companyID,
-		EmployeeID:        getCell(row, colMap, "EmployeeId"),
+		EmployeeID:          getCell(row, colMap, "EmployeeId"),
 		NameEn:              getCell(row, colMap, "Name (En)"),
 		NameBn:              getCell(row, colMap, "Name (Bn)"),
 		FatherName:          getCell(row, colMap, "fatherName"),
@@ -613,9 +638,9 @@ func rowToEmployee(row []string, colMap map[string]int, companyID, userID string
 		EmployeeType:        getCell(row, colMap, "EmployeeType"),
 		Grade:               getCell(row, colMap, "Grade"),
 		DepartmentID:        lookupID(lookups.departments, getCell(row, colMap, "Department")),
-		SectionID:           lookupID(lookups.sections, getCell(row, colMap, "Section")),
-		DesignationID:       lookupID(lookups.designations, getCell(row, colMap, "Designation")),
-		LineID:              lookupID(lookups.lines, getCell(row, colMap, "Line")),
+		SectionID:           sectionID,
+		DesignationID:       desigID,
+		LineID:              lineID,
 		GroupID:             lookupID(lookups.groups, getCell(row, colMap, "Group")),
 		FloorID:             lookupID(lookups.floors, getCell(row, colMap, "Floor")),
 		ShiftID:             lookupID(lookups.shifts, getCell(row, colMap, "shiftName")),
@@ -624,12 +649,12 @@ func rowToEmployee(row []string, colMap map[string]int, companyID, userID string
 		Status:              getCell(row, colMap, "Status"),
 		OverTimeStatus:      overTimeBool,
 		GrossSalary:         getCellFloat(row, colMap, "Gross_Salary"),
-		BasicSalary:         getCellFloat(row, colMap, "BasicSalary"),
-		HouseRent:           getCellFloat(row, colMap, "HouseRent"),
-		TransportAllowance:  getCellFloat(row, colMap, "TransportAllowance"),
-		FoodAllowance:       getCellFloat(row, colMap, "FoodAllowance"),
-		MedicalAllowance:    getCellFloat(row, colMap, "MedicalAllowance"),
-		OtherAllowance:      getCellFloat(row, colMap, "OtherAllowance"),
+		BasicSalary:         getCellFloat(row, colMap, "Basic_Salary"),
+		HouseRent:           getCellFloat(row, colMap, "House_Rent"),
+		TransportAllowance:  getCellFloat(row, colMap, "Transport_Allowance"),
+		FoodAllowance:       getCellFloat(row, colMap, "Food_Allowance"),
+		MedicalAllowance:    getCellFloat(row, colMap, "Medical_Allowance"),
+		OtherAllowance:      getCellFloat(row, colMap, "Other_Allowance"),
 		AccountType:         getCell(row, colMap, "accountType"),
 		AccountNumber:       getCell(row, colMap, "AccountNumber"),
 		CreatedBy:           &userID,

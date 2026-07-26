@@ -231,15 +231,39 @@ func (h *EmployeeHandler) ExportExcel(c *gin.Context) {
 
 		var s, sc, sd, sn func(int) int
 		if isAlt {
-			s = func(c int) int { f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDataAlt); return 0 }
-			sc = func(c int) int { f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDataCenterAlt); return 0 }
-			sd = func(c int) int { f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDateAlt); return 0 }
-			sn = func(c int) int { f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleSalaryAlt); return 0 }
+			s = func(c int) int {
+				f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDataAlt)
+				return 0
+			}
+			sc = func(c int) int {
+				f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDataCenterAlt)
+				return 0
+			}
+			sd = func(c int) int {
+				f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDateAlt)
+				return 0
+			}
+			sn = func(c int) int {
+				f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleSalaryAlt)
+				return 0
+			}
 		} else {
-			s = func(c int) int { f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleData); return 0 }
-			sc = func(c int) int { f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDataCenter); return 0 }
-			sd = func(c int) int { f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDate); return 0 }
-			sn = func(c int) int { f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleSalary); return 0 }
+			s = func(c int) int {
+				f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleData)
+				return 0
+			}
+			sc = func(c int) int {
+				f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDataCenter)
+				return 0
+			}
+			sd = func(c int) int {
+				f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleDate)
+				return 0
+			}
+			sn = func(c int) int {
+				f.SetCellStyle(sheet, colName(c)+strconv.Itoa(row), colName(c)+strconv.Itoa(row), styleSalary)
+				return 0
+			}
 		}
 		_ = s
 		_ = sc
@@ -524,5 +548,3 @@ func truncate(s string, maxLen int) string {
 	}
 	return s
 }
-
-

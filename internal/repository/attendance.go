@@ -24,6 +24,88 @@ func (r *AttendanceRepository) Create(attendance *models.Attendance) error {
 	return r.db.Create(attendance).Error
 }
 
+func (r *AttendanceRepository) CountByDate(date string, filters ...string) (int64, error) {
+	base := r.db.Model(&models.Attendance{}).
+		Where("date = ? AND deleted_at IS NULL", date)
+	// Optional: company_id as first filter
+	if len(filters) > 0 && filters[0] != "" {
+		base = base.Where("company_id = ?", filters[0])
+	}
+	var count int64
+	err := base.Count(&count).Error
+	return count, err
+}
+
+func (r *AttendanceRepository) CountRangeByDate(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID string) (int64, error) {
+	base := r.db.Model(&models.Attendance{}).
+		Where("date BETWEEN ? AND ? AND deleted_at IS NULL", startDate, endDate)
+	if companyID != "" {
+		base = base.Where("company_id = ?", companyID)
+	}
+	if departmentID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", departmentID)
+	}
+	if sectionID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE section_id = ?)", sectionID)
+	}
+	if designationID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE designation_id = ?)", designationID)
+	}
+	if lineID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE line_id = ?)", lineID)
+	}
+	if groupID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE group_id = ?)", groupID)
+	}
+	if shiftID != "" {
+		base = base.Where("shift_id = ?", shiftID)
+	}
+	if status != "" {
+		base = base.Where("status = ?", status)
+	}
+	if employeeID != "" {
+		base = base.Where("employee_id = ?", employeeID)
+	}
+	var count int64
+	err := base.Count(&count).Error
+	return count, err
+}
+
+func (r *AttendanceRepository) CountFilteredByDate(date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID string) (int64, error) {
+	base := r.db.Model(&models.Attendance{}).
+		Where("date = ? AND deleted_at IS NULL", date)
+	if companyID != "" {
+		base = base.Where("company_id = ?", companyID)
+	}
+	if departmentID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", departmentID)
+	}
+	if sectionID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE section_id = ?)", sectionID)
+	}
+	if designationID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE designation_id = ?)", designationID)
+	}
+	if lineID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE line_id = ?)", lineID)
+	}
+	if groupID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE group_id = ?)", groupID)
+	}
+	if shiftID != "" {
+		base = base.Where("shift_id = ?", shiftID)
+	}
+	if status != "" {
+		base = base.Where("status = ?", status)
+	}
+	if employeeID != "" {
+		base = base.Where("employee_id = ?", employeeID)
+	}
+	var count int64
+	err := base.Count(&count).Error
+	return count, err
+}
+
 func (r *AttendanceRepository) FindByID(id string) (*models.Attendance, error) {
 	var attendance models.Attendance
 	err := r.db.Preload("Employee").Preload("Shift").Where("id = ? AND deleted_at IS NULL", id).First(&attendance).Error
@@ -399,14 +481,14 @@ func (r *AttendanceRepository) ClearOnLeaveStatus(employeeID, fromDate, toDate s
 		Update("status", "").Error
 }
 
-func (r *AttendanceRepository) CountByDate(date string) (int64, error) {
+func (r *AttendanceRepository) CountByDateOnly(date string) (int64, error) {
 	var count int64
 	err := r.db.Model(&models.Attendance{}).Where("date = ? AND deleted_at IS NULL", date).Count(&count).Error
 	return count, err
 }
 
 func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status string, page, limit int) ([]models.Attendance, int64, error) {
-	base := r.db.Model(&models.Attendance{}).Where("date BETWEEN ? AND ? AND deleted_at IS NULL", startDate, endDate)
+	base := r.db.Model(&models.Attendance{}).Where("date BETWEEN ? AND ? AND deleted_at IS NULL AND (check_in IS NOT NULL OR check_out IS NOT NULL)", startDate, endDate)
 	if companyID != "" {
 		base = base.Where("company_id = ?", companyID)
 	}
@@ -446,7 +528,7 @@ func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employ
 func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status string) ([]models.Employee, error) {
 	subQuery := r.db.Table("attendances a").
 		Select("DISTINCT a.employee_id").
-		Where("a.date BETWEEN ? AND ? AND a.deleted_at IS NULL", startDate, endDate)
+		Where("a.date BETWEEN ? AND ? AND a.deleted_at IS NULL AND (a.check_in IS NOT NULL OR a.check_out IS NOT NULL)", startDate, endDate)
 
 	if companyID != "" {
 		subQuery = subQuery.Where("a.company_id = ?", companyID)
@@ -651,14 +733,14 @@ func (r *AttendanceRepository) DeleteAfterDate(employeeID, date string) (int64, 
 // CustomSummarySection queries attendance summary for a single report section with flexible filters.
 // Filters are applied as AND conditions on employee org relations.
 type CustomSectionFilter struct {
-	Name              string   `json:"name"`
-	Type              string   `json:"type"` // section_group, section_line, department, etc.
-	SectionNames      []string `json:"section_names"`
-	DepartmentNames   []string `json:"department_names"`
-	GroupNames        []string `json:"group_names"`
-	DesignationNames  []string `json:"designation_names"`
-	LineNames         []string `json:"line_names"`
-	GroupByLine       bool     `json:"group_by_line"`
+	Name             string   `json:"name"`
+	Type             string   `json:"type"` // section_group, section_line, department, etc.
+	SectionNames     []string `json:"section_names"`
+	DepartmentNames  []string `json:"department_names"`
+	GroupNames       []string `json:"group_names"`
+	DesignationNames []string `json:"designation_names"`
+	LineNames        []string `json:"line_names"`
+	GroupByLine      bool     `json:"group_by_line"`
 }
 
 func (r *AttendanceRepository) CustomSummarySection(companyID, startDate, endDate string, filter CustomSectionFilter) ([]map[string]interface{}, error) {

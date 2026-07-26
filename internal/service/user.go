@@ -105,7 +105,6 @@ func (s *UserService) GetUserByID(id string) (*models.User, []models.Role, error
 	return user, roles, nil
 }
 
-
 func (s *UserService) CreateUser(req CreateUserRequest, createdBy string) (*models.User, string, error) {
 	existing, _ := s.userRepo.FindByEmail(req.Email)
 	if existing != nil {
@@ -122,10 +121,10 @@ func (s *UserService) CreateUser(req CreateUserRequest, createdBy string) (*mode
 	}
 
 	user := &models.User{
-		Email:              req.Email,
-		PasswordHash:       hash,
-		Name:               req.Name,
-		Status:             "active",
+		Email:               req.Email,
+		PasswordHash:        hash,
+		Name:                req.Name,
+		Status:              "active",
 		ForcePasswordChange: true,
 	}
 

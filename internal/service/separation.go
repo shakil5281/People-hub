@@ -50,11 +50,11 @@ type CreateSeparationInput struct {
 }
 
 type ProcessResult struct {
-	EmployeeID   string
-	EmployeeName string
-	OldStatus    string
-	NewType      string
-	NewStatus    string
+	EmployeeID        string
+	EmployeeName      string
+	OldStatus         string
+	NewType           string
+	NewStatus         string
 	AttendanceDeleted int64
 }
 
@@ -135,7 +135,7 @@ func (s *SeparationService) Create(input CreateSeparationInput) (*models.Separat
 
 	var created *models.Separation
 	err = s.db.Transaction(func(tx *gorm.DB) error {
-			sep := &models.Separation{
+		sep := &models.Separation{
 			Employee:     employeeName,
 			EmployeeID:   emp.EmployeeID,
 			CompanyID:    emp.CompanyID,

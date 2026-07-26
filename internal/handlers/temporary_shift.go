@@ -10,8 +10,8 @@ import (
 )
 
 type TemporaryShiftHandler struct {
-	repo          *repository.TemporaryShiftRepository
-	employeeRepo  *repository.EmployeeRepository
+	repo         *repository.TemporaryShiftRepository
+	employeeRepo *repository.EmployeeRepository
 }
 
 func NewTemporaryShiftHandler(repo *repository.TemporaryShiftRepository, employeeRepo *repository.EmployeeRepository) *TemporaryShiftHandler {
@@ -86,9 +86,9 @@ func (h *TemporaryShiftHandler) Create(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message":  "Temporary shift(s) created successfully",
-		"count":    len(created),
-		"records":  created,
+		"message": "Temporary shift(s) created successfully",
+		"count":   len(created),
+		"records": created,
 	})
 }
 

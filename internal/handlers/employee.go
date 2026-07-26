@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"regexp"
 	"time"
@@ -17,6 +18,87 @@ func NewEmployeeHandler() *EmployeeHandler {
 	return &EmployeeHandler{}
 }
 
+type EmployeeRow struct {
+	ID            string  `json:"id"`
+	EmployeeID    string  `json:"employee_id"`
+	PunchNumber   string  `json:"punch_number"`
+	NameEn        string  `json:"name_en"`
+	NameBn        string  `json:"name_bn"`
+	Phone         string  `json:"phone"`
+	Designation   string  `json:"designation"`
+	Department    string  `json:"department"`
+	Section       string  `json:"section"`
+	Line          string  `json:"line"`
+	Group         string  `json:"group"`
+	Floor         string  `json:"floor"`
+	JoiningDate   string  `json:"joining_date"`
+	GrossSalary   float64 `json:"gross_salary"`
+	Status        string  `json:"status"`
+	EmployeeType  string  `json:"employee_type"`
+	Gender        string  `json:"gender"`
+	CompanyID     string  `json:"company_id"`
+	ShiftID       *string `json:"shift_id"`
+	DepartmentID  *string `json:"department_id"`
+	SectionID     *string `json:"section_id"`
+	DesignationID *string `json:"designation_id"`
+	LineID        *string `json:"line_id"`
+	GroupID       *string `json:"group_id"`
+	FloorID       *string `json:"floor_id"`
+}
+
+func toEmployeeRow(e models.Employee) EmployeeRow {
+	r := EmployeeRow{
+		ID:            e.ID,
+		EmployeeID:    e.EmployeeID,
+		PunchNumber:   e.PunchNumber,
+		NameEn:        e.NameEn,
+		NameBn:        e.NameBn,
+		Phone:         e.Phone,
+		GrossSalary:   e.GrossSalary,
+		Status:        e.Status,
+		EmployeeType:  e.EmployeeType,
+		Gender:        e.Gender,
+		CompanyID:     e.CompanyID,
+		ShiftID:       e.ShiftID,
+		DepartmentID:  e.DepartmentID,
+		SectionID:     e.SectionID,
+		DesignationID: e.DesignationID,
+		LineID:        e.LineID,
+		GroupID:       e.GroupID,
+		FloorID:       e.FloorID,
+	}
+	if e.DesignationRef != nil {
+		r.Designation = e.DesignationRef.Name
+	}
+	if e.Department != nil {
+		r.Department = e.Department.Name
+	}
+	if e.SectionRef != nil {
+		r.Section = e.SectionRef.Name
+	}
+	if e.LineRef != nil {
+		r.Line = e.LineRef.Name
+	}
+	if e.GroupRef != nil {
+		r.Group = e.GroupRef.Name
+	}
+	if e.FloorRef != nil {
+		r.Floor = e.FloorRef.Name
+	}
+	if !e.JoiningDate.IsZero() {
+		r.JoiningDate = e.JoiningDate.Format("2006-01-02")
+	}
+	return r
+}
+
+func toEmployeeRows(list []models.Employee) []EmployeeRow {
+	res := make([]EmployeeRow, len(list))
+	for i, e := range list {
+		res[i] = toEmployeeRow(e)
+	}
+	return res
+}
+
 type CreateEmployeeRequest struct {
 	// Personal
 	NameEn           string `json:"name_en"`
@@ -26,10 +108,10 @@ type CreateEmployeeRequest struct {
 	DateOfBirth      string `json:"date_of_birth"`
 	Gender           string `json:"gender"`
 	BloodGroup       string `json:"blood_group"`
-	MaritalStatus    string  `json:"marital_status"`
-	Religion         string  `json:"religion"`
-	Nationality      string  `json:"nationality"`
-	NID              string  `json:"nid"`
+	MaritalStatus    string `json:"marital_status"`
+	Religion         string `json:"religion"`
+	Nationality      string `json:"nationality"`
+	NID              string `json:"nid"`
 	Phone            string `json:"phone"`
 	Email            string `json:"email"`
 	PresentAddress   string `json:"present_address"`
@@ -42,20 +124,20 @@ type CreateEmployeeRequest struct {
 	NumberOfDependents int    `json:"number_of_dependents"`
 
 	// Office
-	CompanyID      string `json:"company_id" binding:"required"`
-	DepartmentID   string `json:"department_id"`
-	SectionID      string `json:"section_id"`
-	DesignationID  string `json:"designation_id"`
-	LineID         string `json:"line_id"`
-	GroupID        string `json:"group_id"`
-	FloorID        string `json:"floor_id"`
-	EmployeeID     string `json:"employee_id" binding:"required"`
-	PunchNumber    string `json:"punch_number" binding:"required"`
-	EmployeeType   string `json:"employee_type"`
-	Grade          string `json:"grade"`
-	JoiningDate    string `json:"joining_date" binding:"required"`
-	ShiftID        string `json:"shift_id"`
-	ReportsTo      string `json:"reports_to"`
+	CompanyID     string `json:"company_id" binding:"required"`
+	DepartmentID  string `json:"department_id"`
+	SectionID     string `json:"section_id"`
+	DesignationID string `json:"designation_id"`
+	LineID        string `json:"line_id"`
+	GroupID       string `json:"group_id"`
+	FloorID       string `json:"floor_id"`
+	EmployeeID    string `json:"employee_id" binding:"required"`
+	PunchNumber   string `json:"punch_number" binding:"required"`
+	EmployeeType  string `json:"employee_type"`
+	Grade         string `json:"grade"`
+	JoiningDate   string `json:"joining_date" binding:"required"`
+	ShiftID       string `json:"shift_id"`
+	ReportsTo     string `json:"reports_to"`
 
 	// Address (present)
 	PresentDivisionID string `json:"present_division_id"`
@@ -81,8 +163,8 @@ type CreateEmployeeRequest struct {
 	AccountNumber string `json:"account_number"`
 
 	// Status
-	Status          string `json:"status"`
-	OverTimeStatus  bool   `json:"over_time_status"`
+	Status         string `json:"status"`
+	OverTimeStatus bool   `json:"over_time_status"`
 }
 
 func bindEmployeeFields(req *CreateEmployeeRequest, emp *models.Employee) {
@@ -116,7 +198,9 @@ func bindEmployeeFields(req *CreateEmployeeRequest, emp *models.Employee) {
 	// Office
 	emp.CompanyID = req.CompanyID
 	setPtr := func(val string) *string {
-		if val == "" { return nil }
+		if val == "" {
+			return nil
+		}
 		return &val
 	}
 	emp.DepartmentID = setPtr(req.DepartmentID)
@@ -276,7 +360,7 @@ func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.NewPaginatedResponse(employees, total, p))
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(toEmployeeRows(employees), total, p))
 }
 
 // CreateEmployee godoc
@@ -329,11 +413,11 @@ func (h *EmployeeHandler) CreateEmployee(c *gin.Context) {
 
 	employee := models.Employee{
 		EmployeeID:  req.EmployeeID,
-		PunchNumber:   req.PunchNumber,
-		CompanyID:    req.CompanyID,
-		JoiningDate:  jd,
-		Status:       status,
-		CreatedBy:    &userID,
+		PunchNumber: req.PunchNumber,
+		CompanyID:   req.CompanyID,
+		JoiningDate: jd,
+		Status:      status,
+		CreatedBy:   &userID,
 	}
 
 	bindEmployeeFields(&req, &employee)
@@ -444,6 +528,75 @@ func (h *EmployeeHandler) GetEmployeeByCode(c *gin.Context) {
 		}
 	}
 	c.JSON(http.StatusOK, emp)
+}
+
+type AttendanceCount struct {
+	Status string `json:"status"`
+	Count  int    `json:"count"`
+}
+
+// GetEmployeeProfile godoc
+//
+// @Summary      Get employee profile with attendance and salary
+// @Description  Get full employee details, current month attendance summary, and latest salary
+// @Tags         Employees
+// @Security     BearerAuth
+// @Produce      json
+// @Param        id       path string true "Employee ID"
+// @Param        month    query int    false "Month (default current)"
+// @Param        year     query int    false "Year (default current)"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      404  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /employees/{id}/profile [get]
+func (h *EmployeeHandler) GetEmployeeProfile(c *gin.Context) {
+	id := c.Param("id")
+
+	var emp models.Employee
+	if err := database.DB.Preload("User").Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").First(&emp, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
+		return
+	}
+
+	now := time.Now()
+	month, _ := parseIntParam(c.Query("month"), int(now.Month()))
+	year, _ := parseIntParam(c.Query("year"), now.Year())
+
+	startDate := fmt.Sprintf("%d-%02d-01", year, month)
+	endDate := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+
+	var attendanceCounts []AttendanceCount
+	database.DB.Model(&models.Attendance{}).
+		Select("status, count(*) as count").
+		Where("employee_id = ? AND date BETWEEN ? AND ? AND deleted_at IS NULL", emp.EmployeeID, startDate, endDate).
+		Group("status").
+		Find(&attendanceCounts)
+
+	var salary models.Salary
+	salaryErr := database.DB.Where("employee_id = ? AND month = ? AND year = ?", emp.EmployeeID, month, year).First(&salary).Error
+
+	response := gin.H{
+		"employee":   emp,
+		"attendance": attendanceCounts,
+	}
+
+	if salaryErr == nil {
+		response["salary"] = salary
+	}
+
+	c.JSON(http.StatusOK, response)
+}
+
+func parseIntParam(val string, defaultVal int) (int, error) {
+	if val == "" {
+		return defaultVal, nil
+	}
+	var n int
+	_, err := fmt.Sscanf(val, "%d", &n)
+	if err != nil {
+		return defaultVal, err
+	}
+	return n, nil
 }
 
 // DeleteEmployee godoc

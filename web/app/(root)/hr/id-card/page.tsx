@@ -1,11 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { IdCardIcon, DownloadIcon, PlusIcon, UploadIcon, Loader2 } from "lucide-react"
+import { IdCardIcon, DownloadIcon, Loader2 } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
-import { Employee, statusOptionsEmployee, genderOptions, bloodGroupOptions } from "@/components/data/employee-data"
+import { statusOptionsEmployee, genderOptions, bloodGroupOptions } from "@/components/data/employee-data"
 import {
   employeeApi,
   companyApi,
@@ -28,19 +28,23 @@ interface Shift { id: string; name: string }
 interface Group { id: string; name: string }
 interface Floor { id: string; name: string }
 
-const columns: ColumnDef<Employee>[] = [
+interface EmployeeRow {
+  id: string
+  employee_id: string
+  punch_number: string
+  name_en: string
+  phone: string
+  blood_group: string
+  designation: string
+  department: string
+  status: string
+}
+
+const columns: ColumnDef<EmployeeRow>[] = [
   { accessorKey: "employee_id", header: "Emp. ID" },
   { accessorKey: "name_en", header: "Name" },
-  {
-    accessorKey: "designation_ref",
-    header: "Designation",
-    accessorFn: (r: any) => r.designation_ref?.name || "-",
-  },
-  {
-    accessorKey: "department",
-    header: "Department",
-    accessorFn: (r: any) => r.department?.name || "-",
-  },
+  { accessorKey: "designation", header: "Designation", cell: ({ row }) => row.original.designation || "-" },
+  { accessorKey: "department", header: "Department", cell: ({ row }) => row.original.department || "-" },
   { accessorKey: "punch_number", header: "Punch No" },
   { accessorKey: "phone", header: "Phone" },
   { accessorKey: "blood_group", header: "Blood Group" },
@@ -57,10 +61,10 @@ const columns: ColumnDef<Employee>[] = [
 const selectClass = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 
 export default function IdCardPage() {
-  const [data, setData] = React.useState<Employee[]>([])
+  const [data, setData] = React.useState<EmployeeRow[]>([])
   const [loading, setLoading] = React.useState(true)
   const [generating, setGenerating] = React.useState(false)
-  const [selectedRows, setSelectedRows] = React.useState<Employee[]>([])
+  const [selectedRows, setSelectedRows] = React.useState<EmployeeRow[]>([])
   const [error, setError] = React.useState("")
   const [filters, setFilters] = React.useState<Record<string, string>>({ employee_type: "Regular", status: "active" })
 

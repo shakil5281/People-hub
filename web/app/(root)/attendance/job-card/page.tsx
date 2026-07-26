@@ -9,11 +9,6 @@ import type { FilterDef } from "@/components/filter-bar"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { formatCheck } from "@/lib/utils"
 
-interface ShiftInfo {
-  id: string
-  name: string
-}
-
 interface JobCardRecord {
   id: string
   employee_id: string
@@ -24,15 +19,7 @@ interface JobCardRecord {
   over_time: string | null
   status: string
   late_minutes: number
-  shift?: ShiftInfo | null
-  employee?: {
-    employee_id: string
-    name_en: string
-    designation_ref?: { name: string }
-    phone: string
-    joining_date: string
-    company?: { company_name_en: string }
-  }
+  shift_name: string
 }
 
 interface Company { id: string; company_name_en: string }
@@ -73,29 +60,40 @@ export default function JobCardPage() {
     Promise.all([
       companyApi.list({ limit: "100" }),
       departmentApi.list({ limit: "100" }),
-      sectionApi.list(undefined, { limit: "100" }),
-      designationApi.list(undefined, { limit: "100" }),
-      lineApi.list(undefined, { limit: "100" }),
       groupApi.list({ limit: "100" }),
       shiftApi.list({ limit: "100" }),
-    ]).then(([cRes, dRes, secRes, desRes, lRes, gRes, sRes]) => {
+    ]).then(([cRes, dRes, gRes, sRes]) => {
       setCompanies(cRes.data?.data || [])
       setDepartments(dRes.data?.data || [])
-      setSections(secRes.data?.data || [])
-      setDesignations(desRes.data?.data || [])
-      setLines(lRes.data?.data || [])
       setGroups(gRes.data?.data || [])
       setShifts(sRes.data?.data || [])
     }).catch(() => {})
+    handleApply()
   }, [])
+
+  React.useEffect(() => {
+    if (!filters.department_id) { setSections([]); setDesignations([]); setLines([]); return }
+    sectionApi.list(filters.department_id, { limit: "100" }).then((r) => setSections(r.data?.data || [])).catch(() => setSections([]))
+  }, [filters.department_id])
+
+  React.useEffect(() => {
+    if (!filters.section_id) { setDesignations([]); setLines([]); return }
+    Promise.all([
+      designationApi.list(filters.section_id, { limit: "100" }),
+      lineApi.list(filters.section_id, { limit: "100" }),
+    ]).then(([dr, lr]) => {
+      setDesignations(dr.data?.data || [])
+      setLines(lr.data?.data || [])
+    }).catch(() => { setDesignations([]); setLines([]) })
+  }, [filters.section_id])
 
   const filterDefs: FilterDef[] = React.useMemo(() => [
     { key: "date_range", label: "Date Range", type: "daterange-split", dateRangeKeys: { start: "start_date", end: "end_date" } },
     { key: "company_id", label: "Company", type: "select", options: companies.map((c) => ({ value: c.id, label: c.company_name_en })) },
     { key: "department_id", label: "Department", type: "select", options: departments.map((d) => ({ value: d.id, label: d.name })) },
-    { key: "section_id", label: "Section", type: "select", options: sections.map((s) => ({ value: s.id, label: s.name })) },
-    { key: "designation_id", label: "Designation", type: "select", options: designations.map((d) => ({ value: d.id, label: d.name })) },
-    { key: "line_id", label: "Line", type: "select", options: lines.map((l) => ({ value: l.id, label: l.name })) },
+    { key: "section_id", label: "Section", type: "select", options: sections.map((s) => ({ value: s.id, label: s.name })), disabled: !filters.department_id },
+    { key: "designation_id", label: "Designation", type: "select", options: designations.map((d) => ({ value: d.id, label: d.name })), disabled: !filters.section_id },
+    { key: "line_id", label: "Line", type: "select", options: lines.map((l) => ({ value: l.id, label: l.name })), disabled: !filters.section_id },
     { key: "group_id", label: "Group", type: "select", options: groups.map((g) => ({ value: g.id, label: g.name })) },
     { key: "shift_id", label: "Shift", type: "select", options: shifts.map((s) => ({ value: s.id, label: s.name })) },
     { key: "status", label: "Status", type: "select", options: [
@@ -103,7 +101,7 @@ export default function JobCardPage() {
       { value: "absent", label: "Absent" }, { value: "half_day", label: "Half Day" },
     ] },
     { key: "employee_id", label: "Employee ID", type: "text", placeholder: "Enter employee code..." },
-  ], [companies, departments, sections, designations, lines, groups, shifts])
+  ], [companies, departments, sections, designations, lines, groups, shifts, filters.department_id, filters.section_id])
 
   const buildParams = (f?: Record<string, string>) => {
     const params = f || filters
@@ -281,26 +279,36 @@ export default function JobCardPage() {
                 ) : data.length === 0 ? (
                   <tr><td colSpan={10} className="px-3 py-8 text-center text-muted-foreground">No records found</td></tr>
                 ) : (
-                  data.map((row, i) => (
-                    <tr key={row.id} className="border-b last:border-0">
-                      <td className="px-3 py-2">{i + 1}</td>
-                      <td className="px-3 py-2">{format(new Date(row.date), "dd MMM yyyy")}</td>
-                      <td className="px-3 py-2">{row.shift?.name || "-"}</td>
-                      <td className="px-3 py-2">{format(new Date(row.date), "EEE")}</td>
-                      <td className="px-3 py-2">{formatCheck(row.check_in)}</td>
-                      <td className="px-3 py-2">{formatCheck(row.check_out)}</td>
-                      <td className="px-3 py-2">{row.total_hours || "-"}</td>
-                      <td className="px-3 py-2">{row.over_time || "-"}</td>
-                      <td className="px-3 py-2">{row.late_minutes > 0 ? row.late_minutes : "-"}</td>
-                      <td className="px-3 py-2 font-semibold">
-                        {row.status === "absent" ? (
-                          <span className="text-red-600">{statusMap[row.status] || row.status}</span>
-                        ) : (
-                          statusMap[row.status] || row.status
-                        )}
-                      </td>
-                    </tr>
-                  ))
+                  data.map((row, i) => {
+                    const bg = row.status === "present" ? "bg-green-50/40"
+                      : row.status === "late" ? "bg-orange-50/40"
+                      : row.status === "absent" ? "bg-red-50/40"
+                      : row.status === "half_day" ? "bg-yellow-50/40"
+                      : row.status === "on_leave" ? "bg-indigo-50/40"
+                      : row.status === "weekend" ? "bg-slate-50/40" : ""
+                    const tc = row.status === "absent" ? "text-red-600"
+                      : row.status === "present" ? "text-green-700"
+                      : row.status === "late" ? "text-orange-700"
+                      : row.status === "half_day" ? "text-yellow-700"
+                      : row.status === "on_leave" ? "text-indigo-700"
+                      : "text-muted-foreground"
+                    return (
+                      <tr key={row.id} className={`border-b last:border-0 ${bg} hover:bg-muted/50 transition-colors`}>
+                        <td className="px-3 py-2">{i + 1}</td>
+                        <td className="px-3 py-2">{format(new Date(row.date), "dd MMM yyyy")}</td>
+                        <td className="px-3 py-2">{row.shift_name || "-"}</td>
+                        <td className="px-3 py-2">{format(new Date(row.date), "EEE")}</td>
+                        <td className="px-3 py-2">{formatCheck(row.check_in)}</td>
+                        <td className="px-3 py-2">{formatCheck(row.check_out)}</td>
+                        <td className="px-3 py-2">{row.total_hours || "-"}</td>
+                        <td className="px-3 py-2">{row.over_time || "-"}</td>
+                        <td className="px-3 py-2">{row.late_minutes > 0 ? row.late_minutes : "-"}</td>
+                        <td className={`px-3 py-2 font-semibold ${tc}`}>
+                          {statusMap[row.status] || row.status}
+                        </td>
+                      </tr>
+                    )
+                  })
                 )}
               </tbody>
             </table>

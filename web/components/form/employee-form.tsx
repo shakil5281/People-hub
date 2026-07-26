@@ -226,8 +226,8 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
   React.useEffect(() => {
     const changed = watchGrossSalary !== prevGross.current
     prevGross.current = watchGrossSalary
-    if (changed && watchGrossSalary && watchGrossSalary > 0) {
-      const gross = watchGrossSalary
+    if ((changed || (watchGrossSalary ?? 0) > 0) && (watchGrossSalary ?? 0) > 0) {
+      const gross = watchGrossSalary ?? 0
       const transport = 450
       const food = 1250
       const medical = 750

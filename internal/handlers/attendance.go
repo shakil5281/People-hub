@@ -44,6 +44,108 @@ type ClockOutRequest struct {
 	EmployeeID string `json:"employee_id" binding:"required"`
 }
 
+type AttendanceRow struct {
+	ID           string  `json:"id"`
+	EmployeeID   string  `json:"employee_id"`
+	EmployeeName string  `json:"employee_name"`
+	Designation  string  `json:"designation"`
+	Date         string  `json:"date"`
+	CheckIn      *string `json:"check_in"`
+	CheckOut     *string `json:"check_out"`
+	TotalHours   *string `json:"total_hours"`
+	OverTime     *string `json:"over_time"`
+	Status       string  `json:"status"`
+	LateMinutes  int     `json:"late_minutes"`
+	ShiftName    string  `json:"shift_name"`
+	PunchNumber  *string `json:"punch_number"`
+	CompanyID    string  `json:"company_id"`
+}
+
+func toAttendanceRow(a models.Attendance) AttendanceRow {
+	r := AttendanceRow{
+		ID:          a.ID,
+		EmployeeID:  a.EmployeeID,
+		Date:        a.Date,
+		Status:      a.Status,
+		LateMinutes: a.LateMinutes,
+		PunchNumber: a.PunchNumber,
+		CompanyID:   a.CompanyID,
+		TotalHours:  a.TotalHours,
+		OverTime:    a.OverTime,
+	}
+	if a.Employee.NameEn != "" {
+		r.EmployeeName = a.Employee.NameEn
+	}
+	if a.Employee.DesignationRef != nil {
+		r.Designation = a.Employee.DesignationRef.Name
+	}
+	if a.Shift != nil {
+		r.ShiftName = a.Shift.Name
+	}
+	if a.CheckIn != nil {
+		s := a.CheckIn.Format("2006-01-02 15:04:05")
+		r.CheckIn = &s
+	}
+	if a.CheckOut != nil {
+		s := a.CheckOut.Format("2006-01-02 15:04:05")
+		r.CheckOut = &s
+	}
+	return r
+}
+
+func toAttendanceRows(list []models.Attendance) []AttendanceRow {
+	res := make([]AttendanceRow, len(list))
+	for i, a := range list {
+		res[i] = toAttendanceRow(a)
+	}
+	return res
+}
+
+type JobCardRow struct {
+	ID          string  `json:"id"`
+	EmployeeID  string  `json:"employee_id"`
+	Date        string  `json:"date"`
+	CheckIn     *string `json:"check_in"`
+	CheckOut    *string `json:"check_out"`
+	TotalHours  *string `json:"total_hours"`
+	OverTime    *string `json:"over_time"`
+	Status      string  `json:"status"`
+	LateMinutes int     `json:"late_minutes"`
+	ShiftName   string  `json:"shift_name"`
+}
+
+func toJobCardRow(a models.Attendance) JobCardRow {
+	r := JobCardRow{
+		ID:          a.ID,
+		EmployeeID:  a.EmployeeID,
+		Date:        a.Date,
+		Status:      a.Status,
+		LateMinutes: a.LateMinutes,
+		TotalHours:  a.TotalHours,
+		OverTime:    a.OverTime,
+	}
+	if a.Shift != nil {
+		r.ShiftName = a.Shift.Name
+	}
+	if a.CheckIn != nil {
+		s := a.CheckIn.Format("2006-01-02 15:04:05")
+		r.CheckIn = &s
+	}
+	if a.CheckOut != nil {
+		s := a.CheckOut.Format("2006-01-02 15:04:05")
+		r.CheckOut = &s
+	}
+	return r
+}
+
+func toJobCardRows(list []models.Attendance) []JobCardRow {
+	res := make([]JobCardRow, len(list))
+	for i, a := range list {
+		res[i] = toJobCardRow(a)
+	}
+	return res
+}
+
 // parseDateTime parses a check_in/check_out string into time.Time.
 // Accepts "HH:mm" (uses the given date), "yyyy-MM-ddTHH:mm" or "yyyy-MM-dd HH:mm:ss" (full datetime).
 func parseDateTime(val, date string) (time.Time, error) {
@@ -101,12 +203,32 @@ func (h *AttendanceHandler) List(c *gin.Context) {
 
 	hasFilters := companyID != "" || departmentID != "" || sectionID != "" || designationID != "" || lineID != "" || groupID != "" || shiftID != "" || status != "" || employeeID != ""
 	if hasFilters {
+		realCount, err := h.attendanceRepo.CountFilteredByDate(date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		if realCount == 0 {
+			c.JSON(http.StatusOK, utils.NewPaginatedResponse([]AttendanceRow{}, 0, p))
+			return
+		}
+
 		attendances, total, err := h.attendanceRepo.ListByDateFiltered(date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID, p.Page, p.Limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusOK, utils.NewPaginatedResponse(attendances, total, p))
+		c.JSON(http.StatusOK, utils.NewPaginatedResponse(toAttendanceRows(attendances), total, p))
+		return
+	}
+
+	realCount, err := h.attendanceRepo.CountByDate(date, companyID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if realCount == 0 {
+		c.JSON(http.StatusOK, utils.NewPaginatedResponse([]AttendanceRow{}, 0, p))
 		return
 	}
 
@@ -115,7 +237,7 @@ func (h *AttendanceHandler) List(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, utils.NewPaginatedResponse(attendances, total, p))
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(toAttendanceRows(attendances), total, p))
 }
 
 // GetAttendance godoc
@@ -369,23 +491,29 @@ func (h *AttendanceHandler) ListJobCard(c *gin.Context) {
 			return
 		}
 		type EmpInfo struct {
-			EmployeeID   string `json:"employee_id"`
-			NameEn       string `json:"name_en"`
-			Designation  string `json:"designation"`
-			Department   string `json:"department"`
-			Company      string `json:"company"`
-			Phone        string `json:"phone"`
-			JoiningDate  string `json:"joining_date"`
+			EmployeeID  string `json:"employee_id"`
+			NameEn      string `json:"name_en"`
+			Designation string `json:"designation"`
+			Department  string `json:"department"`
+			Company     string `json:"company"`
+			Phone       string `json:"phone"`
+			JoiningDate string `json:"joining_date"`
 		}
 		var result []EmpInfo
 		for _, e := range employees {
 			d := ""
-			if e.DesignationRef != nil { d = e.DesignationRef.Name }
+			if e.DesignationRef != nil {
+				d = e.DesignationRef.Name
+			}
 			dp := ""
-			if e.Department != nil { dp = e.Department.Name }
+			if e.Department != nil {
+				dp = e.Department.Name
+			}
 			cn := ""
 			jo := ""
-			if !e.JoiningDate.IsZero() { jo = e.JoiningDate.Format("2006-01-02") }
+			if !e.JoiningDate.IsZero() {
+				jo = e.JoiningDate.Format("2006-01-02")
+			}
 			result = append(result, EmpInfo{
 				EmployeeID: e.EmployeeID, NameEn: e.NameEn,
 				Designation: d, Department: dp,
@@ -396,14 +524,25 @@ func (h *AttendanceHandler) ListJobCard(c *gin.Context) {
 		return
 	}
 
+	realCount, err := h.attendanceRepo.CountRangeByDate(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
 	p := utils.ParsePagination(c)
+	if realCount == 0 {
+		c.JSON(http.StatusOK, utils.NewPaginatedResponse([]JobCardRow{}, 0, p))
+		return
+	}
+
 	attendances, total, err := h.attendanceRepo.ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, p.Page, p.Limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	c.JSON(http.StatusOK, utils.NewPaginatedResponse(attendances, total, p))
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(toJobCardRows(attendances), total, p))
 }
 
 // ClockIn godoc
@@ -471,7 +610,7 @@ func (h *AttendanceHandler) ClockIn(c *gin.Context) {
 // @Failure      401  {object}  map[string]string
 // @Failure      404  {object}  map[string]string
 // @Router       /attendance/clock-out [post]
-func (h *AttendanceHandler) 	ClockOut(c *gin.Context) {
+func (h *AttendanceHandler) ClockOut(c *gin.Context) {
 	var req ClockOutRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -542,7 +681,7 @@ func (h *AttendanceHandler) DeleteAll(c *gin.Context) {
 // @Router       /attendance/stats [get]
 func (h *AttendanceHandler) Stats(c *gin.Context) {
 	today := time.Now().Format("2006-01-02")
-	todayCount, _ := h.attendanceRepo.CountByDate(today)
+	todayCount, _ := h.attendanceRepo.CountByDateOnly(today)
 	c.JSON(http.StatusOK, gin.H{
 		"today_count": todayCount,
 		"today_date":  today,
@@ -577,18 +716,30 @@ func (h *AttendanceHandler) Summary(c *gin.Context) {
 	employeeID := c.Query("employee_id")
 	groupBy := c.Query("group_by")
 
-	var result []map[string]interface{}
-	var err error
-
-	if groupBy != "" {
-		result, err = h.attendanceRepo.SummaryByGroup(startDate, endDate, groupBy, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, statusFilter, employeeID)
-	} else {
-		result, err = h.attendanceRepo.Summary(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, statusFilter, employeeID)
-	}
-
+	realCount, err := h.attendanceRepo.CountRangeByDate(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, statusFilter, employeeID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	var result []map[string]interface{}
+
+	if realCount == 0 {
+		if result == nil {
+			result = []map[string]interface{}{}
+		}
+	} else if groupBy != "" {
+		result, err = h.attendanceRepo.SummaryByGroup(startDate, endDate, groupBy, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, statusFilter, employeeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	} else {
+		result, err = h.attendanceRepo.Summary(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, statusFilter, employeeID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -672,10 +823,10 @@ func (h *AttendanceHandler) OvertimeSummary(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"summaries": result,
-		"total":     len(result),
+		"summaries":  result,
+		"total":      len(result),
 		"start_date": startDate,
-		"end_date":  endDate,
+		"end_date":   endDate,
 	})
 }
 
@@ -854,13 +1005,13 @@ func (h *AttendanceHandler) MonthlyReport(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"records":     results,
-		"total":       len(results),
-		"start_date":  startStr,
-		"end_date":    endStr,
-		"year":        year,
-		"month":       month,
-		"totals":      totals,
+		"records":    results,
+		"total":      len(results),
+		"start_date": startStr,
+		"end_date":   endStr,
+		"year":       year,
+		"month":      month,
+		"totals":     totals,
 	})
 }
 
@@ -1052,8 +1203,14 @@ func addGroupedSheet(f *excelize.File, sheetName, companyName, companyAddress, d
 		// Attendance rows
 		for _, a := range list {
 			sl++
-			svc := func(c int, v string) { f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v); f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter) }
-			svl := func(c int, v string) { f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v); f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft) }
+			svc := func(c int, v string) {
+				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
+				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+			}
+			svl := func(c int, v string) {
+				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
+				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+			}
 
 			svc(1, a.EmployeeID)
 			svl(2, a.Employee.NameEn)
@@ -1271,8 +1428,14 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 	for rowIdx, att := range attendances {
 		row := rowIdx + dataStartRow
 
-		svc := func(c int, v string) { f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v); f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), styleDataCenter) }
-		sv := func(c int, v string) { f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v); f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), styleData) }
+		svc := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), styleDataCenter)
+		}
+		sv := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), styleData)
+		}
 
 		svc(1, att.EmployeeID)
 		sv(2, att.Employee.NameEn)
@@ -1597,8 +1760,14 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	// Data rows
 	for rowIdx, a := range attendances {
 		row := rowIdx + 6
-		svc := func(c int, v string) { f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v); f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter) }
-		svl := func(c int, v string) { f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v); f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft) }
+		svc := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+		}
+		svl := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+		}
 
 		svc(1, a.EmployeeID)
 		svl(2, a.Employee.NameEn)
@@ -1632,19 +1801,27 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 
 	// --- Grouped Sheets ---
 	addGroupedAbsentSheet(f, "Department Wise", companyName, companyAddress, dateDisplay, attendances, lastContAbsentMap, func(a models.Attendance) string {
-		if a.Employee.Department != nil { return a.Employee.Department.Name }
+		if a.Employee.Department != nil {
+			return a.Employee.Department.Name
+		}
 		return "-"
 	})
 	addGroupedAbsentSheet(f, "Section Wise", companyName, companyAddress, dateDisplay, attendances, lastContAbsentMap, func(a models.Attendance) string {
-		if a.Employee.SectionRef != nil { return a.Employee.SectionRef.Name }
+		if a.Employee.SectionRef != nil {
+			return a.Employee.SectionRef.Name
+		}
 		return "-"
 	})
 	addGroupedAbsentSheet(f, "Designation Wise", companyName, companyAddress, dateDisplay, attendances, lastContAbsentMap, func(a models.Attendance) string {
-		if a.Employee.DesignationRef != nil { return a.Employee.DesignationRef.Name }
+		if a.Employee.DesignationRef != nil {
+			return a.Employee.DesignationRef.Name
+		}
 		return "-"
 	})
 	addGroupedAbsentSheet(f, "Line Wise", companyName, companyAddress, dateDisplay, attendances, lastContAbsentMap, func(a models.Attendance) string {
-		if a.Employee.LineRef != nil { return a.Employee.LineRef.Name }
+		if a.Employee.LineRef != nil {
+			return a.Employee.LineRef.Name
+		}
 		return "-"
 	})
 
@@ -1791,8 +1968,12 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 	var groupOrder []string
 	for _, a := range attendances {
 		name := groupFn(a)
-		if name == "" { name = "-" }
-		if _, ok := grouped[name]; !ok { groupOrder = append(groupOrder, name) }
+		if name == "" {
+			name = "-"
+		}
+		if _, ok := grouped[name]; !ok {
+			groupOrder = append(groupOrder, name)
+		}
 		grouped[name] = append(grouped[name], a)
 	}
 
@@ -1808,13 +1989,21 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 		row++
 
 		for _, a := range list {
-			svc := func(c int, v string) { f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v); f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter) }
-			svl := func(c int, v string) { f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v); f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft) }
+			svc := func(c int, v string) {
+				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
+				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+			}
+			svl := func(c int, v string) {
+				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
+				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+			}
 
 			svc(1, a.EmployeeID)
 			svl(2, a.Employee.NameEn)
 			d := ""
-			if a.Employee.DesignationRef != nil { d = a.Employee.DesignationRef.Name }
+			if a.Employee.DesignationRef != nil {
+				d = a.Employee.DesignationRef.Name
+			}
 			svl(3, d)
 			svc(4, fmt.Sprintf("%d", lastContAbsentMap[a.EmployeeID]))
 			f.SetCellValue(sheetName, colNameAttendance(5)+strconv.Itoa(row), "A")
@@ -1837,7 +2026,8 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 // ExportSummaryExcel godoc
 //
 //	@Summary      Export daily summary to Excel
-// CustomSummaryReport godoc
+//
+// # CustomSummaryReport godoc
 //
 // @Summary      Custom summary report
 // @Description  Generate a custom mixed summary report with configurable sections
@@ -1867,14 +2057,14 @@ func (h *AttendanceHandler) CustomSummaryReport(c *gin.Context) {
 	}
 
 	type sectionResult struct {
-		Name     string                   `json:"name"`
-		Type     string                   `json:"type"`
-		SubRows  []map[string]interface{} `json:"sub_rows"`
-		Present  int64                    `json:"present"`
-		Absent   int64                    `json:"absent"`
-		Leave    int64                    `json:"leave"`
-		Others   int64                    `json:"others"`
-		Total    int64                    `json:"total"`
+		Name    string                   `json:"name"`
+		Type    string                   `json:"type"`
+		SubRows []map[string]interface{} `json:"sub_rows"`
+		Present int64                    `json:"present"`
+		Absent  int64                    `json:"absent"`
+		Leave   int64                    `json:"leave"`
+		Others  int64                    `json:"others"`
+		Total   int64                    `json:"total"`
 	}
 
 	var report []sectionResult
@@ -1937,14 +2127,14 @@ func (h *AttendanceHandler) CustomSummaryReport(c *gin.Context) {
 	})
 }
 
-//	@Description  Export attendance summary grouped by Department, Section, Designation, and Line
-//	@Tags         Attendance
-//	@Security     BearerAuth
-//	@Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
-//	@Param        start_date query string true "Start date (YYYY-MM-DD)"
-//	@Param        end_date query string true "End date (YYYY-MM-DD)"
-//	@Success      200  {file}  binary
-//	@Router       /attendance/summary/export/excel [get]
+// @Description  Export attendance summary grouped by Department, Section, Designation, and Line
+// @Tags         Attendance
+// @Security     BearerAuth
+// @Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+// @Param        start_date query string true "Start date (YYYY-MM-DD)"
+// @Param        end_date query string true "End date (YYYY-MM-DD)"
+// @Success      200  {file}  binary
+// @Router       /attendance/summary/export/excel [get]
 func (h *AttendanceHandler) ExportSummaryExcel(c *gin.Context) {
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
@@ -1959,9 +2149,13 @@ func (h *AttendanceHandler) ExportSummaryExcel(c *gin.Context) {
 	database.DB.First(&company)
 
 	companyName := company.CompanyNameEn
-	if companyName == "" { companyName = "Company Name" }
+	if companyName == "" {
+		companyName = "Company Name"
+	}
 	companyAddress := company.AddressEn
-	if companyAddress == "" { companyAddress = "Company Address" }
+	if companyAddress == "" {
+		companyAddress = "Company Address"
+	}
 
 	parsedStart, _ := time.Parse("2006-01-02", startDate)
 	parsedEnd, _ := time.Parse("2006-01-02", endDate)
@@ -1978,14 +2172,21 @@ func (h *AttendanceHandler) ExportSummaryExcel(c *gin.Context) {
 	}
 
 	for idx, g := range groups {
-		if idx > 0 { f.NewSheet(g.label) }
+		if idx > 0 {
+			f.NewSheet(g.label)
+		}
 		result, err := h.attendanceRepo.SummaryByGroup(startDate, endDate, g.key, "", "", "", "", "", "", "", "", "")
-		if err != nil { continue }
+		if err != nil {
+			continue
+		}
 		addDailySummarySheet(f, g.label, companyName, companyAddress, dateRange, result)
 	}
 
 	for _, s := range f.GetSheetList() {
-		o := "portrait"; ps := 9; fw := 1; fh := 0
+		o := "portrait"
+		ps := 9
+		fw := 1
+		fh := 0
 		f.SetPageLayout(s, &excelize.PageLayoutOptions{Orientation: &o, Size: &ps, FitToWidth: &fw, FitToHeight: &fh})
 		f.SetPageMargins(s, &excelize.PageLayoutMarginsOptions{Left: ptr(0.3), Right: ptr(0.3), Top: ptr(0.4), Bottom: ptr(0.4)})
 		f.SetSheetView(s, -1, &excelize.ViewOptions{ShowGridLines: ptrBool(false)})
@@ -1996,8 +2197,8 @@ func (h *AttendanceHandler) ExportSummaryExcel(c *gin.Context) {
 	f.Write(c.Writer)
 }
 
-func ptr(v float64) *float64     { return &v }
-func ptrBool(v bool) *bool        { return &v }
+func ptr(v float64) *float64 { return &v }
+func ptrBool(v bool) *bool   { return &v }
 
 func addDailySummarySheet(f *excelize.File, sheetName, companyName, companyAddress, dateRange string, data []map[string]interface{}) {
 	nCols := 9
@@ -2024,17 +2225,26 @@ func addDailySummarySheet(f *excelize.File, sheetName, companyName, companyAddre
 	endCol := colNameAttendance(nCols)
 
 	f.SetCellValue(sheetName, "A1", companyName)
-	f.MergeCell(sheetName, "A1", endCol+"1"); f.SetCellStyle(sheetName, "A1", endCol+"1", cnStyle); f.SetRowHeight(sheetName, 1, 32)
+	f.MergeCell(sheetName, "A1", endCol+"1")
+	f.SetCellStyle(sheetName, "A1", endCol+"1", cnStyle)
+	f.SetRowHeight(sheetName, 1, 32)
 	f.SetCellValue(sheetName, "A2", companyAddress)
-	f.MergeCell(sheetName, "A2", endCol+"2"); f.SetCellStyle(sheetName, "A2", endCol+"2", ncStyle); f.SetRowHeight(sheetName, 2, 20)
+	f.MergeCell(sheetName, "A2", endCol+"2")
+	f.SetCellStyle(sheetName, "A2", endCol+"2", ncStyle)
+	f.SetRowHeight(sheetName, 2, 20)
 	f.SetCellValue(sheetName, "A3", sheetName+" SUMMARY")
-	f.MergeCell(sheetName, "A3", endCol+"3"); f.SetCellStyle(sheetName, "A3", endCol+"3", ncStyle); f.SetRowHeight(sheetName, 3, 20)
+	f.MergeCell(sheetName, "A3", endCol+"3")
+	f.SetCellStyle(sheetName, "A3", endCol+"3", ncStyle)
+	f.SetRowHeight(sheetName, 3, 20)
 	f.SetCellValue(sheetName, "A4", "Date: "+dateRange)
-	f.MergeCell(sheetName, "A4", endCol+"4"); f.SetCellStyle(sheetName, "A4", endCol+"4", ncStyle); f.SetRowHeight(sheetName, 4, 20)
+	f.MergeCell(sheetName, "A4", endCol+"4")
+	f.SetCellStyle(sheetName, "A4", endCol+"4", ncStyle)
+	f.SetRowHeight(sheetName, 4, 20)
 
 	for i, c := range cols {
 		cell := colNameAttendance(i+1) + "5"
-		f.SetCellValue(sheetName, cell, c.header); f.SetCellStyle(sheetName, cell, cell, hdStyle)
+		f.SetCellValue(sheetName, cell, c.header)
+		f.SetCellStyle(sheetName, cell, cell, hdStyle)
 		f.SetColWidth(sheetName, colNameAttendance(i+1), colNameAttendance(i+1), c.width)
 	}
 	f.SetRowHeight(sheetName, 5, 24)
@@ -2042,26 +2252,56 @@ func addDailySummarySheet(f *excelize.File, sheetName, companyName, companyAddre
 	var gp, gl, ga, ghd, gol, gw, gt int64
 	for i, row := range data {
 		r := i + 6
-		svc := func(c int, v string) { f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(r), v); f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(r), colNameAttendance(c)+strconv.Itoa(r), dcStyle) }
-		svl := func(c int, v string) { f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(r), v); f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(r), colNameAttendance(c)+strconv.Itoa(r), dlStyle) }
+		svc := func(c int, v string) {
+			f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(r), v)
+			f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(r), colNameAttendance(c)+strconv.Itoa(r), dcStyle)
+		}
+		svl := func(c int, v string) {
+			f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(r), v)
+			f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(r), colNameAttendance(c)+strconv.Itoa(r), dlStyle)
+		}
 
 		svc(1, fmt.Sprintf("%d", i+1))
-		n := ""; if v, ok := row["name"]; ok && v != nil { n = fmt.Sprintf("%v", v) }
+		n := ""
+		if v, ok := row["name"]; ok && v != nil {
+			n = fmt.Sprintf("%v", v)
+		}
 		svl(2, n)
 
 		gv := func(k string) int64 {
 			if v, ok := row[k]; ok && v != nil {
-				switch x := v.(type) { case int64: return x; case float64: return int64(x) }
+				switch x := v.(type) {
+				case int64:
+					return x
+				case float64:
+					return int64(x)
+				}
 			}
 			return 0
 		}
-		p := gv("present"); l := gv("late"); a := gv("absent"); hd := gv("half_day")
-		ol := gv("on_leave"); we := gv("weekend"); t := gv("total")
+		p := gv("present")
+		l := gv("late")
+		a := gv("absent")
+		hd := gv("half_day")
+		ol := gv("on_leave")
+		we := gv("weekend")
+		t := gv("total")
 
-		svc(3, fmt.Sprintf("%d", p)); svc(4, fmt.Sprintf("%d", l)); svc(5, fmt.Sprintf("%d", a))
-		svc(6, fmt.Sprintf("%d", hd)); svc(7, fmt.Sprintf("%d", ol)); svc(8, fmt.Sprintf("%d", we)); svc(9, fmt.Sprintf("%d", t))
+		svc(3, fmt.Sprintf("%d", p))
+		svc(4, fmt.Sprintf("%d", l))
+		svc(5, fmt.Sprintf("%d", a))
+		svc(6, fmt.Sprintf("%d", hd))
+		svc(7, fmt.Sprintf("%d", ol))
+		svc(8, fmt.Sprintf("%d", we))
+		svc(9, fmt.Sprintf("%d", t))
 
-		gp += p; gl += l; ga += a; ghd += hd; gol += ol; gw += we; gt += t
+		gp += p
+		gl += l
+		ga += a
+		ghd += hd
+		gol += ol
+		gw += we
+		gt += t
 		f.SetRowHeight(sheetName, r, 20)
 	}
 

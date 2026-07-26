@@ -39,7 +39,7 @@ func Connect(cfg *config.Config) {
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
 		&models.SystemSetting{}, &models.SalaryIncrement{},
 		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
-		&models.NightBillProcess{},
+		&models.NightBillProcess{}, &models.Holiday{},
 	)
 	// Ensure new tables were created; if not, create them explicitly.
 	db.Exec("CREATE TABLE IF NOT EXISTS punishments (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
@@ -51,7 +51,7 @@ func Connect(cfg *config.Config) {
 	db.AutoMigrate(
 		&models.SalaryIncrement{},
 		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
-		&models.NightBillProcess{},
+		&models.NightBillProcess{}, &models.Holiday{},
 	)
 
 	// Use silent session for ALTER statements to avoid noisy ERROR logs when tables don't exist yet
@@ -72,6 +72,7 @@ func Connect(cfg *config.Config) {
 	alterCol("night_bills", "employee_id")
 	alterCol("tiffin_bills", "employee_id")
 	silentDB.Exec("ALTER TABLE separations ADD COLUMN IF NOT EXISTS company_id uuid")
+	silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS nid varchar(50)")
 	silentDB.Exec("ALTER TABLE requirements ADD COLUMN IF NOT EXISTS section_id uuid")
 	silentDB.Exec("ALTER TABLE requirements ADD COLUMN IF NOT EXISTS designation_id uuid")
 	silentDB.Exec("ALTER TABLE requirements ADD COLUMN IF NOT EXISTS group_type varchar(20) DEFAULT 'Worker'")

@@ -7,7 +7,8 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
-import { Employee, statusOptionsEmployee, genderOptions, bloodGroupOptions } from "@/components/data/employee-data"
+import Link from "next/link"
+import { statusOptionsEmployee, genderOptions, bloodGroupOptions } from "@/components/data/employee-data"
 import {
   employeeApi,
   companyApi,
@@ -53,22 +54,57 @@ interface Floor {
   name: string
 }
 
-const columns: ColumnDef<Employee>[] = [
+interface EmployeeRow {
+  id: string
+  employee_id: string
+  punch_number: string
+  name_en: string
+  name_bn: string
+  phone: string
+  designation: string
+  department: string
+  section: string
+  line: string
+  group: string
+  floor: string
+  joining_date: string
+  gross_salary: number
+  status: string
+  employee_type: string
+  gender: string
+  company_id: string
+  shift_id: string | null
+  department_id: string | null
+  section_id: string | null
+  designation_id: string | null
+  line_id: string | null
+  group_id: string | null
+  floor_id: string | null
+}
+
+const columns: ColumnDef<EmployeeRow>[] = [
   { accessorKey: "employee_id", header: "Emp. ID" },
-  { accessorKey: "name_en", header: "Name" },
   {
-    accessorKey: "designation_ref",
-    header: "Designation",
-    accessorFn: (r: any) => r.designation_ref?.name || "-",
+    accessorKey: "name_en",
+    header: "Name",
+    cell: ({ row }) => (
+      <Link
+        href={`/hr/employees/${row.original.id}`}
+        className="cursor-pointer text-inherit no-underline hover:text-green-600 hover:underline"
+      >
+        {row.original.name_en}
+      </Link>
+    ),
   },
+  { accessorKey: "designation", header: "Designation", cell: ({ row }) => row.original.designation || "-" },
+  { accessorKey: "department", header: "Department", cell: ({ row }) => row.original.department || "-" },
+  { accessorKey: "section", header: "Section", cell: ({ row }) => row.original.section || "-" },
   { accessorKey: "punch_number", header: "Punch No" },
   { accessorKey: "phone", header: "Phone" },
   {
     accessorKey: "joining_date",
     header: "Joining Date",
-    cell: ({ row }) => row.original.joining_date
-      ? new Date(row.original.joining_date).toLocaleDateString("en-GB")
-      : "-",
+    cell: ({ row }) => row.original.joining_date || "-",
   },
   {
     accessorKey: "gross_salary",
@@ -80,7 +116,7 @@ const columns: ColumnDef<Employee>[] = [
     header: "Status",
     cell: ({ row }) => (
       <Badge variant={row.original.status === "active" ? "default" : "secondary"} className="capitalize">
-        {statusOptionsEmployee.find((s) => s.value === row.original.status)?.label}
+        {statusOptionsEmployee.find((s) => s.value === row.original.status)?.label || row.original.status}
       </Badge>
     ),
   },
@@ -91,7 +127,7 @@ const selectClass =
 
 export default function EmployeesPage() {
   const router = useRouter()
-  const [data, setData] = React.useState<Employee[]>([])
+  const [data, setData] = React.useState<EmployeeRow[]>([])
   const [loading, setLoading] = React.useState(true)
   const [submitting, setSubmitting] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
@@ -225,8 +261,8 @@ export default function EmployeesPage() {
     setSubmitting(false)
   }
 
-  const handleEdit = (emp: Employee) => router.push(`/hr/employees/${emp.id}/edit`)
-  const handleDelete = async (emp: Employee) => {
+  const handleEdit = (emp: EmployeeRow) => router.push(`/hr/employees/${emp.id}/edit`)
+  const handleDelete = async (emp: EmployeeRow) => {
     try {
       await employeeApi.delete(emp.id)
       setData((prev) => prev.filter((e) => e.id !== emp.id))

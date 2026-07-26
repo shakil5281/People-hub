@@ -25,9 +25,9 @@ type Leave struct {
 	CreatedBy       *string        `json:"created_by" gorm:"type:uuid"`
 	UpdatedBy       *string        `json:"updated_by" gorm:"type:uuid"`
 
-	Company    Company    `json:"company" gorm:"foreignKey:CompanyID"`
-	Employee   Employee   `json:"employee" gorm:"foreignKey:EmployeeID;references:EmployeeID"`
-	LeaveType  LeaveType  `json:"leave_type" gorm:"foreignKey:LeaveTypeID"`
+	Company   Company   `json:"company" gorm:"foreignKey:CompanyID"`
+	Employee  Employee  `json:"employee" gorm:"foreignKey:EmployeeID;references:EmployeeID"`
+	LeaveType LeaveType `json:"leave_type" gorm:"foreignKey:LeaveTypeID"`
 }
 
 type LeaveAllocation struct {

@@ -147,13 +147,13 @@ func (h *SeparationHandler) Create(c *gin.Context) {
 
 	autoProcessed := result.NewType != ""
 	response := gin.H{
-		"id":               sep.ID,
-		"message":          "Separation created",
-		"employee_id":      result.EmployeeID,
-		"employee_name":    result.EmployeeName,
-		"auto_processed":   autoProcessed,
-		"new_employee_type": result.NewType,
-		"employee_status":  result.NewStatus,
+		"id":                 sep.ID,
+		"message":            "Separation created",
+		"employee_id":        result.EmployeeID,
+		"employee_name":      result.EmployeeName,
+		"auto_processed":     autoProcessed,
+		"new_employee_type":  result.NewType,
+		"employee_status":    result.NewStatus,
 		"attendance_deleted": result.AttendanceDeleted,
 	}
 	c.JSON(http.StatusCreated, response)

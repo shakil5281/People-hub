@@ -18,6 +18,7 @@ type AttendanceProcessor struct {
 	shiftRepo      *repository.ShiftRepository
 	leaveRepo      *repository.LeaveRepository
 	tempShiftRepo  *repository.TemporaryShiftRepository
+	holidayRepo    *repository.HolidayRepository
 }
 
 func NewAttendanceProcessor(
@@ -27,6 +28,7 @@ func NewAttendanceProcessor(
 	shiftRepo *repository.ShiftRepository,
 	leaveRepo *repository.LeaveRepository,
 	tempShiftRepo *repository.TemporaryShiftRepository,
+	holidayRepo *repository.HolidayRepository,
 ) *AttendanceProcessor {
 	return &AttendanceProcessor{
 		dataLogRepo:    dataLogRepo,
@@ -35,6 +37,7 @@ func NewAttendanceProcessor(
 		shiftRepo:      shiftRepo,
 		leaveRepo:      leaveRepo,
 		tempShiftRepo:  tempShiftRepo,
+		holidayRepo:    holidayRepo,
 	}
 }
 
@@ -154,6 +157,27 @@ func (p *AttendanceProcessor) processDay(
 		onLeaveSet[l.EmployeeID] = true
 	}
 
+	// Holiday sets
+	isGovHoliday := false
+	isCompWeekend := false
+	isGenDuty := false
+	holidays, holErr := p.holidayRepo.ListActiveByDate(date, companyID)
+	if holErr == nil {
+		for _, h := range holidays {
+			if h.Type == "government" && h.Date == date {
+				isGovHoliday = true
+			}
+			if h.Type == "weekend_change" {
+				if h.Date == date {
+					isGenDuty = true
+				}
+				if h.WeekendDate != nil && *h.WeekendDate == date {
+					isCompWeekend = true
+				}
+			}
+		}
+	}
+
 	// --- Process punch logs ---
 	if len(logs) > 0 {
 		type empPunches struct {
@@ -193,6 +217,7 @@ func (p *AttendanceProcessor) processDay(
 
 			checkIn, checkOut, totalHours, overTime, status, lateMinutes, shiftID := p.resolveAttendanceFromPunches(
 				employee, date, gp.Punches, tempShiftByKey, shiftCache, onLeaveSet,
+				isGovHoliday, isCompWeekend, isGenDuty,
 			)
 
 			var attErr error
@@ -272,7 +297,11 @@ func (p *AttendanceProcessor) processDay(
 			weekShift = p.getShift(*emp.ShiftID, shiftCache)
 		}
 
-		if weekShift != nil && weekShift.WeekendDays != "" && utils.IsWeekend(date, weekShift.WeekendDays) {
+		if isGovHoliday {
+			status = "holiday"
+		} else if isCompWeekend {
+			status = "weekend"
+		} else if !isGenDuty && weekShift != nil && weekShift.WeekendDays != "" && utils.IsWeekend(date, weekShift.WeekendDays) {
 			status = "weekend"
 		}
 		if onLeaveSet[emp.EmployeeID] {
@@ -369,9 +398,17 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 	tempShiftByKey map[string]*models.TemporaryShift,
 	shiftCache map[string]*models.Shift,
 	onLeaveSet map[string]bool,
+	isGovHoliday bool,
+	isCompWeekend bool,
+	isGenDuty bool,
 ) (checkIn, checkOut *time.Time, totalHoursStr, overTime *string, status string, lateMinutes int, shiftID *string) {
 
 	status = "present"
+
+	// Government holiday overrides everything
+	if isGovHoliday {
+		return nil, nil, nil, nil, "holiday", 0, nil
+	}
 
 	// Resolve shift — key uses business employee_id
 	var shift *models.Shift
@@ -388,9 +425,12 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 		}
 	}
 
-	// Weekend check
+	// Weekend check: skip if this date is a general duty date (weekend turned working)
 	isWeekendDay := false
-	if shift != nil && shift.WeekendDays != "" && utils.IsWeekend(date, shift.WeekendDays) {
+	if isCompWeekend {
+		isWeekendDay = true
+		status = "weekend"
+	} else if !isGenDuty && shift != nil && shift.WeekendDays != "" && utils.IsWeekend(date, shift.WeekendDays) {
 		isWeekendDay = true
 		status = "weekend"
 	}

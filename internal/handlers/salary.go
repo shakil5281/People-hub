@@ -224,15 +224,15 @@ func (h *SalaryHandler) List(c *gin.Context) {
 		}
 		if _, ok := deptSummary[deptName]; !ok {
 			deptSummary[deptName] = map[string]interface{}{
-				"department":     deptName,
-				"employees":      0,
-				"basic_salary":   0.0,
-				"house_rent":     0.0,
-				"medical":        0.0,
-				"transport":      0.0,
-				"gross_salary":   0.0,
+				"department":       deptName,
+				"employees":        0,
+				"basic_salary":     0.0,
+				"house_rent":       0.0,
+				"medical":          0.0,
+				"transport":        0.0,
+				"gross_salary":     0.0,
 				"total_deductions": 0.0,
-				"net_salary":     0.0,
+				"net_salary":       0.0,
 			}
 		}
 		ds := deptSummary[deptName]
@@ -442,7 +442,7 @@ func (h *SalaryHandler) DailySheet(c *gin.Context) {
 	}
 
 	var totals = map[string]float64{
-		"employees":   0,
+		"employees":    0,
 		"gross_salary": 0,
 		"daily_rate":   0,
 		"ot_hours":     0,
@@ -541,8 +541,8 @@ type bankSheetStyles struct {
 
 func newBankSheetStyles(f *excelize.File) *bankSheetStyles {
 	header, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Color: "#FFFFFF", Size: 11},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
+		Font:      &excelize.Font{Bold: true, Color: "#FFFFFF", Size: 11},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 		Border: []excelize.Border{
 			{Type: "left", Color: "#FFFFFF", Style: 1},
@@ -552,7 +552,7 @@ func newBankSheetStyles(f *excelize.File) *bankSheetStyles {
 		},
 	})
 	data, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Size: 10},
+		Font:      &excelize.Font{Size: 10},
 		Alignment: &excelize.Alignment{Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "left", Color: "#D9D9D9", Style: 1},
@@ -562,8 +562,8 @@ func newBankSheetStyles(f *excelize.File) *bankSheetStyles {
 		},
 	})
 	line, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#D6E4F0"}},
+		Font:      &excelize.Font{Bold: true, Size: 10},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#D6E4F0"}},
 		Alignment: &excelize.Alignment{Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "left", Color: "#D9D9D9", Style: 1},
@@ -573,8 +573,8 @@ func newBankSheetStyles(f *excelize.File) *bankSheetStyles {
 		},
 	})
 	subtotal, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10, Color: "#006100"},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "#006100"},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
 		Alignment: &excelize.Alignment{Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "left", Color: "#D9D9D9", Style: 1},
@@ -584,8 +584,8 @@ func newBankSheetStyles(f *excelize.File) *bankSheetStyles {
 		},
 	})
 	money, _ := f.NewStyle(&excelize.Style{
-		Font:  &excelize.Font{Size: 10},
-		NumFmt: 4,
+		Font:      &excelize.Font{Size: 10},
+		NumFmt:    4,
 		Alignment: &excelize.Alignment{Vertical: "center"},
 		Border: []excelize.Border{
 			{Type: "left", Color: "#D9D9D9", Style: 1},
@@ -595,10 +595,10 @@ func newBankSheetStyles(f *excelize.File) *bankSheetStyles {
 		},
 	})
 	moneyBold, _ := f.NewStyle(&excelize.Style{
-		Font:  &excelize.Font{Bold: true, Size: 10, Color: "#006100"},
-		NumFmt: 4,
+		Font:      &excelize.Font{Bold: true, Size: 10, Color: "#006100"},
+		NumFmt:    4,
 		Alignment: &excelize.Alignment{Vertical: "center"},
-		Fill:  excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
 		Border: []excelize.Border{
 			{Type: "left", Color: "#D9D9D9", Style: 1},
 			{Type: "right", Color: "#D9D9D9", Style: 1},
@@ -777,8 +777,8 @@ func (h *SalaryHandler) BankSheetExportAll(c *gin.Context) {
 
 	// Fetch all 5 datasets
 	type sheetDef struct {
-		name      string
-		groupID   string
+		name        string
+		groupID     string
 		accountType string
 	}
 	defs := []sheetDef{
@@ -835,5 +835,3 @@ func (h *SalaryHandler) BankSheetExportAll(c *gin.Context) {
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	f.Write(c.Writer)
 }
-
-

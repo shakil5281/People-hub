@@ -81,6 +81,7 @@ export const leaveNav = [
   { title: "Leave Type", url: "/leave/leave-type", icon: TagIcon },
   { title: "Leave", url: "/leave/leave", icon: CalendarCheckIcon },
   { title: "Leave Details", url: "/leave/leave-details", icon: FileTextIcon },
+  { title: "Holiday", url: "/leave/holiday", icon: CalendarDaysIcon },
 ] as const satisfies { title: string; url: string; icon: LucideIcon }[]
 
 export const payrollNav = [

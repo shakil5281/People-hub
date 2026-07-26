@@ -7,8 +7,8 @@ import (
 )
 
 type Punishment struct {
-	ID        string `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	CompanyID string `json:"company_id" gorm:"type:uuid;not null"`
+	ID         string `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CompanyID  string `json:"company_id" gorm:"type:uuid;not null"`
 	EmployeeID string `json:"employee_id" gorm:"type:varchar(50);not null"`
 
 	Type    string  `json:"type" gorm:"type:varchar(50);not null"`

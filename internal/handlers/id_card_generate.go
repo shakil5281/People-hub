@@ -121,7 +121,7 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		cardsPerPage = 6
 	)
 
-	cardW := (pageW - 2*margin - float64(cols-1)*gapX) / float64(cols) // ~62mm
+	cardW := (pageW - 2*margin - float64(cols-1)*gapX) / float64(cols)                           // ~62mm
 	cardH := (pageH/2 - margin - halfGap/2 - float64(rowsPerHalf-1)*gapY) / float64(rowsPerHalf) // ~64mm
 
 	// Build positions for top half (front) and bottom half (back)

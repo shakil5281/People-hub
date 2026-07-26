@@ -17,19 +17,19 @@ func NewDashboardHandler(repo *repository.DashboardRepository) *DashboardHandler
 }
 
 type dashboardStats struct {
-	TotalEmployees      int64                              `json:"total_employees"`
-	ActiveEmployees     int64                              `json:"active_employees"`
-	TotalDepartments    int64                              `json:"total_departments"`
-	TotalSections       int64                              `json:"total_sections"`
-	TodayAttendance     int64                              `json:"today_attendance"`
-	TodayLogs           int64                              `json:"today_logs"`
-	PendingLeaves       int64                              `json:"pending_leaves"`
-	NewHiresMonth       int64                              `json:"new_hires_month"`
-	SeparationsMonth    int64                              `json:"separations_month"`
-	GenderDistribution  []repository.GenderCount           `json:"gender_distribution"`
-	DepartmentCounts    []repository.DeptCount             `json:"department_counts"`
-	MonthlyAttendance   []repository.MonthlyAttendanceCount `json:"monthly_attendance"`
-	RecentActivity      []repository.ActivityItem          `json:"recent_activity"`
+	TotalEmployees     int64                               `json:"total_employees"`
+	ActiveEmployees    int64                               `json:"active_employees"`
+	TotalDepartments   int64                               `json:"total_departments"`
+	TotalSections      int64                               `json:"total_sections"`
+	TodayAttendance    int64                               `json:"today_attendance"`
+	TodayLogs          int64                               `json:"today_logs"`
+	PendingLeaves      int64                               `json:"pending_leaves"`
+	NewHiresMonth      int64                               `json:"new_hires_month"`
+	SeparationsMonth   int64                               `json:"separations_month"`
+	GenderDistribution []repository.GenderCount            `json:"gender_distribution"`
+	DepartmentCounts   []repository.DeptCount              `json:"department_counts"`
+	MonthlyAttendance  []repository.MonthlyAttendanceCount `json:"monthly_attendance"`
+	RecentActivity     []repository.ActivityItem           `json:"recent_activity"`
 }
 
 // GetStats godoc

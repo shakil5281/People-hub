@@ -79,8 +79,9 @@ func New(cfg *config.Config) *gin.Engine {
 	mdbReader := service.NewMDBReader()
 	leaveRepo := repository.NewLeaveRepository(database.DB)
 	tempShiftRepo := repository.NewTemporaryShiftRepository(database.DB)
+	holidayRepo := repository.NewHolidayRepository(database.DB)
 	dataLogService := service.NewDataLogService(dataLogRepo, mdbReader)
-	attendanceProcessor := service.NewAttendanceProcessor(dataLogRepo, attendanceRepo, employeeRepo, shiftRepo, leaveRepo, tempShiftRepo)
+	attendanceProcessor := service.NewAttendanceProcessor(dataLogRepo, attendanceRepo, employeeRepo, shiftRepo, leaveRepo, tempShiftRepo, holidayRepo)
 	dataLogHandler := handlers.NewDataLogHandler(dataLogRepo, dataLogService, attendanceProcessor)
 	leaveHandler := handlers.NewLeaveHandler(leaveRepo, employeeRepo, attendanceRepo)
 	salaryRepo := repository.NewSalaryRepository(database.DB)
@@ -102,6 +103,7 @@ func New(cfg *config.Config) *gin.Engine {
 	nightBillHandler := handlers.NewNightBillHandler(nightBillRepo, employeeRepo)
 	tiffinBillRepo := repository.NewTiffinBillRepository(database.DB)
 	tiffinBillHandler := handlers.NewTiffinBillHandler(tiffinBillRepo)
+	holidayHandler := handlers.NewHolidayHandler(holidayRepo)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
@@ -116,7 +118,7 @@ func New(cfg *config.Config) *gin.Engine {
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, nightBillHandler, tiffinBillHandler, cfg.JWTSecret)
+	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, nightBillHandler, tiffinBillHandler, holidayHandler, cfg.JWTSecret)
 
 	return r
 }
