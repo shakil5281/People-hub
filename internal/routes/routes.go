@@ -43,6 +43,7 @@ func Setup(
 	nightBillHandler *handlers.NightBillHandler,
 	tiffinBillHandler *handlers.TiffinBillHandler,
 	holidayHandler *handlers.HolidayHandler,
+	systemLogHandler *handlers.SystemLogHandler,
 	jwtSecret string,
 ) {
 	r.GET("/health", handlers.HealthCheck)
@@ -510,5 +511,16 @@ func Setup(
 	{
 		settingsRoutes.GET("", settingsHandler.List)
 		settingsRoutes.PUT("", settingsHandler.Update)
+	}
+
+	// Protected system-logs routes
+	systemLog := api.Group("/system-logs")
+	systemLog.Use(middleware.AuthMiddleware(jwtSecret), middleware.RequireRole("super_admin"))
+	{
+		systemLog.GET("", systemLogHandler.List)
+		systemLog.GET("/stats", systemLogHandler.Stats)
+		systemLog.GET("/:id", systemLogHandler.GetByID)
+		systemLog.DELETE("", systemLogHandler.Delete)
+		systemLog.DELETE("/purge", systemLogHandler.Purge)
 	}
 }

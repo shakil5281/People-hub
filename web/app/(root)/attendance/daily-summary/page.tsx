@@ -1,11 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { FileTextIcon, DownloadIcon, Loader2, ClipboardCheckIcon } from "lucide-react"
+import { FileTextIcon, DownloadIcon, Loader2, ClipboardCheckIcon, FilterIcon, XIcon } from "lucide-react"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from "@/components/ui/sheet"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
 interface Company { id: string; company_name_en: string }
@@ -141,6 +143,7 @@ export default function DailySummaryPage() {
   const [groups, setGroups] = React.useState<Group[]>([])
   const [shifts, setShifts] = React.useState<Shift[]>([])
   const [filters, setFilters] = React.useState<Record<string, string>>({ date: today })
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
   const [groupBy, setGroupBy] = React.useState("department")
   const [activeFilters, setActiveFilters] = React.useState<Record<string, string>>({ date: today })
 
@@ -244,12 +247,14 @@ export default function DailySummaryPage() {
     const active: Record<string, string> = {}
     for (const [k, v] of Object.entries(filters)) { if (v) active[k] = v }
     fetchData(active, groupBy)
+    setMobileFilterOpen(false)
   }
 
   const handleReset = () => {
     const rf = { date: today }
     setFilters(rf)
     fetchData(rf, groupBy)
+    setMobileFilterOpen(false)
   }
 
   const handleExport = async () => {
@@ -287,14 +292,54 @@ export default function DailySummaryPage() {
               <p className="text-muted-foreground mt-1">Daily attendance summary reports</p>
             </div>
           </div>
-          <Button onClick={handleExport} disabled={exporting} variant="outline">
-            {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
-            {exporting ? "Exporting..." : "Export Excel"}
-          </Button>
+          <div className="hidden md:flex">
+            <Button onClick={handleExport} disabled={exporting} variant="outline">
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
+              {exporting ? "Exporting..." : "Export Excel"}
+            </Button>
+          </div>
+        </div>
+        <div className="md:hidden mt-3">
+          <ButtonGroup className="w-full">
+            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="flex-1">
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filters
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                  <SheetTitle className="text-base">Filters</SheetTitle>
+                  <SheetClose asChild>
+                    <Button variant="ghost" size="icon-sm">
+                      <XIcon className="h-4 w-4" />
+                    </Button>
+                  </SheetClose>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+                  <FilterBar
+                    filters={filterDefs}
+                    values={filters}
+                    onChange={handleChange}
+                    onApply={handleApply}
+                    onReset={handleReset}
+                    submitting={loading}
+                    singleColumn
+                    noBorder
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+            <Button onClick={handleExport} disabled={exporting} variant="outline" className="flex-1">
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
+              {exporting ? "Exporting..." : "Export"}
+            </Button>
+          </ButtonGroup>
         </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar
           filters={filterDefs}
           values={filters}

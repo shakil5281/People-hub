@@ -23,7 +23,7 @@ export default function DashboardLayout({
         <SidebarInset>
           <SiteHeader />
           <div className="flex flex-1 flex-col">
-            <div className="@container/main flex flex-1 flex-col gap-2 p-8">
+            <div className="@container/main flex flex-1 flex-col gap-2 p-2 md:p-8">
               {children}
             </div>
           </div>

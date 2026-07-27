@@ -3,7 +3,6 @@ package handlers
 import (
 	"bytes"
 	"encoding/base64"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -14,6 +13,7 @@ import (
 	"github.com/jung-kurt/gofpdf"
 	"github.com/shakil5281/peoplehub-api/internal/database"
 	"github.com/shakil5281/peoplehub-api/internal/models"
+	"github.com/shakil5281/peoplehub-api/internal/service"
 )
 
 type GenerateIdCardRequest struct {
@@ -28,22 +28,22 @@ func findWorkingFont() (fontName string, fontPath string, boldPath string) {
 	}
 	for _, c := range candidates {
 		if _, err := os.Stat(c.path); err != nil {
-			log.Printf("[IDCard] font not found: %s", c.path)
+			service.WriteLog("debug", "idcard", "font not found: "+c.path)
 			continue
 		}
-		log.Printf("[IDCard] testing font: %s", c.path)
+		service.WriteLog("debug", "idcard", "testing font: "+c.path)
 		testPdf := gofpdf.New("P", "mm", "A4", "")
 		testPdf.AddUTF8Font(c.name, "", c.path)
 		if c.bold != "" {
 			testPdf.AddUTF8Font(c.name, "B", c.bold)
 		}
 		if testPdf.Error() == nil {
-			log.Printf("[IDCard] font OK: %s", c.path)
+			service.WriteLog("debug", "idcard", "font OK: "+c.path)
 			return c.name, c.path, c.bold
 		}
-		log.Printf("[IDCard] font failed: %s error=%v", c.path, testPdf.Error())
+		service.WriteLog("error", "idcard", "font failed: "+c.path+" error="+testPdf.Error().Error())
 	}
-	log.Printf("[IDCard] falling back to Helvetica")
+	service.WriteLog("warn", "idcard", "falling back to Helvetica")
 	return "Helvetica", "", ""
 }
 
@@ -86,7 +86,7 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 
 	// --- Font setup ---
 	fontName, fontPath, boldPath := findWorkingFont()
-	log.Printf("[IDCard] selected font=%s path=%s bold=%s", fontName, fontPath, boldPath)
+	service.WriteLog("info", "idcard", "selected font="+fontName+" path="+fontPath+" bold="+boldPath)
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(0, 0, 0)
 	pdf.SetAutoPageBreak(false, 0)
@@ -94,7 +94,7 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 	if fontPath != "" {
 		pdf.AddUTF8Font(fontName, "", fontPath)
 		if pdf.Error() != nil {
-			log.Printf("[IDCard] AddUTF8Font normal failed: %v — falling back to Helvetica", pdf.Error())
+			service.WriteErrorLog("idcard", "AddUTF8Font normal failed: "+pdf.Error().Error()+" — falling back to Helvetica")
 			fontName = "Helvetica"
 			pdf = gofpdf.New("P", "mm", "A4", "")
 			pdf.SetMargins(0, 0, 0)
@@ -102,7 +102,7 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		} else if boldPath != "" {
 			pdf.AddUTF8Font(fontName, "B", boldPath)
 			if pdf.Error() != nil {
-				log.Printf("[IDCard] AddUTF8Font bold failed: %v", pdf.Error())
+				service.WriteErrorLog("idcard", "AddUTF8Font bold failed: "+pdf.Error().Error())
 			}
 		}
 	}
@@ -140,7 +140,7 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 	for i := 0; i < len(employees); i += cardsPerPage {
 		pdf.AddPage()
 		if pdf.Error() != nil {
-			log.Printf("[IDCard] AddPage error: %v", pdf.Error())
+			service.WriteErrorLog("idcard", "AddPage error: "+pdf.Error().Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "PDF page error: " + pdf.Error().Error()})
 			return
 		}
@@ -153,24 +153,24 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 			bPos := backPositions[j]
 			drawCardFront(pdf, fPos[0], fPos[1], cardW, cardH, emp, fontName)
 			if pdf.Error() != nil {
-				log.Printf("[IDCard] drawCardFront error at emp=%s: %v", emp.EmployeeID, pdf.Error())
+				service.WriteErrorLog("idcard", "drawCardFront error at emp="+emp.EmployeeID+": "+pdf.Error().Error())
 			}
 			drawCardBack(pdf, bPos[0], bPos[1], cardW, cardH, emp, fontName)
 			if pdf.Error() != nil {
-				log.Printf("[IDCard] drawCardBack error at emp=%s: %v", emp.EmployeeID, pdf.Error())
+				service.WriteErrorLog("idcard", "drawCardBack error at emp="+emp.EmployeeID+": "+pdf.Error().Error())
 			}
 		}
 	}
 
 	if pdf.Error() != nil {
-		log.Printf("[IDCard] final PDF error: %v", pdf.Error())
+		service.WriteErrorLog("idcard", "final PDF error: "+pdf.Error().Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "PDF generation failed: " + pdf.Error().Error()})
 		return
 	}
 
 	var buf bytes.Buffer
 	if err := pdf.Output(&buf); err != nil {
-		log.Printf("[IDCard] PDF output error: %v", err)
+		service.WriteErrorLog("idcard", "PDF output error: "+err.Error())
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF: " + err.Error()})
 		return
 	}

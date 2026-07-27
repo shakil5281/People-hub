@@ -5,10 +5,7 @@
   <executable>node</executable>
   <arguments>G:\\softwer\\People-hub\web\build\standalone\server.js</arguments>
   <workingdirectory>G:\\softwer\\People-hub\web</workingdirectory>
-  <log mode="roll-by-size">
-    <sizeThreshold>10240</sizeThreshold>
-    <keepFiles>8</keepFiles>
-  </log>
+  <log mode="none"/>
   <onfailure action="restart" delay="10 sec"/>
   <delayedAutoStart>true</delayedAutoStart>
   <startmode>Automatic</startmode>

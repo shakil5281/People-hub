@@ -4,10 +4,7 @@
   <description>PeopleHub Go Backend API Server</description>
   <executable>G:\\softwer\\People-hub\peoplehub.exe</executable>
   <workingdirectory>G:\\softwer\\People-hub</workingdirectory>
-  <log mode="roll-by-size">
-    <sizeThreshold>10240</sizeThreshold>
-    <keepFiles>8</keepFiles>
-  </log>
+  <log mode="none"/>
   <onfailure action="restart" delay="10 sec"/>
   <delayedAutoStart>true</delayedAutoStart>
   <startmode>Automatic</startmode>

@@ -1,5 +1,0 @@
-2026-07-24 11:40:44,188 INFO  - Stopping HubAPI
-2026-07-24 11:40:44,191 DEBUG - ProcessKill 12764
-2026-07-24 11:40:44,202 DEBUG - Stopping process 12764...
-2026-07-24 11:40:44,292 DEBUG - Process 12764 canceled with code 0.
-2026-07-24 11:40:44,314 INFO  - Finished HubAPI

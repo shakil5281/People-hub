@@ -3,6 +3,7 @@
 import * as React from "react"
 import { format } from "date-fns"
 import { Loader2, RotateCcwIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { DatePicker } from "@/components/ui/date-picker"
 import { DateRangePicker } from "@/components/ui/date-range-picker"
@@ -24,17 +25,19 @@ interface FilterBarProps {
   onApply: () => void
   onReset: () => void
   submitting: boolean
+  singleColumn?: boolean
+  noBorder?: boolean
 }
 
 const selectClass =
   "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
 
-export function FilterBar({ filters, values, onChange, onApply, onReset, submitting }: FilterBarProps) {
+export function FilterBar({ filters, values, onChange, onApply, onReset, submitting, singleColumn, noBorder }: FilterBarProps) {
   const hasFilters = Object.values(values).some((v) => v !== "")
 
   return (
-    <div className="rounded-lg border bg-card p-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div className={noBorder ? "p-4" : "rounded-lg border bg-card p-4"}>
+      <div className={singleColumn ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"}>
         {filters.map((f) => (
           <div key={f.key} className="flex flex-col gap-1.5">
             <label className="text-xs font-medium text-muted-foreground">{f.label}</label>

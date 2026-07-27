@@ -4,10 +4,7 @@
   <description>Reverse proxy routing PeopleHub traffic on port 8081</description>
   <executable>G:\\softwer\\People-hub\peoplehub-gateway.exe</executable>
   <workingdirectory>G:\\softwer\\People-hub</workingdirectory>
-  <log mode="roll-by-size">
-    <sizeThreshold>10240</sizeThreshold>
-    <keepFiles>8</keepFiles>
-  </log>
+  <log mode="none"/>
   <onfailure action="restart" delay="10 sec"/>
   <delayedAutoStart>true</delayedAutoStart>
   <startmode>Automatic</startmode>

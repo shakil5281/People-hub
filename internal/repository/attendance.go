@@ -2,11 +2,21 @@ package repository
 
 import (
 	"fmt"
-	"log"
+	"time"
 
+	"github.com/shakil5281/peoplehub-api/internal/database"
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"gorm.io/gorm"
 )
+
+func writeLog(level, source, message string) {
+	database.DB.Create(&models.SystemLog{
+		Level:    level,
+		Source:   source,
+		Message:  message,
+		CreatedAt: time.Now(),
+	})
+}
 
 type AttendanceRepository struct {
 	db *gorm.DB
@@ -374,14 +384,14 @@ func (r *AttendanceRepository) SummaryByGroup(startDate, endDate, groupBy, compa
 		diagSQL := fmt.Sprintf(`SELECT COUNT(DISTINCT employees.employee_id) FROM attendances JOIN employees ON employees.employee_id = attendances.employee_id %s %s`, joinClause, whereClause)
 		var empCount int64
 		if diagErr := r.db.Raw(diagSQL, args...).Scan(&empCount).Error; diagErr == nil {
-			log.Printf("[SummaryByGroup] group_by=%s filters=%v matched_employees=%d", groupBy, args, empCount)
+			writeLog("debug", "attendance", fmt.Sprintf("[SummaryByGroup] group_by=%s matched_employees=%d", groupBy, empCount))
 		}
 		// Extra diagnostic: show distinct designation IDs present when filtering by designation
 		if designationID != "" {
 			var actualIDs []string
 			idSQL := fmt.Sprintf(`SELECT DISTINCT employees.designation_id FROM attendances JOIN employees ON employees.employee_id = attendances.employee_id %s %s`, joinClause, whereClause)
 			if idErr := r.db.Raw(idSQL, args...).Pluck("designation_id", &actualIDs).Error; idErr == nil {
-				log.Printf("[SummaryByGroup] requested_designation_id=%s actual_designation_ids_in_data=%v", designationID, actualIDs)
+				writeLog("debug", "attendance", fmt.Sprintf("[SummaryByGroup] requested_designation_id=%s actual_designation_ids_in_data=%v", designationID, actualIDs))
 			}
 		}
 	}

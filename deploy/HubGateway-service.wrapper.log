@@ -1,5 +1,0 @@
-2026-07-24 11:40:44,761 INFO  - Stopping HubGateway
-2026-07-24 11:40:44,763 DEBUG - ProcessKill 7596
-2026-07-24 11:40:44,787 DEBUG - Stopping process 7596...
-2026-07-24 11:40:44,801 DEBUG - Process 7596 canceled with code -1073741510.
-2026-07-24 11:40:44,828 INFO  - Finished HubGateway

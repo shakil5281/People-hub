@@ -19,6 +19,7 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar"
 
 export function NavGroup({
@@ -37,6 +38,7 @@ export function NavGroup({
   label?: string
 }) {
   const pathname = usePathname()
+  const { isMobile, setOpenMobile } = useSidebar()
 
   const activeGroupIndex = items.findIndex((group) =>
     group.items?.some((sub) => sub.url === pathname)
@@ -45,6 +47,10 @@ export function NavGroup({
   const [openGroup, setOpenGroup] = React.useState<number | null>(
     activeGroupIndex >= 0 ? activeGroupIndex : null
   )
+
+  const closeOnMobile = () => {
+    if (isMobile) setOpenMobile(false)
+  }
 
   return (
     <SidebarGroup>
@@ -81,7 +87,7 @@ export function NavGroup({
                           asChild
                           isActive={subItem.url === pathname}
                         >
-                          <Link href={subItem.url}>
+                          <Link href={subItem.url} onClick={closeOnMobile}>
                             <span>{subItem.title}</span>
                           </Link>
                         </SidebarMenuSubButton>

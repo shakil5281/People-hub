@@ -104,6 +104,8 @@ func New(cfg *config.Config) *gin.Engine {
 	tiffinBillRepo := repository.NewTiffinBillRepository(database.DB)
 	tiffinBillHandler := handlers.NewTiffinBillHandler(tiffinBillRepo)
 	holidayHandler := handlers.NewHolidayHandler(holidayRepo)
+	systemLogRepo := repository.NewSystemLogRepository(database.DB)
+	systemLogHandler := handlers.NewSystemLogHandler(systemLogRepo)
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
@@ -118,7 +120,7 @@ func New(cfg *config.Config) *gin.Engine {
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, nightBillHandler, tiffinBillHandler, holidayHandler, cfg.JWTSecret)
+	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, nightBillHandler, tiffinBillHandler, holidayHandler, systemLogHandler, cfg.JWTSecret)
 
 	return r
 }

@@ -1,5 +1,0 @@
-2026-07-24 11:40:44,453 INFO  - Stopping HubWeb
-2026-07-24 11:40:44,455 DEBUG - ProcessKill 2284
-2026-07-24 11:40:44,461 DEBUG - Stopping process 2284...
-2026-07-24 11:40:44,518 DEBUG - Process 2284 canceled with code 130.
-2026-07-24 11:40:44,523 INFO  - Finished HubWeb

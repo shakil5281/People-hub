@@ -22,6 +22,11 @@ func GenerateDateRange(start, end string) ([]string, error) {
 	return dates, nil
 }
 
+// ParseDate parses a date string in YYYY-MM-DD format.
+func ParseDate(dateStr string) (time.Time, error) {
+	return time.Parse("2006-01-02", dateStr)
+}
+
 // IsWeekend checks whether a given date falls on a weekend configured by comma-separated day names/abbreviations (e.g. "Fri,Sat").
 func IsWeekend(dateStr string, weekendDays string) bool {
 	if weekendDays == "" {

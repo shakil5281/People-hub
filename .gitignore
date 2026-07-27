@@ -45,6 +45,9 @@ desktop.ini
 # Swagger generated docs (optional - uncomment if you want to regenerate)
 # docs/
 
+# Log files
+*.log
+
 # Temporary files
 *.tmp
 *.bak
