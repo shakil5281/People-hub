@@ -1,9 +1,11 @@
 "use client"
 
 import * as React from "react"
-import { ClipboardListIcon, Loader2, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+import { ClipboardListIcon, Loader2, ChevronLeftIcon, ChevronRightIcon, FilterIcon, XIcon } from "lucide-react"
 import { format } from "date-fns"
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
@@ -55,7 +57,8 @@ export default function JobCardPage() {
   const [lines, setLines] = React.useState<Line[]>([])
   const [groups, setGroups] = React.useState<Group[]>([])
   const [shifts, setShifts] = React.useState<Shift[]>([])
-
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
+ 
   React.useEffect(() => {
     Promise.all([
       companyApi.list({ limit: "100" }),
@@ -163,6 +166,7 @@ export default function JobCardPage() {
     } else {
       setData([])
     }
+    setMobileFilterOpen(false)
   }
 
   const handleReset = () => {
@@ -171,6 +175,7 @@ export default function JobCardPage() {
     setEmployees([])
     setCurrentIndex(0)
     setError("")
+    setMobileFilterOpen(false)
   }
 
   const handlePrev = () => {
@@ -204,16 +209,52 @@ export default function JobCardPage() {
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
-        <div className="flex items-center gap-2">
-          <ClipboardListIcon className="h-6 w-6 text-muted-foreground" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Job Card</h1>
-            <p className="text-muted-foreground mt-1">Employee attendance job card report</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ClipboardListIcon className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Job Card</h1>
+              <p className="text-muted-foreground mt-1">Employee attendance job card report</p>
+            </div>
           </div>
+        </div>
+        <div className="md:hidden mt-3">
+          <ButtonGroup className="w-full">
+            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="w-full">
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filters
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                  <SheetTitle className="text-base">Filters</SheetTitle>
+                  <SheetClose asChild>
+                    <Button variant="ghost" size="icon-sm">
+                      <XIcon className="h-4 w-4" />
+                    </Button>
+                  </SheetClose>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+                  <FilterBar
+                    filters={filterDefs}
+                    values={filters}
+                    onChange={handleFilterChange}
+                    onApply={handleApply}
+                    onReset={handleReset}
+                    submitting={submitting}
+                    singleColumn
+                    noBorder
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </ButtonGroup>
         </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar
           filters={filterDefs}
           values={filters}

@@ -46,7 +46,7 @@ func (r *SalaryRepository) ListByMonth(companyID string, month, year int, depart
 		return nil, 0, err
 	}
 	var salaries []models.Salary
-	err := base.Preload("Employee.Department").Preload("Employee.DesignationRef").Order("created_at ASC").Offset((page - 1) * limit).Limit(limit).Find(&salaries).Error
+	err := base.Preload("Employee.Department").Preload("Employee.DesignationRef").Order("LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&salaries).Error
 	return salaries, total, err
 }
 
@@ -96,7 +96,7 @@ func (r *SalaryRepository) ListAllByMonthFiltered(f SalaryFilter) ([]models.Sala
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE account_type = ?)", f.AccountType)
 	}
 	var salaries []models.Salary
-	err := query.Order("created_at ASC").Find(&salaries).Error
+	err := query.Order("LENGTH(employee_id) ASC, employee_id ASC").Find(&salaries).Error
 	return salaries, err
 }
 
@@ -171,7 +171,7 @@ func (r *SalaryRepository) DailySheet(date, companyID, departmentID, sectionID, 
 		query = query.Where("e.group_id = ?", groupID)
 	}
 
-	query = query.Order("e.employee_id ASC")
+	query = query.Order("LENGTH(e.employee_id) ASC, e.employee_id ASC")
 
 	rows, err := query.Rows()
 	if err != nil {

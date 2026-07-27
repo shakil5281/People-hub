@@ -129,7 +129,7 @@ func (r *AttendanceRepository) ListByDate(date string, page, limit int) ([]model
 		return nil, 0, err
 	}
 	var attendances []models.Attendance
-	err := base.Preload("Employee.DesignationRef").Preload("Employee").Preload("Shift").Order("created_at ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
+	err := base.Preload("Employee.DesignationRef").Preload("Employee").Preload("Shift").Order("LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
 	return attendances, total, err
 }
 
@@ -188,7 +188,7 @@ func (r *AttendanceRepository) ListByDateFiltered(date, companyID, departmentID,
 		return nil, 0, err
 	}
 	var attendances []models.Attendance
-	err := base.Preload("Employee.DesignationRef").Preload("Employee").Preload("Shift").Order("created_at ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
+	err := base.Preload("Employee.DesignationRef").Preload("Employee").Preload("Shift").Order("LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
 	return attendances, total, err
 }
 
@@ -531,7 +531,7 @@ func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employ
 		return nil, 0, err
 	}
 	var attendances []models.Attendance
-	err := base.Preload("Employee.DesignationRef").Preload("Employee.Department").Preload("Employee.Company").Preload("Shift").Order("date ASC, created_at ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
+	err := base.Preload("Employee.DesignationRef").Preload("Employee.Department").Preload("Employee.Company").Preload("Shift").Order("LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
 	return attendances, total, err
 }
 
@@ -571,7 +571,7 @@ func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyI
 	var employees []models.Employee
 	err := r.db.Where("employee_id IN (?)", subQuery).
 		Preload("DesignationRef").Preload("Department").
-		Order("employee_id ASC").
+		Order("LENGTH(employee_id) ASC, employee_id ASC").
 		Find(&employees).Error
 	return employees, err
 }

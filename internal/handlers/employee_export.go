@@ -111,7 +111,7 @@ func (h *EmployeeHandler) ExportExcel(c *gin.Context) {
 		}
 	}
 
-	if err := query.Order("employee_id ASC").Find(&employees).Error; err != nil {
+	if err := query.Order("LENGTH(employee_id) ASC, employee_id ASC").Find(&employees).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -461,7 +461,7 @@ func (h *EmployeeHandler) ExportPDF(c *gin.Context) {
 	if v := c.Query("status"); v != "" {
 		query = query.Where("status = ?", v)
 	}
-	if err := query.Order("employee_id ASC").Find(&employees).Error; err != nil {
+	if err := query.Order("LENGTH(employee_id) ASC, employee_id ASC").Find(&employees).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

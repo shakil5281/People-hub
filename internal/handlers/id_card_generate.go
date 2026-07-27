@@ -78,7 +78,7 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		Preload("DesignationRef").
 		Preload("SectionRef").
 		Where("employee_id IN ? AND deleted_at IS NULL", req.EmployeeIDs).
-		Order("employee_id ASC").
+		Order("LENGTH(employee_id) ASC, employee_id ASC").
 		Find(&employees).Error; err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})
 		return

@@ -23,6 +23,20 @@ func (r *PunishmentRepository) List(companyID string) ([]models.Punishment, erro
 	return items, err
 }
 
+func (r *PunishmentRepository) ListPaginated(companyID string, page, limit int) ([]models.Punishment, int64, error) {
+	base := r.db.Model(&models.Punishment{}).Preload("Employee.Department").Preload("Employee.DesignationRef").Where("deleted_at IS NULL")
+	if companyID != "" {
+		base = base.Where("company_id = ?", companyID)
+	}
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var items []models.Punishment
+	err := base.Order("created_at DESC").Offset((page - 1) * limit).Limit(limit).Find(&items).Error
+	return items, total, err
+}
+
 func (r *PunishmentRepository) Create(item *models.Punishment) error {
 	return r.db.Create(item).Error
 }

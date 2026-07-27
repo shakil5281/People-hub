@@ -356,7 +356,7 @@ func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 
 	p := utils.ParsePagination(c)
 	offset := (p.Page - 1) * p.Limit
-	if err := query.Offset(offset).Limit(p.Limit).Find(&employees).Error; err != nil {
+	if err := query.Order("LENGTH(employee_id) ASC, employee_id ASC").Offset(offset).Limit(p.Limit).Find(&employees).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

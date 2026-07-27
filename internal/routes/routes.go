@@ -33,6 +33,7 @@ func Setup(
 	leaveHandler *handlers.LeaveHandler,
 	salaryHandler *handlers.SalaryHandler,
 	salaryIncrementHandler *handlers.SalaryIncrementHandler,
+	eidBonusHandler *handlers.EidBonusHandler,
 	employeeImportHandler *handlers.EmployeeImportHandler,
 	tempShiftHandler *handlers.TemporaryShiftHandler,
 	userHandler *handlers.UserHandler,
@@ -44,6 +45,7 @@ func Setup(
 	tiffinBillHandler *handlers.TiffinBillHandler,
 	holidayHandler *handlers.HolidayHandler,
 	systemLogHandler *handlers.SystemLogHandler,
+	notificationHandler *handlers.NotificationHandler,
 	jwtSecret string,
 ) {
 	r.GET("/health", handlers.HealthCheck)
@@ -354,6 +356,7 @@ func Setup(
 	{
 		punishment.GET("", punishmentHandler.List)
 		punishment.POST("", punishmentHandler.Create)
+		punishment.POST("/calculate", punishmentHandler.Calculate)
 		punishment.PUT("/:id", punishmentHandler.Update)
 		punishment.DELETE("/:id", punishmentHandler.Delete)
 	}
@@ -436,6 +439,17 @@ func Setup(
 		salary.PUT("/increments/:id/reject", salaryIncrementHandler.Reject)
 	}
 
+	// Protected eid-bonus routes
+	eidBonus := api.Group("/eid-bonus")
+	eidBonus.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		eidBonus.POST("/process", eidBonusHandler.Process)
+		eidBonus.GET("/sheet", eidBonusHandler.Sheet)
+		eidBonus.GET("/summary", eidBonusHandler.Summary)
+		eidBonus.GET("/bank-sheet", eidBonusHandler.BankSheet)
+		eidBonus.GET("/export/excel", eidBonusHandler.ExportExcel)
+	}
+
 	// Protected night-bill routes
 	nightBill := api.Group("/night-bills")
 	nightBill.Use(middleware.AuthMiddleware(jwtSecret))
@@ -511,6 +525,18 @@ func Setup(
 	{
 		settingsRoutes.GET("", settingsHandler.List)
 		settingsRoutes.PUT("", settingsHandler.Update)
+	}
+
+	// Protected notification routes
+	notif := api.Group("/notifications")
+	notif.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		notif.GET("", notificationHandler.List)
+		notif.GET("/unread-count", notificationHandler.GetUnreadCount)
+		notif.POST("", notificationHandler.Create)
+		notif.PUT("/:id/read", notificationHandler.MarkAsRead)
+		notif.PUT("/read-all", notificationHandler.MarkAllAsRead)
+		notif.DELETE("/:id", notificationHandler.Delete)
 	}
 
 	// Protected system-logs routes

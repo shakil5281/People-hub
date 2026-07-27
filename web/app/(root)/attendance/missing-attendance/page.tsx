@@ -1,14 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { UserXIcon, Loader2, PencilIcon } from "lucide-react"
+import { UserXIcon, Loader2, PencilIcon, FilterIcon, XIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { formatCheck } from "@/lib/utils"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
 import { toast } from "sonner"
 
@@ -69,6 +70,7 @@ export default function MissingAttendancePage() {
   const [inTime, setInTime] = React.useState("")
   const [outTime, setOutTime] = React.useState("")
   const [saving, setSaving] = React.useState(false)
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
   const computedStatus = React.useMemo(() => {
     const hasIn = inTime.length > 0 && inTime.includes(":") && !inTime.endsWith("T")
@@ -249,9 +251,43 @@ export default function MissingAttendancePage() {
             <p className="text-muted-foreground mt-1">Attendance records missing check-in or check-out time</p>
           </div>
         </div>
+        <div className="md:hidden mt-3">
+          <ButtonGroup className="w-full">
+            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="flex-1">
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filters
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                  <SheetTitle className="text-base">Filters</SheetTitle>
+                  <SheetClose asChild>
+                    <Button variant="ghost" size="icon-sm">
+                      <XIcon className="h-4 w-4" />
+                    </Button>
+                  </SheetClose>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto px-4 py-4">
+                  <FilterBar
+                    filters={filterDefs}
+                    values={filters}
+                    onChange={handleChange}
+                    onApply={() => { handleApply(); setMobileFilterOpen(false) }}
+                    onReset={() => { handleReset(); setMobileFilterOpen(false) }}
+                    submitting={loading}
+                    singleColumn
+                    noBorder
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </ButtonGroup>
+        </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar
           filters={filterDefs}
           values={filters}

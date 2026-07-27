@@ -36,6 +36,7 @@ import {
   CalendarIcon,
   MoonIcon,
   CoffeeIcon,
+  GiftIcon,
 } from "lucide-react"
 
 export const monthlyReportNav = [
@@ -93,6 +94,7 @@ export const payrollNav = [
   { title: "Daily Salary Sheet", url: "/payroll/daily-salary-sheet", icon: CalendarRangeIcon },
   { title: "Night Bill", url: "/payroll/night-bill", icon: MoonIcon },
   { title: "Tiffin Bill", url: "/payroll/tiffin-bill", icon: CoffeeIcon },
+  { title: "Eid Bonus", url: "/payroll/eid-bonus", icon: GiftIcon },
 ] as const satisfies { title: string; url: string; icon: LucideIcon }[]
 
 export const collectDataNav = [

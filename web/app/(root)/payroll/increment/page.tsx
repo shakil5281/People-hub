@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { TrendingUpIcon, Loader2, PlusIcon, CheckCircleIcon, XCircleIcon } from "lucide-react"
+import { TrendingUpIcon, Loader2, PlusIcon, CheckCircleIcon, XCircleIcon, FilterIcon, XIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
@@ -12,6 +12,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { salaryIncrementApi, companyApi } from "@/lib/api"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 
 interface Company { id: string; company_name_en: string }
 
@@ -46,6 +48,7 @@ export default function IncrementPage() {
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [formData, setFormData] = React.useState({ employee_id: "", increment_amount: "", effective_date: "", remarks: "" })
   const [creating, setCreating] = React.useState(false)
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
   const fetchData = React.useCallback(async () => {
     if (!companyId) return
@@ -183,44 +186,89 @@ export default function IncrementPage() {
             <p className="text-muted-foreground mt-1">Manage salary increments</p>
           </div>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Apply Increment
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Apply Salary Increment</DialogTitle>
-            </DialogHeader>
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
-                <input value={formData.employee_id} onChange={(e) => setFormData((p) => ({ ...p, employee_id: e.target.value }))} placeholder="e.g. EMP001" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Increment Amount</label>
-                <input type="number" value={formData.increment_amount} onChange={(e) => setFormData((p) => ({ ...p, increment_amount: e.target.value }))} placeholder="e.g. 3000" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Effective Date</label>
-                <input type="date" value={formData.effective_date} onChange={(e) => setFormData((p) => ({ ...p, effective_date: e.target.value }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Remarks (optional)</label>
-                <textarea value={formData.remarks} onChange={(e) => setFormData((p) => ({ ...p, remarks: e.target.value }))} placeholder="Reason for increment..." className="flex h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
-              </div>
-              <Button onClick={handleCreate} disabled={creating}>
-                {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Apply
+        <div className="hidden md:block">
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusIcon className="mr-2 h-4 w-4" />
+                Apply Increment
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Apply Salary Increment</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
+                  <input value={formData.employee_id} onChange={(e) => setFormData((p) => ({ ...p, employee_id: e.target.value }))} placeholder="e.g. EMP001" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Increment Amount</label>
+                  <input type="number" value={formData.increment_amount} onChange={(e) => setFormData((p) => ({ ...p, increment_amount: e.target.value }))} placeholder="e.g. 3000" className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Effective Date</label>
+                  <input type="date" value={formData.effective_date} onChange={(e) => setFormData((p) => ({ ...p, effective_date: e.target.value }))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Remarks (optional)</label>
+                  <textarea value={formData.remarks} onChange={(e) => setFormData((p) => ({ ...p, remarks: e.target.value }))} placeholder="Reason for increment..." className="flex h-20 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <Button onClick={handleCreate} disabled={creating}>
+                  {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Apply
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="md:hidden px-4 lg:px-6">
+        <ButtonGroup className="w-full">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="flex-1">
+                <FilterIcon className="mr-2 h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar
+                  filters={filterDefs}
+                  values={{ company_id: companyId }}
+                  onChange={(key, value) => { if (key === "company_id") setCompanyId(value) }}
+                  onApply={() => { fetchData(); setMobileFilterOpen(false) }}
+                  onReset={() => {}}
+                  submitting={false}
+                  singleColumn
+                  noBorder
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="flex-1">
+                <PlusIcon className="mr-2 h-4 w-4" />
+                Apply
+              </Button>
+            </DialogTrigger>
+          </Dialog>
+        </ButtonGroup>
+      </div>
+
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar
           filters={filterDefs}
           values={{ company_id: companyId }}

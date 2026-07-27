@@ -17,7 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { authApi } from "@/lib/api"
+import { authApi, notificationApi } from "@/lib/api"
 import {
   SearchIcon,
   SettingsIcon,
@@ -25,6 +25,7 @@ import {
   LogOutIcon,
   Loader2,
   UserIcon,
+  BellDotIcon,
 } from "lucide-react"
 import { toast } from "sonner"
 import { useSearchDialog } from "@/contexts/search-context"
@@ -41,12 +42,25 @@ export function SiteHeader() {
   const [user, setUser] = React.useState<UserData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [loggingOut, setLoggingOut] = React.useState(false)
+  const [notifCount, setNotifCount] = React.useState(0)
 
   React.useEffect(() => {
     authApi.me()
       .then((res) => setUser(res.data))
       .catch(() => {})
       .finally(() => setLoading(false))
+  }, [])
+
+  React.useEffect(() => {
+    const fetchCount = async () => {
+      try {
+        const { data } = await notificationApi.unreadCount()
+        setNotifCount(data.count)
+      } catch {}
+    }
+    fetchCount()
+    const interval = setInterval(fetchCount, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const handleLogout = async () => {
@@ -89,9 +103,11 @@ export function SiteHeader() {
         <div className="flex items-center gap-1 ml-auto">
           <Button variant="ghost" size="icon" className="relative h-9 w-9" onClick={() => router.push("/notifications")}>
             <BellIcon className="h-4 w-4" />
-            <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center">
-              3
-            </Badge>
+            {notifCount > 0 && (
+              <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center">
+                {notifCount > 99 ? "99+" : notifCount}
+              </Badge>
+            )}
           </Button>
 
           <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin/settings")}>

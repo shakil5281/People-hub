@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { Trash2Icon, Loader2, AlertTriangleIcon } from "lucide-react"
+import { Trash2Icon, Loader2, AlertTriangleIcon, FilterIcon, XIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { format } from "date-fns"
@@ -28,6 +28,8 @@ import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, l
 import { formatCheck } from "@/lib/utils"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import { toast } from "sonner"
 
 interface Company { id: string; company_name_en: string }
@@ -71,6 +73,7 @@ export default function RemoveAttendancePage() {
   const [deleting, setDeleting] = React.useState(false)
   const [confirmOpen, setConfirmOpen] = React.useState(false)
   const [deleteType, setDeleteType] = React.useState<"selected" | "all">("selected")
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
   const [filters, setFilters] = React.useState<Record<string, string>>({
     start_date: today,
@@ -245,7 +248,7 @@ export default function RemoveAttendancePage() {
             <p className="text-muted-foreground mt-1">Select and delete attendance records</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2">
           {selectedRows.length > 0 && (
             <Button
               variant="destructive"
@@ -260,7 +263,55 @@ export default function RemoveAttendancePage() {
         </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="md:hidden px-4 lg:px-6 mt-3">
+        {selectedRows.length > 0 && (
+          <ButtonGroup className="w-full mb-3">
+            <Button
+              variant="destructive"
+              onClick={() => { setDeleteType("selected"); setConfirmOpen(true) }}
+              disabled={deleting}
+              className="flex-1"
+            >
+              {deleting ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Trash2Icon className="mr-1 h-4 w-4" />}
+              Delete Selected ({selectedRows.length})
+            </Button>
+          </ButtonGroup>
+        )}
+        <ButtonGroup className="w-full">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="flex-1">
+                <FilterIcon className="mr-2 h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar
+                  filters={filterDefs}
+                  values={filters}
+                  onChange={handleChange}
+                  onApply={() => { handleApply(); setMobileFilterOpen(false) }}
+                  onReset={() => { handleReset(); setMobileFilterOpen(false) }}
+                  submitting={loading}
+                  singleColumn
+                  noBorder
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </ButtonGroup>
+      </div>
+
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar
           filters={filterDefs}
           values={filters}

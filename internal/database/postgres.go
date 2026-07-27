@@ -53,6 +53,8 @@ func Connect(cfg *config.Config) {
 		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
 		&models.NightBillProcess{}, &models.Holiday{},
 		&models.SystemLog{},
+		&models.Notification{},
+		&models.EidBonus{},
 	)
 
 	// Use silent session for ALTER statements to avoid noisy ERROR logs when tables don't exist yet
@@ -72,6 +74,7 @@ func Connect(cfg *config.Config) {
 	alterCol("daily_schedules", "employee_id")
 	alterCol("night_bills", "employee_id")
 	alterCol("tiffin_bills", "employee_id")
+	alterCol("eid_bonuses", "employee_id")
 	silentDB.Exec("ALTER TABLE separations ADD COLUMN IF NOT EXISTS company_id uuid")
 	silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS nid varchar(50)")
 	silentDB.Exec("ALTER TABLE requirements ADD COLUMN IF NOT EXISTS section_id uuid")

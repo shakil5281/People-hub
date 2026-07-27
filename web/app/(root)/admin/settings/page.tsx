@@ -136,7 +136,7 @@ export default function AdminSettingsPage() {
 
       <div className="px-4 lg:px-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-5 max-w-3xl">
+          <TabsList className="flex-wrap w-full max-w-3xl">
             <TabsTrigger value="company"><Building2Icon className="h-4 w-4 mr-1.5" />Company</TabsTrigger>
             <TabsTrigger value="attendance"><ClockIcon className="h-4 w-4 mr-1.5" />Attendance</TabsTrigger>
             <TabsTrigger value="payroll"><DollarSignIcon className="h-4 w-4 mr-1.5" />Payroll</TabsTrigger>

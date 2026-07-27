@@ -125,7 +125,7 @@ interface DataTableProps<TData extends { id: number | string }> {
 export function DataTable<TData extends { id: number | string }>({
   data: initialData,
   columns,
-  enableDnd = false,
+  enableDnd = true,
   enableSelection = true,
   onSelectionChange,
   onEdit,

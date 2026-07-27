@@ -40,7 +40,6 @@ interface AttendanceRecord {
 }
 
 const columns: ColumnDef<AttendanceRecord>[] = [
-  { id: "sl", header: "Sl", cell: ({ row }) => row.index + 1 },
   { accessorKey: "employee_id", header: "Employee ID" },
   { accessorKey: "employee_name", header: "Name", cell: ({ row }) => row.original.employee_name || "-" },
   { accessorKey: "designation", header: "Designation", cell: ({ row }) => row.original.designation || "-" },

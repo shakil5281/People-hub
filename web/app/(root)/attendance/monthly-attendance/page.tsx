@@ -1,12 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { BarChart3Icon } from "lucide-react"
+import { BarChart3Icon, FilterIcon, XIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { attendanceApi, companyApi, departmentApi } from "@/lib/api"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
+import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 
 interface Company { id: string; company_name_en: string }
 interface Department { id: string; name: string }
@@ -71,6 +74,7 @@ export default function MonthlyAttendancePage() {
   const [selectedMonth, setSelectedMonth] = React.useState(currentMonth)
   const [selectedYear, setSelectedYear] = React.useState(currentYear)
   const [filters, setFilters] = React.useState<Record<string, string>>({})
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
   const filterDefs: FilterDef[] = React.useMemo(() => [
     {
@@ -153,9 +157,69 @@ export default function MonthlyAttendancePage() {
             <p className="text-muted-foreground mt-1">Per-employee monthly attendance breakdown</p>
           </div>
         </div>
+        <div className="md:hidden mt-3">
+          <ButtonGroup className="w-full">
+            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+              <SheetTrigger asChild>
+                <Button variant="outline" className="flex-1">
+                  <FilterIcon className="mr-2 h-4 w-4" />
+                  Filters
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                  <SheetTitle className="text-base">Filters</SheetTitle>
+                  <SheetClose asChild>
+                    <Button variant="ghost" size="icon-sm">
+                      <XIcon className="h-4 w-4" />
+                    </Button>
+                  </SheetClose>
+                </SheetHeader>
+                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+                  <div className="space-y-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Month</label>
+                      <select
+                        value={selectedMonth}
+                        onChange={(e) => { setSelectedMonth(Number(e.target.value)) }}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                      >
+                        {MONTHS.map((name, idx) => (
+                          <option key={name} value={idx}>{name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-muted-foreground">Year</label>
+                      <select
+                        value={selectedYear}
+                        onChange={(e) => { setSelectedYear(Number(e.target.value)) }}
+                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+                      >
+                        {YEARS.map((y) => (
+                          <option key={y} value={y}>{y}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <FilterBar
+                    filters={filterDefs}
+                    values={filters}
+                    onChange={handleChange}
+                    onApply={() => { handleApply(); setMobileFilterOpen(false) }}
+                    onReset={() => { handleReset(); setMobileFilterOpen(false) }}
+                    submitting={loading}
+                    singleColumn
+                    noBorder
+                  />
+                </div>
+              </SheetContent>
+            </Sheet>
+          </ButtonGroup>
+        </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="px-4 lg:px-6 hidden md:block">
         <div className="rounded-lg border bg-card p-4">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
@@ -186,7 +250,7 @@ export default function MonthlyAttendancePage() {
         </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar
           filters={filterDefs}
           values={filters}

@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { format } from "date-fns"
-import { CalendarCheckIcon, PlusIcon, EllipsisVertical, Pencil, Trash2, Check, X, FileText } from "lucide-react"
+import { CalendarCheckIcon, PlusIcon, EllipsisVertical, Pencil, Trash2, Check, X, FileText, FilterIcon, XIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -12,6 +12,8 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { leaveApi, companyApi, departmentApi } from "@/lib/api"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -60,6 +62,7 @@ export default function LeavePage() {
   const [rejectDialogOpen, setRejectDialogOpen] = React.useState(false)
   const [rejectingId, setRejectingId] = React.useState<string | null>(null)
   const [rejectReason, setRejectReason] = React.useState("")
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
   const [page, setPage] = React.useState(1)
   const [limit, setLimit] = React.useState(20)
@@ -270,13 +273,45 @@ export default function LeavePage() {
             <p className="text-muted-foreground mt-1">Manage employee leave applications</p>
           </div>
         </div>
-        <Button onClick={() => router.push("/leave/leave-entry")}>
-          <PlusIcon className="mr-2 h-4 w-4" />
-          Leave Entry
-        </Button>
+        <div className="hidden md:block">
+          <Button onClick={() => router.push("/leave/leave-entry")}>
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Leave Entry
+          </Button>
+        </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="md:hidden px-4 lg:px-6">
+        <ButtonGroup className="w-full">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="flex-1">
+                <FilterIcon className="mr-2 h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar filters={filterDefs} values={filters} onChange={handleChange} onApply={() => { handleApply(); setMobileFilterOpen(false) }} onReset={() => { handleReset(); setMobileFilterOpen(false) }} submitting={loading} singleColumn noBorder />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Button onClick={() => router.push("/leave/leave-entry")} className="flex-1">
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Leave Entry
+          </Button>
+        </ButtonGroup>
+      </div>
+
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar filters={filterDefs} values={filters} onChange={handleChange} onApply={handleApply} onReset={handleReset} submitting={loading} />
       </div>
 

@@ -11,12 +11,18 @@ type Punishment struct {
 	CompanyID  string `json:"company_id" gorm:"type:uuid;not null"`
 	EmployeeID string `json:"employee_id" gorm:"type:varchar(50);not null"`
 
-	Type    string  `json:"type" gorm:"type:varchar(50);not null"`
-	Reason  string  `json:"reason" gorm:"type:text"`
-	Amount  float64 `json:"amount" gorm:"type:decimal(12,2);default:0"`
-	Date    string  `json:"date" gorm:"type:date;not null"`
-	Status  string  `json:"status" gorm:"type:varchar(20);default:active"`
-	Remarks string  `json:"remarks" gorm:"type:text"`
+	PunishmentType string  `json:"punishment_type" gorm:"type:varchar(20);not null;default:fixed"`
+	Reason         string  `json:"reason" gorm:"type:text"`
+	Amount         float64 `json:"amount" gorm:"type:decimal(12,2);default:0"`
+
+	OvertimeLessHours *float64 `json:"overtime_less_hours" gorm:"type:decimal(10,2)"`
+	OvertimeRate      *float64 `json:"overtime_rate" gorm:"type:decimal(10,2)"`
+	AbsentDays        *int     `json:"absent_days" gorm:"type:int"`
+	PerDayRate        *float64 `json:"per_day_rate" gorm:"type:decimal(10,2)"`
+
+	Date    string `json:"date" gorm:"type:date;not null"`
+	Status  string `json:"status" gorm:"type:varchar(20);default:active"`
+	Remarks string `json:"remarks" gorm:"type:text"`
 
 	CreatedAt time.Time      `json:"created_at"`
 	UpdatedAt time.Time      `json:"updated_at"`

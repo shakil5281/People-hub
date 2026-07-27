@@ -1315,7 +1315,7 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 		Preload("Employee.LineRef").
 		Preload("Employee").
 		Where("date = ? AND deleted_at IS NULL", date).
-		Order("created_at ASC").
+		Order("LENGTH(attendances.employee_id) ASC, attendances.employee_id ASC").
 		Find(&attendances).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1645,7 +1645,7 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	}
 
 	var attendances []models.Attendance
-	if err := baseQuery.Order("attendances.date ASC, attendances.created_at ASC").
+	if err := baseQuery.Order("LENGTH(attendances.employee_id) ASC, attendances.employee_id ASC, attendances.date ASC").
 		Find(&attendances).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { UtensilsCrossedIcon, PlusIcon, Loader2 } from "lucide-react"
+import { UtensilsCrossedIcon, PlusIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input"
 import { tiffinBillApi, companyApi } from "@/lib/api"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 
 interface TiffinBill {
   id: string
@@ -53,6 +55,7 @@ export default function TiffinBillPage() {
   const [totalPages, setTotalPages] = React.useState(0)
 
   const [form, setForm] = React.useState({ employee_id: "", date: "", amount: "" })
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
   const filterDefs: FilterDef[] = React.useMemo(() => [
     {
@@ -199,43 +202,79 @@ export default function TiffinBillPage() {
             <p className="text-muted-foreground mt-1">Manage employee tiffin bills</p>
           </div>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
-          <DialogTrigger asChild>
-            <Button>
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Add Tiffin Bill
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>{editing ? "Edit Tiffin Bill" : "Add Tiffin Bill"}</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div className="flex flex-col gap-1.5">
-                <Label>Employee ID *</Label>
-                <Input value={form.employee_id} onChange={(e) => setForm((p) => ({ ...p, employee_id: e.target.value }))} placeholder="EMP-001" />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Date *</Label>
-                <Input type="date" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label>Amount</Label>
-                <Input type="number" step="0.01" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} placeholder="0" />
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 mt-4">
-              <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Cancel</Button>
-              <Button onClick={editing ? handleUpdate : handleCreate} disabled={submitting}>
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {editing ? "Update" : "Create"}
+        <div className="hidden md:block">
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
+            <DialogTrigger asChild>
+              <Button>
+                <PlusIcon className="mr-2 h-4 w-4" />
+                Add Tiffin Bill
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>{editing ? "Edit Tiffin Bill" : "Add Tiffin Bill"}</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3">
+                <div className="flex flex-col gap-1.5">
+                  <Label>Employee ID *</Label>
+                  <Input value={form.employee_id} onChange={(e) => setForm((p) => ({ ...p, employee_id: e.target.value }))} placeholder="EMP-001" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Date *</Label>
+                  <Input type="date" value={form.date} onChange={(e) => setForm((p) => ({ ...p, date: e.target.value }))} />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label>Amount</Label>
+                  <Input type="number" step="0.01" value={form.amount} onChange={(e) => setForm((p) => ({ ...p, amount: e.target.value }))} placeholder="0" />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 mt-4">
+                <Button variant="outline" onClick={() => { setDialogOpen(false); resetForm() }}>Cancel</Button>
+                <Button onClick={editing ? handleUpdate : handleCreate} disabled={submitting}>
+                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {editing ? "Update" : "Create"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="md:hidden px-4 lg:px-6">
+        <ButtonGroup className="w-full">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="flex-1">
+                <FilterIcon className="mr-2 h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar filters={filterDefs} values={filters} onChange={handleChange} onApply={() => { handleApply(); setMobileFilterOpen(false) }} onReset={() => { handleReset(); setMobileFilterOpen(false) }} submitting={loading} singleColumn noBorder />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm() }}>
+            <DialogTrigger asChild>
+              <Button className="flex-1">
+                <PlusIcon className="mr-2 h-4 w-4" />
+                Add
+              </Button>
+            </DialogTrigger>
+          </Dialog>
+        </ButtonGroup>
+      </div>
+
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar filters={filterDefs} values={filters} onChange={handleChange} onApply={handleApply} onReset={handleReset} submitting={loading} />
       </div>
 

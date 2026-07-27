@@ -338,6 +338,7 @@ export const salaryIncrementApi = {
 export const punishmentApi = {
   list: (params?: Record<string, string>) => api.get("/punishments", { params }),
   create: (data: Record<string, unknown>) => api.post("/punishments", data),
+  calculate: (data: Record<string, unknown>) => api.post<{ amount: number }>("/punishments/calculate", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/punishments/${id}`, data),
   delete: (id: string) => api.delete(`/punishments/${id}`),
 }
@@ -386,4 +387,33 @@ export const uploadApi = {
     formData.append("file", file)
     return api.post<{ url: string; filename: string }>("/upload", formData)
   },
+}
+
+export const notificationApi = {
+  list: (params?: Record<string, string>) => api.get<PaginatedResponse<Notification>>("/notifications", { params }),
+  unreadCount: () => api.get<{ count: number }>("/notifications/unread-count"),
+  markAsRead: (id: string) => api.put(`/notifications/${id}/read`),
+  markAllAsRead: () => api.put("/notifications/read-all"),
+  delete: (id: string) => api.delete(`/notifications/${id}`),
+}
+
+export interface Notification {
+  id: string
+  user_id: string
+  title: string
+  message: string
+  type: "info" | "warning" | "error" | "success"
+  is_read: boolean
+  read_at: string | null
+  metadata: string | null
+  created_at: string
+  user?: { id: string; name: string; email: string }
+}
+
+export const eidBonusApi = {
+  process: (data: { company_id: string; year: number }) => api.post("/eid-bonus/process", data),
+  sheet: (params?: Record<string, string>) => api.get("/eid-bonus/sheet", { params }),
+  summary: (params?: Record<string, string>) => api.get("/eid-bonus/summary", { params }),
+  bankSheet: (params?: Record<string, string>) => api.get("/eid-bonus/bank-sheet", { params }),
+  exportExcel: (params: Record<string, string>) => api.get("/eid-bonus/export/excel", { params, responseType: "blob" }),
 }

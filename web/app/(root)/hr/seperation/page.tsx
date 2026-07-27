@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { UserXIcon, PlusIcon, RotateCcwIcon, Loader2, CheckCircleIcon, XCircleIcon } from "lucide-react"
+import { UserXIcon, PlusIcon, RotateCcwIcon, Loader2, CheckCircleIcon, XCircleIcon, FilterIcon, XIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
@@ -15,6 +15,8 @@ import type { Company } from "@/components/data/company-data"
 import type { Group } from "@/components/data/group-data"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 
 const today = new Date().toISOString().split("T")[0]
 const firstOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0]
@@ -40,6 +42,7 @@ export default function SeperationPage() {
     date_to: today,
   })
   const [submitting, setSubmitting] = React.useState(false)
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
   const [page, setPage] = React.useState(1)
   const [limit, setLimit] = React.useState(20)
@@ -226,7 +229,7 @@ export default function SeperationPage() {
             <p className="text-muted-foreground mt-1">Manage employee separations</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="hidden md:flex gap-2">
           <Button onClick={handleProcessBatch} disabled={processing} variant="outline">
             {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcwIcon className="mr-2 h-4 w-4" />}
             {processing ? "Processing..." : "Process Due"}
@@ -238,7 +241,52 @@ export default function SeperationPage() {
         </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="md:hidden px-4 lg:px-6">
+        <ButtonGroup className="w-full">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="flex-1">
+                <FilterIcon className="mr-2 h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar
+                  filters={filterDefs}
+                  values={filters}
+                  onChange={handleChange}
+                  onApply={() => { handleApply(); setMobileFilterOpen(false) }}
+                  onReset={() => { handleReset(); setMobileFilterOpen(false) }}
+                  submitting={submitting}
+                  singleColumn
+                  noBorder
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+        </ButtonGroup>
+        <ButtonGroup className="w-full mt-2">
+          <Button onClick={handleProcessBatch} disabled={processing} variant="outline" className="flex-1">
+            {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcwIcon className="mr-2 h-4 w-4" />}
+            {processing ? "Process..." : "Process Due"}
+          </Button>
+          <Button onClick={() => router.push("/hr/seperation/create")} className="flex-1">
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Add
+          </Button>
+        </ButtonGroup>
+      </div>
+
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar
           filters={filterDefs}
           values={filters}

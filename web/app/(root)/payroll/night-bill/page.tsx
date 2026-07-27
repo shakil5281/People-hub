@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { MoonIcon, PlusIcon, CheckIcon, XIcon } from "lucide-react"
+import { MoonIcon, PlusIcon, CheckIcon, XIcon, FilterIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -11,6 +11,8 @@ import { Badge } from "@/components/ui/badge"
 import { nightBillApi, companyApi, departmentApi, sectionApi, designationApi } from "@/lib/api"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 
 interface NightBill {
   id: string
@@ -63,6 +65,7 @@ export default function NightBillPage() {
   const [limit, setLimit] = React.useState(20)
   const [total, setTotal] = React.useState(0)
   const [totalPages, setTotalPages] = React.useState(0)
+  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
   const fetchDepartments = React.useCallback(async (companyId: string) => {
     try {
@@ -257,7 +260,7 @@ export default function NightBillPage() {
             <p className="text-muted-foreground mt-1">Manage employee night shift bills</p>
           </div>
         </div>
-        <div className="flex gap-2">
+        <div className="hidden md:flex gap-2">
           <Button onClick={() => router.push("/payroll/night-bill/create")}>
             <PlusIcon className="mr-2 h-4 w-4" />
             Add Night Bill
@@ -265,7 +268,37 @@ export default function NightBillPage() {
         </div>
       </div>
 
-      <div className="px-4 lg:px-6">
+      <div className="md:hidden px-4 lg:px-6">
+        <ButtonGroup className="w-full">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="flex-1">
+                <FilterIcon className="mr-2 h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar filters={filterDefs} values={filters} onChange={handleChange} onApply={() => { handleApply(); setMobileFilterOpen(false) }} onReset={() => { handleReset(); setMobileFilterOpen(false) }} submitting={loading} singleColumn noBorder />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <Button onClick={() => router.push("/payroll/night-bill/create")} className="flex-1">
+            <PlusIcon className="mr-2 h-4 w-4" />
+            Add
+          </Button>
+        </ButtonGroup>
+      </div>
+
+      <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar filters={filterDefs} values={filters} onChange={handleChange} onApply={handleApply} onReset={handleReset} submitting={loading} />
       </div>
 
