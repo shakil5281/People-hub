@@ -524,24 +524,26 @@ func (h *AttendanceHandler) ListJobCard(c *gin.Context) {
 		return
 	}
 
-	realCount, err := h.attendanceRepo.CountRangeByDate(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID)
+	page := 1
+	limit := 366
+	if p := c.Query("page"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil && v > 0 {
+			page = v
+		}
+	}
+	if l := c.Query("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 366 {
+			limit = v
+		}
+	}
+
+	attendances, total, err := h.attendanceRepo.ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	p := utils.ParsePagination(c)
-	if realCount == 0 {
-		c.JSON(http.StatusOK, utils.NewPaginatedResponse([]JobCardRow{}, 0, p))
-		return
-	}
-
-	attendances, total, err := h.attendanceRepo.ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, p.Page, p.Limit)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
+	p := utils.Pagination{Page: page, Limit: limit}
 	c.JSON(http.StatusOK, utils.NewPaginatedResponse(toJobCardRows(attendances), total, p))
 }
 

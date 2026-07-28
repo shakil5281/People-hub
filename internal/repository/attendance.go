@@ -498,7 +498,7 @@ func (r *AttendanceRepository) CountByDateOnly(date string) (int64, error) {
 }
 
 func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status string, page, limit int) ([]models.Attendance, int64, error) {
-	base := r.db.Model(&models.Attendance{}).Where("date BETWEEN ? AND ? AND deleted_at IS NULL AND (check_in IS NOT NULL OR check_out IS NOT NULL)", startDate, endDate)
+	base := r.db.Model(&models.Attendance{}).Where("date BETWEEN ? AND ? AND deleted_at IS NULL", startDate, endDate)
 	if companyID != "" {
 		base = base.Where("company_id = ?", companyID)
 	}
@@ -531,14 +531,14 @@ func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employ
 		return nil, 0, err
 	}
 	var attendances []models.Attendance
-	err := base.Preload("Employee.DesignationRef").Preload("Employee.Department").Preload("Employee.Company").Preload("Shift").Order("LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
+	err := base.Preload("Employee.DesignationRef").Preload("Employee.Department").Preload("Employee.Company").Preload("Shift").Order("date ASC, LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
 	return attendances, total, err
 }
 
 func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status string) ([]models.Employee, error) {
 	subQuery := r.db.Table("attendances a").
 		Select("DISTINCT a.employee_id").
-		Where("a.date BETWEEN ? AND ? AND a.deleted_at IS NULL AND (a.check_in IS NOT NULL OR a.check_out IS NOT NULL)", startDate, endDate)
+		Where("a.date BETWEEN ? AND ? AND a.deleted_at IS NULL", startDate, endDate)
 
 	if companyID != "" {
 		subQuery = subQuery.Where("a.company_id = ?", companyID)

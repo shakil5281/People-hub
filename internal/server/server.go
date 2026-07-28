@@ -103,7 +103,7 @@ func New(cfg *config.Config) *gin.Engine {
 	nightBillHandler := handlers.NewNightBillHandler(nightBillRepo, employeeRepo)
 	tiffinBillRepo := repository.NewTiffinBillRepository(database.DB)
 	tiffinBillHandler := handlers.NewTiffinBillHandler(tiffinBillRepo)
-	holidayHandler := handlers.NewHolidayHandler(holidayRepo)
+	holidayHandler := handlers.NewHolidayHandler(holidayRepo, attendanceProcessor)
 	systemLogRepo := repository.NewSystemLogRepository(database.DB)
 	systemLogHandler := handlers.NewSystemLogHandler(systemLogRepo)
 

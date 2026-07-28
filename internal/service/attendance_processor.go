@@ -164,14 +164,25 @@ func (p *AttendanceProcessor) processDay(
 	holidays, holErr := p.holidayRepo.ListActiveByDate(date, companyID)
 	if holErr == nil {
 		for _, h := range holidays {
-			if h.Type == "government" && h.Date == date {
+			hDate := utils.NormalizeDate(h.Date)
+			var hFrom, hTo, hWeekend string
+			if h.FromDate != nil {
+				hFrom = utils.NormalizeDate(*h.FromDate)
+			}
+			if h.ToDate != nil {
+				hTo = utils.NormalizeDate(*h.ToDate)
+			}
+			if h.WeekendDate != nil {
+				hWeekend = utils.NormalizeDate(*h.WeekendDate)
+			}
+			if h.Type == "government" && (hDate == date || (hFrom != "" && hTo != "" && date >= hFrom && date <= hTo)) {
 				isGovHoliday = true
 			}
 			if h.Type == "weekend_change" {
-				if h.Date == date {
+				if hDate == date {
 					isGenDuty = true
 				}
-				if h.WeekendDate != nil && *h.WeekendDate == date {
+				if hWeekend != "" && hWeekend == date {
 					isCompWeekend = true
 				}
 			}
@@ -309,11 +320,12 @@ func (p *AttendanceProcessor) processDay(
 		}
 
 		if hasExisting {
-			// Update existing absent/weekend/leave record (e.g. shift changed, leave approved)
 			if existing.Status != status || (existing.ShiftID == nil && shiftID != nil) || (existing.ShiftID != nil && shiftID != nil && *existing.ShiftID != *shiftID) {
 				existing.Status = status
 				existing.ShiftID = shiftID
-				p.attendanceRepo.Update(existing)
+				if err := p.attendanceRepo.Update(existing); err == nil {
+					processedCount++
+				}
 			}
 		} else {
 			att := &models.Attendance{

@@ -60,6 +60,19 @@ export default function ManualAttendancePage() {
   const [checkOut, setCheckOut] = React.useState(defaultOut)
   const [entryStatus, setEntryStatus] = React.useState("present")
 
+  const withDate = React.useCallback((date: Date, timeValue: string, fallbackTime: string) => {
+    const day = format(date, "yyyy-MM-dd")
+    const timePart = timeValue.includes("T") ? timeValue.split("T")[1] : fallbackTime
+    return `${day}T${timePart || fallbackTime}`
+  }, [])
+
+  const handleEntryDateChange = React.useCallback((d: Date | undefined) => {
+    if (!d) return
+    setEntryDate(d)
+    setCheckIn((prev) => withDate(d, prev, "07:55"))
+    setCheckOut((prev) => withDate(d, prev, "17:00"))
+  }, [withDate])
+
   const fetchData = React.useCallback(async (f?: Record<string, string>, p?: number, l?: number) => {
     setLoading(true)
     try {
@@ -149,9 +162,10 @@ export default function ManualAttendancePage() {
     if (successCount > 0) {
       toast.success(`Attendance saved for ${successCount} employee(s)` + (failCount > 0 ? `, ${failCount} failed` : ""))
       setSelectedRows([])
-      setEntryDate(new Date())
-      setCheckIn("")
-      setCheckOut("")
+      const today = new Date()
+      setEntryDate(today)
+      setCheckIn(withDate(today, "", "07:55"))
+      setCheckOut(withDate(today, "", "17:00"))
       setEntryStatus("present")
     } else {
       toast.error("Failed to save attendance")
@@ -271,7 +285,7 @@ export default function ManualAttendancePage() {
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5 max-w-[240px]">
                 <label className="text-xs font-medium text-muted-foreground">Date</label>
-                <DatePicker value={entryDate} onChange={(d) => d && setEntryDate(d)} />
+                  <DatePicker value={entryDate} onChange={handleEntryDateChange} />
               </div>
               <div className="flex flex-row flex-wrap gap-4">
                 <div className="flex flex-col gap-1.5 min-w-[200px] flex-1">

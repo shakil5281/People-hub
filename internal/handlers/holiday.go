@@ -7,21 +7,38 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"github.com/shakil5281/peoplehub-api/internal/repository"
+	"github.com/shakil5281/peoplehub-api/internal/service"
 	"github.com/shakil5281/peoplehub-api/internal/utils"
 )
 
 type HolidayHandler struct {
-	holidayRepo *repository.HolidayRepository
+	holidayRepo         *repository.HolidayRepository
+	attendanceProcessor *service.AttendanceProcessor
 }
 
-func NewHolidayHandler(holidayRepo *repository.HolidayRepository) *HolidayHandler {
-	return &HolidayHandler{holidayRepo: holidayRepo}
+func NewHolidayHandler(holidayRepo *repository.HolidayRepository, attendanceProcessor *service.AttendanceProcessor) *HolidayHandler {
+	return &HolidayHandler{
+		holidayRepo:         holidayRepo,
+		attendanceProcessor: attendanceProcessor,
+	}
+}
+
+func (h *HolidayHandler) reprocessHolidayAttendance(date string, fromDate, toDate *string, companyID string) {
+	startDate := date
+	endDate := date
+	if fromDate != nil && toDate != nil {
+		startDate = *fromDate
+		endDate = *toDate
+	}
+	_, _ = h.attendanceProcessor.ProcessDateRange(startDate, endDate, companyID)
 }
 
 type CreateHolidayRequest struct {
 	Name        string  `json:"name" binding:"required"`
 	CompanyID   string  `json:"company_id" binding:"required"`
 	Date        string  `json:"date" binding:"required"`
+	FromDate    *string `json:"from_date"`
+	ToDate      *string `json:"to_date"`
 	WeekendDate *string `json:"weekend_date"`
 	Type        string  `json:"type"`
 	Description string  `json:"description"`
@@ -30,6 +47,8 @@ type CreateHolidayRequest struct {
 type UpdateHolidayRequest struct {
 	Name        string  `json:"name"`
 	Date        string  `json:"date"`
+	FromDate    *string `json:"from_date"`
+	ToDate      *string `json:"to_date"`
 	WeekendDate *string `json:"weekend_date"`
 	Type        string  `json:"type"`
 	Description string  `json:"description"`
@@ -102,13 +121,27 @@ func (h *HolidayHandler) Create(c *gin.Context) {
 		return
 	}
 
-	if _, err := time.Parse("2006-01-02", req.Date); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, use YYYY-MM-DD"})
+	if req.Type == "" {
+		req.Type = "government"
+	}
+
+	if req.FromDate != nil && req.ToDate != nil {
+		if _, err := time.Parse("2006-01-02", *req.FromDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from_date format, use YYYY-MM-DD"})
+			return
+		}
+		if _, err := time.Parse("2006-01-02", *req.ToDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid to_date format, use YYYY-MM-DD"})
+			return
+		}
+	} else if req.FromDate != nil || req.ToDate != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "both from_date and to_date must be provided together"})
 		return
 	}
 
-	if req.Type == "" {
-		req.Type = "government"
+	if _, err := time.Parse("2006-01-02", req.Date); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, use YYYY-MM-DD"})
+		return
 	}
 
 	userID := c.GetString("user_id")
@@ -117,6 +150,8 @@ func (h *HolidayHandler) Create(c *gin.Context) {
 		CompanyID:   req.CompanyID,
 		Name:        req.Name,
 		Date:        req.Date,
+		FromDate:    req.FromDate,
+		ToDate:      req.ToDate,
 		WeekendDate: req.WeekendDate,
 		Type:        req.Type,
 		Description: req.Description,
@@ -128,6 +163,8 @@ func (h *HolidayHandler) Create(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
 
 	c.JSON(http.StatusCreated, holiday)
 }
@@ -164,6 +201,21 @@ func (h *HolidayHandler) Update(c *gin.Context) {
 	if req.Name != "" {
 		holiday.Name = req.Name
 	}
+	if req.FromDate != nil && req.ToDate != nil {
+		if _, err := time.Parse("2006-01-02", *req.FromDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from_date format, use YYYY-MM-DD"})
+			return
+		}
+		if _, err := time.Parse("2006-01-02", *req.ToDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid to_date format, use YYYY-MM-DD"})
+			return
+		}
+		holiday.FromDate = req.FromDate
+		holiday.ToDate = req.ToDate
+	} else if req.FromDate != nil || req.ToDate != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "both from_date and to_date must be provided together"})
+		return
+	}
 	if req.Date != "" {
 		if _, err := time.Parse("2006-01-02", req.Date); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format, use YYYY-MM-DD"})
@@ -192,6 +244,8 @@ func (h *HolidayHandler) Update(c *gin.Context) {
 		return
 	}
 
+	go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
+
 	c.JSON(http.StatusOK, holiday)
 }
 
@@ -209,7 +263,8 @@ func (h *HolidayHandler) Update(c *gin.Context) {
 // @Router       /holidays/{id} [delete]
 func (h *HolidayHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-	if _, err := h.holidayRepo.FindByID(id); err != nil {
+	holiday, err := h.holidayRepo.FindByID(id)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "holiday not found"})
 		return
 	}
@@ -217,5 +272,8 @@ func (h *HolidayHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
+
 	c.JSON(http.StatusOK, gin.H{"message": "holiday deleted"})
 }

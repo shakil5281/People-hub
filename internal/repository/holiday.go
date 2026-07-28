@@ -2,6 +2,7 @@ package repository
 
 import (
 	"github.com/shakil5281/peoplehub-api/internal/models"
+	"github.com/shakil5281/peoplehub-api/internal/utils"
 	"gorm.io/gorm"
 )
 
@@ -17,14 +18,41 @@ func (r *HolidayRepository) WithTx(tx *gorm.DB) *HolidayRepository {
 	return &HolidayRepository{db: tx}
 }
 
+func normalizeHolidayDates(h *models.Holiday) {
+	if h == nil {
+		return
+	}
+	h.Date = utils.NormalizeDate(h.Date)
+	if h.FromDate != nil {
+		n := utils.NormalizeDate(*h.FromDate)
+		h.FromDate = &n
+	}
+	if h.ToDate != nil {
+		n := utils.NormalizeDate(*h.ToDate)
+		h.ToDate = &n
+	}
+	if h.WeekendDate != nil {
+		n := utils.NormalizeDate(*h.WeekendDate)
+		h.WeekendDate = &n
+	}
+}
+
 func (r *HolidayRepository) Create(holiday *models.Holiday) error {
-	return r.db.Create(holiday).Error
+	if err := r.db.Create(holiday).Error; err != nil {
+		return err
+	}
+	normalizeHolidayDates(holiday)
+	return nil
 }
 
 func (r *HolidayRepository) FindByID(id string) (*models.Holiday, error) {
 	var holiday models.Holiday
 	err := r.db.Preload("Company").Where("id = ? AND deleted_at IS NULL", id).First(&holiday).Error
-	return &holiday, err
+	if err != nil {
+		return &holiday, err
+	}
+	normalizeHolidayDates(&holiday)
+	return &holiday, nil
 }
 
 func (r *HolidayRepository) List(companyID string, page, limit int) ([]models.Holiday, int64, error) {
@@ -38,7 +66,13 @@ func (r *HolidayRepository) List(companyID string, page, limit int) ([]models.Ho
 	}
 	var list []models.Holiday
 	err := base.Preload("Company").Order("date DESC").Offset((page - 1) * limit).Limit(limit).Find(&list).Error
-	return list, total, err
+	if err != nil {
+		return list, total, err
+	}
+	for i := range list {
+		normalizeHolidayDates(&list[i])
+	}
+	return list, total, nil
 }
 
 func (r *HolidayRepository) Update(holiday *models.Holiday) error {
@@ -51,21 +85,34 @@ func (r *HolidayRepository) Delete(id string) error {
 
 func (r *HolidayRepository) ListActiveByDate(date, companyID string) ([]models.Holiday, error) {
 	var list []models.Holiday
-	query := r.db.Where("(date = ? OR weekend_date = ?) AND status = 'active' AND deleted_at IS NULL", date, date)
+	query := r.db.Where(`(date = ? OR weekend_date = ? OR (from_date IS NOT NULL AND to_date IS NOT NULL AND from_date <= ? AND to_date >= ?)) AND status = 'active' AND deleted_at IS NULL`,
+		date, date, date, date)
 	if companyID != "" {
 		query = query.Where("company_id = ?", companyID)
 	}
 	err := query.Find(&list).Error
-	return list, err
+	if err != nil {
+		return list, err
+	}
+	for i := range list {
+		normalizeHolidayDates(&list[i])
+	}
+	return list, nil
 }
 
 func (r *HolidayRepository) ListActiveByDateRange(startDate, endDate, companyID string) ([]models.Holiday, error) {
 	var list []models.Holiday
-	query := r.db.Where("(date BETWEEN ? AND ? OR weekend_date BETWEEN ? AND ?) AND status = 'active' AND deleted_at IS NULL",
-		startDate, endDate, startDate, endDate)
+	query := r.db.Where(`(date BETWEEN ? AND ? OR weekend_date BETWEEN ? AND ? OR (from_date IS NOT NULL AND to_date IS NOT NULL AND from_date <= ? AND to_date >= ?)) AND status = 'active' AND deleted_at IS NULL`,
+		startDate, endDate, startDate, endDate, endDate, startDate)
 	if companyID != "" {
 		query = query.Where("company_id = ?", companyID)
 	}
 	err := query.Find(&list).Error
-	return list, err
+	if err != nil {
+		return list, err
+	}
+	for i := range list {
+		normalizeHolidayDates(&list[i])
+	}
+	return list, nil
 }

@@ -27,6 +27,28 @@ func ParseDate(dateStr string) (time.Time, error) {
 	return time.Parse("2006-01-02", dateStr)
 }
 
+// NormalizeDate converts driver date values like "2026-06-01T00:00:00Z" to "YYYY-MM-DD".
+func NormalizeDate(dateStr string) string {
+	if dateStr == "" {
+		return ""
+	}
+	if len(dateStr) >= 10 && dateStr[4] == '-' && dateStr[7] == '-' {
+		return dateStr[:10]
+	}
+	for _, layout := range []string{
+		"2006-01-02",
+		time.RFC3339,
+		"2006-01-02T15:04:05Z07:00",
+		"2006-01-02 15:04:05",
+		"2006-01-02 15:04:05.999999",
+	} {
+		if t, err := time.Parse(layout, dateStr); err == nil {
+			return t.Format("2006-01-02")
+		}
+	}
+	return dateStr
+}
+
 // IsWeekend checks whether a given date falls on a weekend configured by comma-separated day names/abbreviations (e.g. "Fri,Sat").
 func IsWeekend(dateStr string, weekendDays string) bool {
 	if weekendDays == "" {

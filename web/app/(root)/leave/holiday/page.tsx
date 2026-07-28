@@ -20,6 +20,8 @@ interface Holiday {
   company_id: string
   name: string
   date: string
+  from_date: string | null
+  to_date: string | null
   weekend_date: string | null
   type: string
   description: string
@@ -52,7 +54,17 @@ function formatDate(val: string | null | undefined) {
 const govColumns: ColumnDef<Holiday>[] = [
   { id: "sl", header: "#", cell: ({ row }) => row.index + 1 },
   { accessorKey: "name", header: "Holiday Name" },
-  { accessorKey: "date", header: "Date", cell: ({ row }) => formatDate(row.original.date) },
+  {
+    id: "date_range",
+    header: "Date",
+    cell: ({ row }) => {
+      const h = row.original
+      if (h.from_date && h.to_date) {
+        return `${formatDate(h.from_date)} to ${formatDate(h.to_date)}`
+      }
+      return formatDate(h.date)
+    },
+  },
   { accessorKey: "description", header: "Description", cell: ({ row }) => row.original.description || "-" },
   {
     accessorKey: "status",
@@ -101,9 +113,12 @@ function GovHolidayDialog({
   const [companyId, setCompanyId] = React.useState("")
   const [name, setName] = React.useState("")
   const [date, setDate] = React.useState<Date | undefined>()
+  const [fromDate, setFromDate] = React.useState<Date | undefined>()
+  const [toDate, setToDate] = React.useState<Date | undefined>()
   const [description, setDescription] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState("")
+  const [useRange, setUseRange] = React.useState(false)
 
   React.useEffect(() => {
     companyApi.list({ limit: "100" }).then((res) => {
@@ -116,11 +131,17 @@ function GovHolidayDialog({
     if (editingItem) {
       setName(editingItem.name)
       setDate(editingItem.date ? new Date(editingItem.date + "T00:00:00") : undefined)
+      setFromDate(editingItem.from_date ? new Date(editingItem.from_date + "T00:00:00") : undefined)
+      setToDate(editingItem.to_date ? new Date(editingItem.to_date + "T00:00:00") : undefined)
+      setUseRange(!!(editingItem.from_date && editingItem.to_date))
       setDescription(editingItem.description || "")
       setCompanyId(editingItem.company_id)
     } else {
       setName("")
       setDate(undefined)
+      setFromDate(undefined)
+      setToDate(undefined)
+      setUseRange(false)
       setDescription("")
       setCompanyId(companies.length === 1 ? companies[0].id : "")
     }
@@ -129,30 +150,39 @@ function GovHolidayDialog({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name || !date || !companyId) {
-      setError("Name, date, and company are required")
+    if (!name || !companyId) {
+      setError("Name and company are required")
+      return
+    }
+    if (!useRange && !date) {
+      setError("Date is required")
+      return
+    }
+    if (useRange && (!fromDate || !toDate)) {
+      setError("From date and to date are required")
       return
     }
     setIsSubmitting(true)
     setError("")
     try {
-      const dateStr = format(date, "yyyy-MM-dd")
+      const payload: Record<string, unknown> = {
+        name,
+        description,
+        type: "government",
+      }
+      if (useRange && fromDate && toDate) {
+        payload.date = format(fromDate, "yyyy-MM-dd")
+        payload.from_date = format(fromDate, "yyyy-MM-dd")
+        payload.to_date = format(toDate, "yyyy-MM-dd")
+      } else if (date) {
+        payload.date = format(date, "yyyy-MM-dd")
+      }
       if (editingItem) {
-        await holidayApi.update(editingItem.id, {
-          name,
-          date: dateStr,
-          description,
-          type: "government",
-        })
+        await holidayApi.update(editingItem.id, payload)
         toast.success("Holiday updated successfully")
       } else {
-        await holidayApi.create({
-          name,
-          date: dateStr,
-          description,
-          type: "government",
-          company_id: companyId,
-        })
+        payload.company_id = companyId
+        await holidayApi.create(payload)
         toast.success("Holiday created successfully")
       }
       onOpenChange(false)
@@ -216,14 +246,46 @@ function GovHolidayDialog({
             />
           </div>
 
-          <div className="space-y-2">
-            <Label>Date *</Label>
-            <DatePicker
-              value={date}
-              onChange={(d) => setDate(d)}
-              placeholder="Select holiday date"
+          <div className="flex items-center gap-2 mb-2">
+            <input
+              id="use-range"
+              type="checkbox"
+              checked={useRange}
+              onChange={(e) => setUseRange(e.target.checked)}
+              className="h-4 w-4 rounded border-gray-300"
             />
+            <Label htmlFor="use-range" className="text-sm font-normal">Date range (multi-day holiday)</Label>
           </div>
+
+          {useRange ? (
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>From Date *</Label>
+                <DatePicker
+                  value={fromDate}
+                  onChange={(d) => setFromDate(d)}
+                  placeholder="Start date"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>To Date *</Label>
+                <DatePicker
+                  value={toDate}
+                  onChange={(d) => setToDate(d)}
+                  placeholder="End date"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Date *</Label>
+              <DatePicker
+                value={date}
+                onChange={(d) => setDate(d)}
+                placeholder="Select holiday date"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="description">Description</Label>

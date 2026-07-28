@@ -11,6 +11,8 @@ type Holiday struct {
 	CompanyID   string         `json:"company_id" gorm:"type:uuid;not null"`
 	Name        string         `json:"name" gorm:"type:varchar(255);not null"`
 	Date        string         `json:"date" gorm:"type:date;not null"`
+	FromDate    *string        `json:"from_date" gorm:"type:date"`
+	ToDate      *string        `json:"to_date" gorm:"type:date"`
 	WeekendDate *string        `json:"weekend_date" gorm:"type:date"`
 	Type        string         `json:"type" gorm:"type:varchar(50);not null;default:government"`
 	Description string         `json:"description" gorm:"type:text"`
