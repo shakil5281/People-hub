@@ -85,7 +85,7 @@ func New(cfg *config.Config) *gin.Engine {
 	dataLogHandler := handlers.NewDataLogHandler(dataLogRepo, dataLogService, attendanceProcessor)
 	leaveHandler := handlers.NewLeaveHandler(leaveRepo, employeeRepo, attendanceRepo)
 	salaryRepo := repository.NewSalaryRepository(database.DB)
-	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo)
+	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo, groupRepo)
 	salaryHandler := handlers.NewSalaryHandler(salaryService, salaryRepo)
 	salaryIncrementRepo := repository.NewSalaryIncrementRepository(database.DB)
 	salaryIncrementHandler := handlers.NewSalaryIncrementHandler(salaryIncrementRepo, employeeRepo)

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ReceiptIcon, Loader2, SearchIcon, FileDownIcon } from "lucide-react"
+import { ReceiptIcon, Loader2, SearchIcon, FileDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 import { salaryApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -14,8 +14,19 @@ interface Line { id: string; name: string }
 interface Group { id: string; name: string }
 interface Shift { id: string; name: string }
 
-interface PayslipData {
-  employee?: { employee_id:string; name_en:string; designation_ref?:{name:string}; joining_date:string }
+interface Emp {
+  employee_id: string
+  name_en: string
+  designation_ref?: { name: string }
+  department?: { name: string }
+  section_ref?: { name: string }
+  line_ref?: { name: string }
+  group_ref?: { name: string }
+}
+
+interface PayslipRecord {
+  id: string
+  employee: Emp
   basic_salary: number
   house_rent: number
   medical_allowance: number
@@ -42,6 +53,16 @@ interface PayslipData {
   status: string
 }
 
+interface PaginatedResponse {
+  salaries: PayslipRecord[]
+  total: number
+  page: number
+  limit: number
+  total_pages: number
+  month: number
+  year: number
+}
+
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth()
@@ -49,6 +70,77 @@ const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
 const labelCls = "text-xs font-medium text-muted-foreground"
+
+const fmt = (n: number) => n.toLocaleString()
+const fmt2 = (n: number) => n.toFixed(2)
+
+function PayslipCard({ s, month }: { s: PayslipRecord; month: number }) {
+  return (
+    <Card className="border-primary/10 shadow-sm">
+      <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg">{s.employee?.name_en || "-"}</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {s.employee?.employee_id} | {s.employee?.designation_ref?.name || "-"}
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded">
+            {MONTHS[month]}
+          </span>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-4 space-y-3">
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Earnings</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <span className="text-muted-foreground">Basic Salary</span><span className="text-right font-medium">{fmt(s.basic_salary)}</span>
+            <span className="text-muted-foreground">House Rent</span><span className="text-right font-medium">{fmt(s.house_rent)}</span>
+            <span className="text-muted-foreground">Medical</span><span className="text-right font-medium">{fmt(s.medical_allowance)}</span>
+            <span className="text-muted-foreground">Transport</span><span className="text-right font-medium">{fmt(s.transport_allowance)}</span>
+            <span className="text-muted-foreground">Food</span><span className="text-right font-medium">{fmt(s.food_allowance)}</span>
+            <span className="text-muted-foreground">Other</span><span className="text-right font-medium">{fmt(s.other_allowance)}</span>
+            <span className="font-semibold text-primary border-t pt-0.5">Gross</span>
+            <span className="text-right font-semibold text-primary border-t pt-0.5">{fmt(s.gross_salary)}</span>
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Overtime & Bonus</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <span className="text-muted-foreground">OT Hours</span><span className="text-right">{fmt2(s.overtime_hours)}</span>
+            <span className="text-muted-foreground">OT Rate</span><span className="text-right">{fmt2(s.overtime_rate)}</span>
+            <span className="text-muted-foreground">OT Amount</span><span className="text-right font-medium">{fmt(s.overtime_amount)}</span>
+            <span className="text-muted-foreground">Att. Bonus</span><span className="text-right font-medium">{fmt(s.attendance_bonus)}</span>
+          </div>
+        </div>
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Deductions</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+            <span className="text-muted-foreground">PF</span><span className="text-right">{fmt(s.provident_fund)}</span>
+            <span className="text-muted-foreground">Tax</span><span className="text-right">{fmt(s.tax)}</span>
+            <span className="text-muted-foreground">Absent Deduction</span><span className="text-right">{fmt(s.absent_deduction)}</span>
+            <span className="font-semibold text-destructive border-t pt-0.5">Total Deductions</span>
+            <span className="text-right font-semibold text-destructive border-t pt-0.5">{fmt(s.total_deductions)}</span>
+          </div>
+        </div>
+        <div className="flex justify-between items-center p-3 rounded-lg bg-primary/5 border border-primary/10">
+          <span className="font-bold text-lg">Net Salary</span>
+          <span className="font-bold text-lg text-primary">{fmt(s.net_salary)}</span>
+        </div>
+        <div className="grid grid-cols-4 gap-1 text-xs text-muted-foreground border-t pt-2">
+          <span>P: <strong>{s.present_days}</strong></span>
+          <span>A: <strong>{s.absent_days}</strong></span>
+          <span>L: <strong>{s.late_days}</strong></span>
+          <span>LV: <strong>{s.leave_days}</strong></span>
+          <span>H: <strong>{s.holiday_days}</strong></span>
+          <span>W: <strong>{s.weekend_days}</strong></span>
+          <span>T: <strong>{s.total_days}</strong></span>
+          <span className="text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${s.status === "processed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{s.status}</span></span>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
 
 export default function PaySlipPage() {
   const [companies, setCompanies] = React.useState<Company[]>([])
@@ -70,10 +162,11 @@ export default function PaySlipPage() {
   const [month, setMonth] = React.useState(currentMonth)
   const [year, setYear] = React.useState(currentYear)
 
-  const [payslip, setPayslip] = React.useState<PayslipData | null>(null)
+  const [singlePayslip, setSinglePayslip] = React.useState<PayslipRecord | null>(null)
+  const [paginated, setPaginated] = React.useState<PaginatedResponse | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [searched, setSearched] = React.useState(false)
-  const [exporting, setExporting] = React.useState(false)
+  const [page, setPage] = React.useState(1)
 
   const fetchSections = React.useCallback(async (deptId: string) => {
     try {
@@ -133,17 +226,68 @@ export default function PaySlipPage() {
     init()
   }, [])
 
-  const handleSearch = async () => {
-    if (!employeeId) return
+  const buildParams = React.useCallback(() => {
+    const params: Record<string, string> = {
+      month: String(month + 1),
+      year: String(year),
+    }
+    if (employeeId) params.employee_id = employeeId
+    if (companyId) params.company_id = companyId
+    if (departmentId) params.department_id = departmentId
+    if (sectionId) params.section_id = sectionId
+    if (designationId) params.designation_id = designationId
+    if (lineId) params.line_id = lineId
+    if (groupId) params.group_id = groupId
+    if (shiftId) params.shift_id = shiftId
+    return params
+  }, [companyId, month, year, departmentId, sectionId, designationId, lineId, groupId, shiftId, employeeId])
+
+  const loadPage = React.useCallback(async (pageNum: number) => {
     setLoading(true)
     setSearched(true)
     try {
-      const { data } = await salaryApi.payslip({ employee_id: employeeId, month: String(month+1), year: String(year) })
-      setPayslip(data)
+      const bp = buildParams()
+      const params: Record<string, string> = { month: bp.month, year: bp.year, page: String(pageNum) }
+      if (bp.company_id) params.company_id = bp.company_id
+      if (bp.department_id) params.department_id = bp.department_id
+      if (bp.section_id) params.section_id = bp.section_id
+      if (bp.designation_id) params.designation_id = bp.designation_id
+      if (bp.line_id) params.line_id = bp.line_id
+      if (bp.group_id) params.group_id = bp.group_id
+      if (bp.shift_id) params.shift_id = bp.shift_id
+      const { data } = await salaryApi.payslip(params)
+      setPaginated(data)
+      setSinglePayslip(null)
+      setPage(data.page || pageNum)
     } catch {
-      setPayslip(null)
+      setPaginated(null)
+    } finally {
+      setLoading(false)
     }
-    finally { setLoading(false) }
+  }, [buildParams])
+
+  const handleSearch = async () => {
+    if (!employeeId) {
+      setSearched(false)
+      return
+    }
+    setLoading(true)
+    setSearched(true)
+    try {
+      const params = buildParams()
+      const { data } = await salaryApi.payslip(params)
+      setSinglePayslip(data)
+      setPaginated(null)
+    } catch {
+      setSinglePayslip(null)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleApply = () => {
+    setPage(1)
+    loadPage(1)
   }
 
   const handleReset = () => {
@@ -155,17 +299,45 @@ export default function PaySlipPage() {
     setGroupId("")
     setShiftId("")
     setEmployeeId("")
+    setSinglePayslip(null)
+    setPaginated(null)
+    setSearched(false)
   }
+
+  const handleExport = async () => {
+    setLoading(true)
+    try {
+      const params = buildParams()
+      const res = await salaryApi.payslipExport(params)
+      const url = window.URL.createObjectURL(new Blob([res.data]))
+      const a = document.createElement("a")
+      a.href = url
+      const suffix = employeeId ? `_${employeeId}` : ""
+      a.download = `payslip${suffix}_${MONTHS[month]}_${year}.xlsx`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const hasResults = singlePayslip || (paginated?.salaries && paginated.salaries.length > 0)
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6">
+      <div className="px-4 lg:px-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <ReceiptIcon className="h-6 w-6 text-muted-foreground" />
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Payslip</h1>
-            <p className="text-muted-foreground mt-1">View employee payslip</p>
+            <p className="text-muted-foreground mt-1">Employee salary payslip</p>
           </div>
+        </div>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" disabled={loading || !searched || !hasResults} onClick={handleExport}>
+            <FileDownIcon className="mr-2 h-4 w-4" />
+            {loading ? "Exporting..." : "Export Excel"}
+          </Button>
         </div>
       </div>
 
@@ -247,102 +419,89 @@ export default function PaySlipPage() {
             </div>
           </div>
           <div className="flex gap-2 mt-4">
-            <Button onClick={handleSearch} disabled={loading || !employeeId}>
-              {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchIcon className="mr-2 h-4 w-4" />}
-              Search
+            <Button disabled={loading || !employeeId} onClick={handleSearch}>
+              <SearchIcon className="mr-2 h-4 w-4" />
+              {loading ? "Searching..." : "Search"}
+            </Button>
+            <Button variant="outline" disabled={loading || !companyId} onClick={handleApply}>
+              Apply Filters
             </Button>
             <Button variant="outline" onClick={handleReset}>Reset</Button>
           </div>
         </div>
       </div>
 
-      {searched && !payslip && !loading && (
+      {searched && !loading && !hasResults && (
         <div className="px-4 lg:px-6">
           <div className="rounded-md bg-muted px-4 py-3 text-sm text-muted-foreground">
-            No payslip found for this employee. Process salary first.
+            No payslip found. Process salary first or adjust filters.
           </div>
         </div>
       )}
 
       {loading && (
-        <div className="px-4 lg:px-6 flex justify-center py-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+        <div className="px-4 lg:px-6 flex justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
       )}
 
-      {payslip && (
+      {singlePayslip && !loading && (
+        <div className="px-4 lg:px-6 max-w-2xl mx-auto">
+          <PayslipCard s={singlePayslip} month={month} />
+        </div>
+      )}
+
+      {paginated && paginated.salaries.length > 0 && !loading && (
         <div className="px-4 lg:px-6">
-          <div className="flex justify-end mb-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={exporting}
-              onClick={async () => {
-                setExporting(true)
-                try {
-                  const res = await salaryApi.payslipExport({ employee_id: employeeId, month: String(month+1), year: String(year) })
-                  const url = window.URL.createObjectURL(new Blob([res.data]))
-                  const a = document.createElement("a")
-                  a.href = url
-                  a.download = `payslip_${employeeId}_${MONTHS[month]}_${year}.xlsx`
-                  a.click()
-                  window.URL.revokeObjectURL(url)
-                } finally { setExporting(false) }
-              }}
-            >
-              <FileDownIcon className="mr-2 h-4 w-4" />
-              {exporting ? "Exporting..." : "Export Excel"}
-            </Button>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">{MONTHS[month]} {year} - Payslips</h2>
+            <span className="text-sm text-muted-foreground">
+              Page {paginated.page} of {paginated.total_pages} ({paginated.total} total)
+            </span>
           </div>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-xl">Payslip - {MONTHS[month]} {year}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-4 mb-6 p-4 rounded-lg bg-muted/50">
-                <div><span className="text-sm text-muted-foreground">Employee:</span> <strong>{payslip.employee?.name_en}</strong></div>
-                <div><span className="text-sm text-muted-foreground">Code:</span> <strong>{payslip.employee?.employee_id}</strong></div>
-                <div><span className="text-sm text-muted-foreground">Designation:</span> <strong>{payslip.employee?.designation_ref?.name || "-"}</strong></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {paginated.salaries.map((s) => (
+              <PayslipCard key={s.id} s={s} month={month} />
+            ))}
+          </div>
+          {paginated.total_pages > 1 && (
+            <div className="flex items-center justify-center gap-4 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={paginated.page <= 1}
+                onClick={() => loadPage(paginated.page - 1)}
+              >
+                <ChevronLeftIcon className="mr-1 h-4 w-4" /> Previous
+              </Button>
+              <div className="flex gap-1">
+                {Array.from({ length: Math.min(paginated.total_pages, 5) }, (_, i) => {
+                  const startPage = Math.max(1, paginated.page - 2)
+                  const p = startPage + i
+                  if (p > paginated.total_pages) return null
+                  return (
+                    <Button
+                      key={p}
+                      variant={p === paginated.page ? "default" : "outline"}
+                      size="sm"
+                      className="min-w-[32px]"
+                      onClick={() => loadPage(p)}
+                    >
+                      {p}
+                    </Button>
+                  )
+                })}
               </div>
-
-              <h3 className="font-semibold mb-2">Earnings</h3>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="flex justify-between p-2 rounded border"><span>Transport Allowance</span><span>{payslip.transport_allowance.toLocaleString()}</span></div>
-                <div className="flex justify-between p-2 rounded border"><span>Food Allowance</span><span>{payslip.food_allowance.toLocaleString()}</span></div>
-                <div className="flex justify-between p-2 rounded border"><span>Other Allowance</span><span>{payslip.other_allowance.toLocaleString()}</span></div>
-                <div className="flex justify-between p-2 rounded border font-semibold bg-primary/5"><span>Gross Salary</span><span>{payslip.gross_salary.toLocaleString()}</span></div>
-              </div>
-
-              <h3 className="font-semibold mb-2">Overtime & Bonus</h3>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="flex justify-between p-2 rounded border"><span>OT Hours</span><span>{payslip.overtime_hours?.toFixed(2)}</span></div>
-                <div className="flex justify-between p-2 rounded border"><span>OT Rate</span><span>{payslip.overtime_rate?.toFixed(2)}</span></div>
-                <div className="flex justify-between p-2 rounded border"><span>OT Amount</span><span>{payslip.overtime_amount?.toLocaleString()}</span></div>
-                <div className="flex justify-between p-2 rounded border"><span>Attendance Bonus</span><span>{payslip.attendance_bonus?.toLocaleString()}</span></div>
-              </div>
-
-              <h3 className="font-semibold mb-2">Deductions</h3>
-              <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className="flex justify-between p-2 rounded border"><span>Provident Fund</span><span>{payslip.provident_fund.toLocaleString()}</span></div>
-                <div className="flex justify-between p-2 rounded border"><span>Tax</span><span>{payslip.tax.toLocaleString()}</span></div>
-                <div className="flex justify-between p-2 rounded border"><span>Absent Deduction</span><span>{payslip.absent_deduction.toLocaleString()}</span></div>
-                <div className="flex justify-between p-2 rounded border font-semibold bg-destructive/5"><span>Total Deductions</span><span>{payslip.total_deductions.toLocaleString()}</span></div>
-              </div>
-
-              <div className="flex justify-between p-4 rounded-lg border-2 border-primary/20 bg-primary/5 text-lg font-bold mt-2">
-                <span>Net Salary</span>
-                <span>{payslip.net_salary.toLocaleString()}</span>
-              </div>
-
-              <div className="grid grid-cols-3 gap-3 mt-6 text-sm text-muted-foreground">
-                <span>Present: <strong>{payslip.present_days}</strong></span>
-                <span>Absent: <strong>{payslip.absent_days}</strong></span>
-                <span>Late: <strong>{payslip.late_days}</strong></span>
-                <span>Leave: <strong>{payslip.leave_days}</strong></span>
-                <span>Holiday: <strong>{payslip.holiday_days}</strong></span>
-                <span>Weekend: <strong>{payslip.weekend_days}</strong></span>
-                <span>Total Days: <strong>{payslip.total_days}</strong></span>
-              </div>
-            </CardContent>
-          </Card>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={paginated.page >= paginated.total_pages}
+                onClick={() => loadPage(paginated.page + 1)}
+              >
+                Next <ChevronRightIcon className="ml-1 h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       )}
     </div>

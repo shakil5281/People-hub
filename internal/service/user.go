@@ -175,13 +175,13 @@ func (s *UserService) DeleteUser(id string) error {
 	roles, _ := s.userRepo.GetUserRoles(id)
 	hasSuperAdmin := false
 	for _, r := range roles {
-		if r.Name == "super_admin" {
+		if r.Name == "superadmin" {
 			hasSuperAdmin = true
 			break
 		}
 	}
 	if hasSuperAdmin {
-		count, _ := s.userRepo.CountByRole("super_admin")
+		count, _ := s.userRepo.CountByRole("superadmin")
 		if count <= 1 {
 			return errors.New("cannot delete the last super admin")
 		}
@@ -207,15 +207,15 @@ func (s *UserService) AssignRoles(id string, req AssignRolesRequest, currentUser
 			}
 			return err
 		}
-		if role.Name == "super_admin" && !contains(currentUserRoles, "super_admin") {
-			return errors.New("only super admin can assign the super_admin role")
+		if role.Name == "superadmin" && !contains(currentUserRoles, "superadmin") {
+			return errors.New("only super admin can assign the superadmin role")
 		}
 	}
 
 	currentRoles, _ := s.userRepo.GetUserRoles(id)
 	currentHasSuper := false
 	for _, r := range currentRoles {
-		if r.Name == "super_admin" {
+		if r.Name == "superadmin" {
 			currentHasSuper = true
 			break
 		}
@@ -224,15 +224,15 @@ func (s *UserService) AssignRoles(id string, req AssignRolesRequest, currentUser
 		stillHasSuper := false
 		for _, roleID := range req.RoleIDs {
 			role, err := s.roleRepo.FindByID(roleID)
-			if err == nil && role.Name == "super_admin" {
+			if err == nil && role.Name == "superadmin" {
 				stillHasSuper = true
 				break
 			}
 		}
 		if !stillHasSuper {
-			count, _ := s.userRepo.CountByRole("super_admin")
+			count, _ := s.userRepo.CountByRole("superadmin")
 			if count <= 1 {
-				return errors.New("cannot remove super_admin from the last super admin")
+				return errors.New("cannot remove superadmin from the last super admin")
 			}
 		}
 	}

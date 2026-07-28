@@ -32,10 +32,10 @@ interface EmployeeRecord {
   present_post_code: string | null
   permanent_post_office: string | null
   permanent_post_code: string | null
-  present_division?: { name: string }
-  present_district?: { name: string }
-  permanent_division?: { name: string }
-  permanent_district?: { name: string }
+  present_division_name: string
+  present_district_name: string
+  permanent_division_name: string
+  permanent_district_name: string
 }
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
@@ -173,14 +173,14 @@ export default function MCashPage() {
       cell: ({ row }) => row.original.date_of_birth || "-",
     },
     {
-      id: "present_division",
+      id: "present_division_name",
       header: "Present Division",
-      accessorFn: (r) => r.present_division?.name || "-",
+      accessorFn: (r) => r.present_division_name || "-",
     },
     {
-      id: "present_district",
+      id: "present_district_name",
       header: "Present District",
-      accessorFn: (r) => r.present_district?.name || "-",
+      accessorFn: (r) => r.present_district_name || "-",
     },
     {
       accessorKey: "present_post_office",
@@ -198,14 +198,14 @@ export default function MCashPage() {
       cell: ({ row }) => row.original.present_address || "-",
     },
     {
-      id: "permanent_division",
+      id: "permanent_division_name",
       header: "Permanent Division",
-      accessorFn: (r) => r.permanent_division?.name || "-",
+      accessorFn: (r) => r.permanent_division_name || "-",
     },
     {
-      id: "permanent_district",
+      id: "permanent_district_name",
       header: "Permanent District",
-      accessorFn: (r) => r.permanent_district?.name || "-",
+      accessorFn: (r) => r.permanent_district_name || "-",
     },
     {
       accessorKey: "permanent_post_office",

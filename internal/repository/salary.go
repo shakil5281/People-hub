@@ -23,10 +23,23 @@ func (r *SalaryRepository) Create(salary *models.Salary) error {
 }
 
 func (r *SalaryRepository) Upsert(salary *models.Salary) error {
-	return r.db.Where("employee_id = ? AND month = ? AND year = ? AND company_id = ?",
-		salary.EmployeeID, salary.Month, salary.Year, salary.CompanyID).
-		Assign(salary).
-		FirstOrCreate(salary).Error
+	var existing models.Salary
+	err := r.db.Where("employee_id = ? AND month = ? AND year = ? AND company_id = ?",
+		salary.EmployeeID, salary.Month, salary.Year, salary.CompanyID).First(&existing).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return r.db.Create(salary).Error
+		}
+		return err
+	}
+	salary.ID = existing.ID
+	return r.db.Model(&existing).Select(
+		"basic_salary", "house_rent", "medical_allowance", "transport_allowance", "food_allowance", "other_allowance",
+		"gross_salary", "provident_fund", "tax", "absent_deduction", "other_deduction", "total_deductions",
+		"overtime_hours", "overtime_rate", "overtime_amount", "attendance_bonus", "net_salary",
+		"present_days", "absent_days", "late_days", "leave_days", "holiday_days", "weekend_days", "total_days",
+		"status", "updated_at",
+	).Updates(salary).Error
 }
 
 func (r *SalaryRepository) FindByEmployeeMonth(employeeID string, month, year int) (*models.Salary, error) {
@@ -106,6 +119,43 @@ func (r *SalaryRepository) ListAllByMonthFiltered(f SalaryFilter) ([]models.Sala
 	var salaries []models.Salary
 	err := query.Order("LENGTH(employee_id) ASC, employee_id ASC").Find(&salaries).Error
 	return salaries, err
+}
+
+func (r *SalaryRepository) ListPayslips(f SalaryFilter, page, limit int) ([]models.Salary, int64, error) {
+	query := r.db.Preload("Employee.Department").
+		Preload("Employee.DesignationRef").
+		Preload("Employee.SectionRef").
+		Preload("Employee.LineRef").
+		Preload("Employee.GroupRef").
+		Where("company_id = ? AND month = ? AND year = ? AND deleted_at IS NULL", f.CompanyID, f.Month, f.Year)
+	if f.DepartmentID != "" {
+		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", f.DepartmentID)
+	}
+	if f.SectionID != "" {
+		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE section_id = ?)", f.SectionID)
+	}
+	if f.DesignationID != "" {
+		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE designation_id = ?)", f.DesignationID)
+	}
+	if f.LineID != "" {
+		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE line_id = ?)", f.LineID)
+	}
+	if f.GroupID != "" {
+		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE group_id = ?)", f.GroupID)
+	}
+	if f.ShiftID != "" {
+		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE shift_id = ?)", f.ShiftID)
+	}
+	if f.EmployeeID != "" {
+		query = query.Where("employee_id LIKE ?", "%"+f.EmployeeID+"%")
+	}
+	var total int64
+	if err := query.Model(&models.Salary{}).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var salaries []models.Salary
+	err := query.Order("LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&salaries).Error
+	return salaries, total, err
 }
 
 func (r *SalaryRepository) DeleteByMonth(companyID string, month, year int) error {
@@ -245,6 +295,6 @@ func calculateOTAmount(grossSalary, otHours float64, daysInMonth int) float64 {
 	medical := 750.0
 	core := grossSalary - transport - food - medical
 	basic := core / 1.5
-	otRate := basic / float64(daysInMonth) / 8
+	otRate := (basic / 208) * 2
 	return otHours * otRate
 }

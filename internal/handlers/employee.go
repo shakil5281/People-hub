@@ -25,6 +25,8 @@ type EmployeeRow struct {
 	NameEn        string  `json:"name_en"`
 	NameBn        string  `json:"name_bn"`
 	Phone         string  `json:"phone"`
+	NID           string  `json:"nid"`
+	DateOfBirth   string  `json:"date_of_birth"`
 	Designation   string  `json:"designation"`
 	Department    string  `json:"department"`
 	Section       string  `json:"section"`
@@ -44,6 +46,18 @@ type EmployeeRow struct {
 	LineID        *string `json:"line_id"`
 	GroupID       *string `json:"group_id"`
 	FloorID       *string `json:"floor_id"`
+
+	PresentAddress     string `json:"present_address"`
+	PresentPostOffice  string `json:"present_post_office"`
+	PresentPostCode    string `json:"present_post_code"`
+	PermanentAddress   string `json:"permanent_address"`
+	PermanentPostOffice string `json:"permanent_post_office"`
+	PermanentPostCode  string `json:"permanent_post_code"`
+
+	PresentDivisionName   string `json:"present_division_name"`
+	PresentDistrictName   string `json:"present_district_name"`
+	PermanentDivisionName string `json:"permanent_division_name"`
+	PermanentDistrictName string `json:"permanent_district_name"`
 }
 
 func toEmployeeRow(e models.Employee) EmployeeRow {
@@ -54,6 +68,8 @@ func toEmployeeRow(e models.Employee) EmployeeRow {
 		NameEn:        e.NameEn,
 		NameBn:        e.NameBn,
 		Phone:         e.Phone,
+		NID:           e.NID,
+		DateOfBirth:   e.DateOfBirth,
 		GrossSalary:   e.GrossSalary,
 		Status:        e.Status,
 		EmployeeType:  e.EmployeeType,
@@ -66,6 +82,20 @@ func toEmployeeRow(e models.Employee) EmployeeRow {
 		LineID:        e.LineID,
 		GroupID:       e.GroupID,
 		FloorID:       e.FloorID,
+		PresentAddress: e.PresentAddress,
+		PermanentAddress: e.PermanentAddress,
+	}
+	if e.PresentPostOffice != nil {
+		r.PresentPostOffice = *e.PresentPostOffice
+	}
+	if e.PresentPostCode != nil {
+		r.PresentPostCode = *e.PresentPostCode
+	}
+	if e.PermanentPostOffice != nil {
+		r.PermanentPostOffice = *e.PermanentPostOffice
+	}
+	if e.PermanentPostCode != nil {
+		r.PermanentPostCode = *e.PermanentPostCode
 	}
 	if e.DesignationRef != nil {
 		r.Designation = e.DesignationRef.Name
@@ -87,6 +117,18 @@ func toEmployeeRow(e models.Employee) EmployeeRow {
 	}
 	if !e.JoiningDate.IsZero() {
 		r.JoiningDate = e.JoiningDate.Format("2006-01-02")
+	}
+	if e.PresentDivision != nil {
+		r.PresentDivisionName = e.PresentDivision.Name
+	}
+	if e.PresentDistrict != nil {
+		r.PresentDistrictName = e.PresentDistrict.Name
+	}
+	if e.PermanentDivision != nil {
+		r.PermanentDivisionName = e.PermanentDivision.Name
+	}
+	if e.PermanentDistrict != nil {
+		r.PermanentDistrictName = e.PermanentDistrict.Name
 	}
 	return r
 }

@@ -131,7 +131,7 @@ func (r *EmployeeRepository) ListActive(companyID string, page, limit int) ([]mo
 // ListActiveAll returns all active employees without pagination (for batch operations like salary processing)
 func (r *EmployeeRepository) ListActiveAll(companyID string) ([]models.Employee, error) {
 	var employees []models.Employee
-	query := r.db.Where("status = ?", "active")
+	query := r.db.Preload("GroupRef").Where("status = ?", "active")
 	if companyID != "" {
 		query = query.Where("company_id = ?", companyID)
 	}

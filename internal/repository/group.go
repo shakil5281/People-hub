@@ -34,6 +34,12 @@ func (r *GroupRepository) List(page, limit int) ([]models.Group, int64, error) {
 	return groups, total, err
 }
 
+func (r *GroupRepository) ListAll() ([]models.Group, error) {
+	var groups []models.Group
+	err := r.db.Where("deleted_at IS NULL").Order("name ASC").Find(&groups).Error
+	return groups, err
+}
+
 func (r *GroupRepository) Update(group *models.Group) error {
 	return r.db.Save(group).Error
 }

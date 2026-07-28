@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+
 import { cn } from "@/lib/utils"
 import { authApi } from "@/lib/api"
 import { Button } from "@/components/ui/button"
@@ -9,7 +9,6 @@ import {
   Field,
   FieldGroup,
   FieldLabel,
-  FieldSeparator,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 
@@ -17,7 +16,6 @@ export function LoginForm({
   className,
   ...props
 }: React.ComponentProps<"form">) {
-  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -34,15 +32,14 @@ export function LoginForm({
       localStorage.setItem("access_token", data.access_token)
       localStorage.setItem("refresh_token", data.refresh_token)
 
-      document.cookie = `auth_token=${data.access_token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`
+      document.cookie = `auth_token=1; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`
 
       const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/"
       if (data.user.force_password_change) {
-        router.push("/settings?force_change=true")
+        window.location.href = "/settings?force_change=true"
       } else {
-        router.push(redirectTo)
+        window.location.href = redirectTo
       }
-      router.refresh()
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Login failed"

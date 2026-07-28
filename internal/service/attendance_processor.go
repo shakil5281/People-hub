@@ -175,7 +175,7 @@ func (p *AttendanceProcessor) processDay(
 			if h.WeekendDate != nil {
 				hWeekend = utils.NormalizeDate(*h.WeekendDate)
 			}
-			if h.Type == "government" && (hDate == date || (hFrom != "" && hTo != "" && date >= hFrom && date <= hTo)) {
+			if h.Type != "weekend_change" && (hDate == date || (hFrom != "" && hTo != "" && date >= hFrom && date <= hTo)) {
 				isGovHoliday = true
 			}
 			if h.Type == "weekend_change" {

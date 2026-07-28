@@ -30,6 +30,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    const url = error.config?.url || ""
+
     if (error.response?.status !== 401) {
       if (error.response?.status === 403) {
         const message = error.response?.data?.error || "You don't have permission to perform this action"
@@ -38,7 +40,12 @@ api.interceptors.response.use(
       return Promise.reject(error)
     }
 
-    const isRefreshRequest = error.config.url?.includes("/auth/refresh")
+    // Do not intercept login or register — let the calling code handle errors
+    if (url.includes("/auth/login") || url.includes("/auth/register")) {
+      return Promise.reject(error)
+    }
+
+    const isRefreshRequest = url.includes("/auth/refresh")
     if (isRefreshRequest) {
       clearAuthAndRedirect()
       return Promise.reject(error)
@@ -63,7 +70,7 @@ api.interceptors.response.use(
         const { access_token, refresh_token } = response.data
         localStorage.setItem("access_token", access_token)
         localStorage.setItem("refresh_token", refresh_token)
-        document.cookie = `auth_token=${access_token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`
+        document.cookie = `auth_token=1; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`
 
         error.config.headers.Authorization = `Bearer ${access_token}`
         return api(error.config)

@@ -189,7 +189,7 @@ func Setup(
 
 		// Admin-only destructive database operations
 		databaseAdmin := database.Group("")
-		databaseAdmin.Use(middleware.RequireRole("super_admin"))
+		databaseAdmin.Use(middleware.RequireRole("superadmin"))
 		{
 			databaseAdmin.POST("/backup", databaseHandler.Backup)
 			databaseAdmin.POST("/import", databaseHandler.Import)
@@ -284,7 +284,7 @@ func Setup(
 
 		// Admin-only destructive attendance operations
 		attendanceAdmin := attendance.Group("")
-		attendanceAdmin.Use(middleware.RequireRole("super_admin"))
+		attendanceAdmin.Use(middleware.RequireRole("superadmin"))
 		{
 			attendanceAdmin.DELETE("/delete-all", attendanceHandler.DeleteAll)
 		}
@@ -305,7 +305,7 @@ func Setup(
 
 		// Admin-only destructive data-log operations
 		dataLogAdmin := dataLog.Group("")
-		dataLogAdmin.Use(middleware.RequireRole("super_admin"))
+		dataLogAdmin.Use(middleware.RequireRole("superadmin"))
 		{
 			dataLogAdmin.DELETE("/delete-all", dataLogHandler.DeleteAll)
 		}
@@ -544,7 +544,7 @@ func Setup(
 
 	// Protected system-logs routes
 	systemLog := api.Group("/system-logs")
-	systemLog.Use(middleware.AuthMiddleware(jwtSecret), middleware.RequireRole("super_admin"))
+	systemLog.Use(middleware.AuthMiddleware(jwtSecret), middleware.RequireRole("superadmin"))
 	{
 		systemLog.GET("", systemLogHandler.List)
 		systemLog.GET("/stats", systemLogHandler.Stats)
