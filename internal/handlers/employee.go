@@ -301,6 +301,8 @@ func validateAccount(accountType, accountNumber string) string {
 func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 	var employees []models.Employee
 	query := database.DB.Preload("User").Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef")
+	query = query.Preload("PresentDivision").Preload("PresentDistrict").Preload("PresentUpazila").Preload("PresentUnion")
+	query = query.Preload("PermanentDivision").Preload("PermanentDistrict").Preload("PermanentUpazila").Preload("PermanentUnion")
 
 	if v := c.Query("company_id"); v != "" {
 		query = query.Where("company_id = ?", v)
@@ -346,6 +348,12 @@ func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 	}
 	if v := c.Query("max_salary"); v != "" {
 		query = query.Where("gross_salary <= ?", v)
+	}
+	if v := c.Query("joining_from"); v != "" {
+		query = query.Where("joining_date >= ?", v)
+	}
+	if v := c.Query("joining_to"); v != "" {
+		query = query.Where("joining_date <= ?", v)
 	}
 
 	var total int64

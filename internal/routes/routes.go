@@ -427,14 +427,17 @@ func Setup(
 	{
 		salary.POST("/process", salaryHandler.Process)
 		salary.GET("/sheet", salaryHandler.Sheet)
+		salary.GET("/sheet/export", salaryHandler.SheetExport)
 		salary.GET("/payslip", salaryHandler.Payslip)
+		salary.GET("/payslip/export", salaryHandler.PayslipExport)
 		salary.GET("/list", salaryHandler.List)
 		salary.GET("/summary", salaryHandler.Summary)
+		salary.GET("/summary/export", salaryHandler.SummaryExport)
 		salary.GET("/daily-sheet", salaryHandler.DailySheet)
 		salary.GET("/bank-sheet", salaryHandler.BankSheet)
 		salary.GET("/bank-sheet/export", salaryHandler.BankSheetExportAll)
 		salary.GET("/increments", salaryIncrementHandler.List)
-		salary.POST("/increments", salaryIncrementHandler.Create)
+		salary.POST("/increments/bulk-apply", salaryIncrementHandler.BulkApply)
 		salary.PUT("/increments/:id/approve", salaryIncrementHandler.Approve)
 		salary.PUT("/increments/:id/reject", salaryIncrementHandler.Reject)
 	}

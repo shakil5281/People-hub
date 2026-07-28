@@ -576,7 +576,7 @@ func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyI
 	return employees, err
 }
 
-func (r *AttendanceRepository) MonthlyReport(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID string) ([]map[string]interface{}, error) {
+func (r *AttendanceRepository) MonthlyReport(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID string) ([]map[string]interface{}, error) {
 	query := r.db.Table("attendances").
 		Select(`
 			attendances.employee_id,
@@ -591,6 +591,8 @@ func (r *AttendanceRepository) MonthlyReport(startDate, endDate, companyID, depa
 			COALESCE(SUM(CASE WHEN attendances.status = 'on_leave' THEN 1 ELSE 0 END), 0) as leave,
 			COALESCE(SUM(CASE WHEN attendances.status = 'weekend' THEN 1 ELSE 0 END), 0) as weekend,
 			COALESCE(SUM(CASE WHEN attendances.status = 'half_day' THEN 1 ELSE 0 END), 0) as half_day,
+			COALESCE(SUM(CASE WHEN attendances.status = 'holiday' THEN 1 ELSE 0 END), 0) as holiday,
+			COALESCE(SUM(CAST(NULLIF(attendances.over_time, '') AS INTEGER)), 0) as over_time,
 			COUNT(*) as total_days
 		`).
 		Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
@@ -615,6 +617,12 @@ func (r *AttendanceRepository) MonthlyReport(startDate, endDate, companyID, depa
 	}
 	if groupID != "" {
 		query = query.Where("employees.group_id = ?", groupID)
+	}
+	if shiftID != "" {
+		query = query.Where("employees.shift_id = ?", shiftID)
+	}
+	if employeeID != "" {
+		query = query.Where("employees.employee_id LIKE ?", "%"+employeeID+"%")
 	}
 	var results []map[string]interface{}
 	err := query.Group("attendances.employee_id, employees.employee_id, employees.name_en, designations.name, departments.name, shifts.name").

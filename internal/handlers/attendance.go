@@ -941,7 +941,7 @@ func (h *AttendanceHandler) MissingAttendance(c *gin.Context) {
 // MonthlyReport godoc
 //
 // @Summary      Monthly attendance report
-// @Description  Get per-employee monthly attendance summary (present, absent, leave, weekend, late, half_day)
+// @Description  Get per-employee monthly attendance summary (present, absent, leave, weekend, late, half_day, holiday, over_time)
 // @Tags         Attendance
 // @Security     BearerAuth
 // @Produce      json
@@ -953,6 +953,8 @@ func (h *AttendanceHandler) MissingAttendance(c *gin.Context) {
 // @Param        designation_id query string false "Filter by designation"
 // @Param        line_id        query string false "Filter by line"
 // @Param        group_id       query string false "Filter by group"
+// @Param        shift_id       query string false "Filter by shift"
+// @Param        employee_id    query string false "Search by employee ID (partial match)"
 // @Success      200  {object}  map[string]interface{}
 // @Failure      400  {object}  map[string]string
 // @Failure      500  {object}  map[string]string
@@ -991,13 +993,15 @@ func (h *AttendanceHandler) MonthlyReport(c *gin.Context) {
 		c.Query("designation_id"),
 		c.Query("line_id"),
 		c.Query("group_id"),
+		c.Query("shift_id"),
+		c.Query("employee_id"),
 	)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	totals := map[string]int{"present": 0, "absent": 0, "late": 0, "leave": 0, "weekend": 0, "half_day": 0}
+	totals := map[string]int{"present": 0, "absent": 0, "late": 0, "leave": 0, "weekend": 0, "half_day": 0, "holiday": 0, "over_time": 0}
 	for _, r := range results {
 		for k := range totals {
 			if v, ok := r[k].(int64); ok {

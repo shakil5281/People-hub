@@ -54,11 +54,15 @@ type Employee struct {
 	PresentDistrictID *string `json:"present_district_id" gorm:"type:uuid"`
 	PresentUpazilaID  *string `json:"present_upazila_id" gorm:"type:uuid"`
 	PresentUnionID    *string `json:"present_union_id" gorm:"type:uuid"`
+	PresentPostOffice *string `json:"present_post_office" gorm:"type:varchar(100)"`
+	PresentPostCode   *string `json:"present_post_code" gorm:"type:varchar(20)"`
 	// Address (permanent)
 	PermanentDivisionID *string `json:"permanent_division_id" gorm:"type:uuid"`
 	PermanentDistrictID *string `json:"permanent_district_id" gorm:"type:uuid"`
 	PermanentUpazilaID  *string `json:"permanent_upazila_id" gorm:"type:uuid"`
 	PermanentUnionID    *string `json:"permanent_union_id" gorm:"type:uuid"`
+	PermanentPostOffice *string `json:"permanent_post_office" gorm:"type:varchar(100)"`
+	PermanentPostCode   *string `json:"permanent_post_code" gorm:"type:varchar(20)"`
 
 	// Salary Information
 	GrossSalary        float64 `json:"gross_salary" gorm:"type:decimal(12,2)"`

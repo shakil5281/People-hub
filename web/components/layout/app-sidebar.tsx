@@ -15,7 +15,6 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { CommandIcon } from "lucide-react"
 import { NavGroup } from "./nav-group"
 import { navMain, navGroup, navSecondary, documents } from "../data"
 import { useSearchDialog } from "@/contexts/search-context"
@@ -32,9 +31,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               asChild
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
-              <a href="#">
-                <CommandIcon className="size-5!" />
-                <span className="text-base font-semibold">HR Hub</span>
+              <a href="/">
+                <svg viewBox="0 0 24 24" className="size-5!" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="9" cy="7" r="3" />
+                  <circle cx="17" cy="7" r="3" />
+                  <path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2" />
+                  <path d="M13 21v-2a4 4 0 0 1 4-4h2a4 4 0 0 1 2 2v2" />
+                  <circle cx="12" cy="17" r="1" fill="currentColor" />
+                </svg>
+                <span className="text-base font-semibold">People Hub</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

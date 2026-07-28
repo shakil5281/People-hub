@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
@@ -27,16 +29,18 @@ function Marker({
   VariantProps<typeof markerVariants> & {
     asChild?: boolean
   }) {
-  const Comp = asChild ? Slot.Root : "div"
+  const shared = {
+    "data-slot": "marker" as const,
+    "data-variant": variant,
+    className: cn(markerVariants({ variant, className })),
+    ...props,
+  }
 
-  return (
-    <Comp
-      data-slot="marker"
-      data-variant={variant}
-      className={cn(markerVariants({ variant, className }))}
-      {...props}
-    />
-  )
+  if (asChild) {
+    return <Slot.Root {...shared} />
+  }
+
+  return <div {...shared} />
 }
 
 function MarkerIcon({ className, ...props }: React.ComponentProps<"span">) {

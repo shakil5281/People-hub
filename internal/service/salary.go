@@ -67,7 +67,7 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		return &MonthResult{Processed: 0, Total: 0, Month: month, Year: year}, nil
 	}
 
-	attendanceReport, err := s.attendanceRepo.MonthlyReport(startStr, endStr, companyID, "", "", "", "", "")
+	attendanceReport, err := s.attendanceRepo.MonthlyReport(startStr, endStr, companyID, "", "", "", "", "", "", "")
 	if err != nil {
 		return nil, fmt.Errorf("fetch attendance: %w", err)
 	}
@@ -129,6 +129,7 @@ func (s *SalaryService) calculateEmployeeSalary(
 	absentDays := 0
 	lateDays := 0
 	leaveDays := 0
+	holidayDays := 0
 	weekendDays := 0
 	totalDays := 0
 
@@ -137,6 +138,7 @@ func (s *SalaryService) calculateEmployeeSalary(
 		absentDays = toInt(att["absent"])
 		lateDays = toInt(att["late"])
 		leaveDays = toInt(att["leave"])
+		holidayDays = toInt(att["holiday"])
 		weekendDays = toInt(att["weekend"])
 		totalDays = toInt(att["total_days"])
 	}
@@ -192,6 +194,7 @@ func (s *SalaryService) calculateEmployeeSalary(
 		AbsentDays:         absentDays,
 		LateDays:           lateDays,
 		LeaveDays:          leaveDays,
+		HolidayDays:        holidayDays,
 		WeekendDays:        weekendDays,
 		TotalDays:          totalDays,
 		Status:             "processed",

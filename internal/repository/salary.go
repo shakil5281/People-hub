@@ -58,6 +58,8 @@ type SalaryFilter struct {
 	DesignationID string
 	LineID        string
 	GroupID       string
+	ShiftID       string
+	EmployeeID    string
 	AccountType   string
 }
 
@@ -91,6 +93,12 @@ func (r *SalaryRepository) ListAllByMonthFiltered(f SalaryFilter) ([]models.Sala
 	}
 	if f.GroupID != "" {
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE group_id = ?)", f.GroupID)
+	}
+	if f.ShiftID != "" {
+		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE shift_id = ?)", f.ShiftID)
+	}
+	if f.EmployeeID != "" {
+		query = query.Where("employee_id LIKE ?", "%"+f.EmployeeID+"%")
 	}
 	if f.AccountType != "" {
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE account_type = ?)", f.AccountType)

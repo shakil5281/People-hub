@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { FileBarChartIcon, Loader2 } from "lucide-react"
+import { FileBarChartIcon, Loader2, FileDownIcon } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/table/data-table"
@@ -71,6 +71,7 @@ export default function SalarySummaryPage() {
 
   const [data, setData] = React.useState<SummaryResponse | null>(null)
   const [loading, setLoading] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
 
   React.useEffect(() => {
     Promise.all([
@@ -220,7 +221,29 @@ export default function SalarySummaryPage() {
         <div className="px-4 lg:px-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold">{MONTHS[month]} {year} - Salary Summary</h2>
-            <span className="text-sm text-muted-foreground">Total Employees: <b>{data.total_employees}</b></span>
+            <div className="flex gap-2 items-center">
+              <span className="text-sm text-muted-foreground">Total Employees: <b>{data.total_employees}</b></span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={exporting}
+                onClick={async () => {
+                  setExporting(true)
+                  try {
+                    const res = await salaryApi.summaryExport(buildParams())
+                    const url = window.URL.createObjectURL(new Blob([res.data]))
+                    const a = document.createElement("a")
+                    a.href = url
+                    a.download = `salary_summary_${MONTHS[month]}_${year}.xlsx`
+                    a.click()
+                    window.URL.revokeObjectURL(url)
+                  } finally { setExporting(false) }
+                }}
+              >
+                <FileDownIcon className="mr-2 h-4 w-4" />
+                {exporting ? "Exporting..." : "Export Excel"}
+              </Button>
+            </div>
           </div>
 
           <Tabs value={tab} onValueChange={v => { setTab(v); setData(null) }}>

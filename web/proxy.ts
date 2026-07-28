@@ -4,8 +4,13 @@ import type { NextRequest } from "next/server"
 const publicPaths = ["/login", "/register"]
 
 export function proxy(request: NextRequest) {
-  const { pathname } = request.nextUrl
   const basePath = request.nextUrl.basePath || ""
+  // Strip basePath from pathname for comparison
+  const rawPath = request.nextUrl.pathname
+  const pathname = basePath && rawPath.startsWith(basePath)
+    ? rawPath.slice(basePath.length) || "/"
+    : rawPath
+
   const token = request.cookies.get("auth_token")?.value
 
   const isPublic = publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))

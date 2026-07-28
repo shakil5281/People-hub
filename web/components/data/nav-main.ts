@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react"
-import { LayoutDashboardIcon, ListIcon, ChartBarIcon, FolderIcon, UsersIcon } from "lucide-react"
+import { LayoutDashboardIcon, ListIcon, ChartBarIcon } from "lucide-react"
 
 export const navMain = [
   {
@@ -16,16 +16,6 @@ export const navMain = [
     title: "Analytics",
     url: "/analytics",
     icon: ChartBarIcon,
-  },
-  {
-    title: "Projects",
-    url: "/projects",
-    icon: FolderIcon,
-  },
-  {
-    title: "Team",
-    url: "/team",
-    icon: UsersIcon,
   },
 ] as const satisfies {
   title: string

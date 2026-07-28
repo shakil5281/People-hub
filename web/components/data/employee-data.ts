@@ -53,11 +53,15 @@ export interface Employee {
   present_district_id: string | null
   present_upazila_id: string | null
   present_union_id: string | null
+  present_post_office: string | null
+  present_post_code: string | null
   // Address (permanent)
   permanent_division_id: string | null
   permanent_district_id: string | null
   permanent_upazila_id: string | null
   permanent_union_id: string | null
+  permanent_post_office: string | null
+  permanent_post_code: string | null
   // Salary
   gross_salary: number
   basic_salary: number
@@ -118,11 +122,15 @@ export const employeeSchema = z.object({
   present_district_id: z.string().optional().nullable(),
   present_upazila_id: z.string().optional().nullable(),
   present_union_id: z.string().optional().nullable(),
+  present_post_office: z.string().optional().nullable(),
+  present_post_code: z.string().optional().nullable(),
   // Address (permanent)
   permanent_division_id: z.string().optional().nullable(),
   permanent_district_id: z.string().optional().nullable(),
   permanent_upazila_id: z.string().optional().nullable(),
   permanent_union_id: z.string().optional().nullable(),
+  permanent_post_office: z.string().optional().nullable(),
+  permanent_post_code: z.string().optional().nullable(),
   // Salary
   gross_salary: z.number().optional(),
   basic_salary: z.number().optional(),

@@ -33,12 +33,13 @@ type Salary struct {
 	AttendanceBonus float64 `json:"attendance_bonus" gorm:"type:decimal(12,2);default:0"`
 	NetSalary       float64 `json:"net_salary" gorm:"type:decimal(12,2);default:0"`
 
-	PresentDays int `json:"present_days" gorm:"default:0"`
-	AbsentDays  int `json:"absent_days" gorm:"default:0"`
-	LateDays    int `json:"late_days" gorm:"default:0"`
-	LeaveDays   int `json:"leave_days" gorm:"default:0"`
-	WeekendDays int `json:"weekend_days" gorm:"default:0"`
-	TotalDays   int `json:"total_days" gorm:"default:0"`
+	PresentDays  int `json:"present_days" gorm:"default:0"`
+	AbsentDays   int `json:"absent_days" gorm:"default:0"`
+	LateDays     int `json:"late_days" gorm:"default:0"`
+	LeaveDays    int `json:"leave_days" gorm:"default:0"`
+	HolidayDays  int `json:"holiday_days" gorm:"default:0"`
+	WeekendDays  int `json:"weekend_days" gorm:"default:0"`
+	TotalDays    int `json:"total_days" gorm:"default:0"`
 
 	Status    string         `json:"status" gorm:"type:varchar(20);default:processed"`
 	CreatedAt time.Time      `json:"created_at"`

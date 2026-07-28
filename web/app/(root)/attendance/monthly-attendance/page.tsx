@@ -1,18 +1,20 @@
 "use client"
 
 import * as React from "react"
-import { BarChart3Icon, FilterIcon, XIcon } from "lucide-react"
+import { BarChart3Icon, SearchIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
-import { attendanceApi, companyApi, departmentApi } from "@/lib/api"
-import { FilterBar } from "@/components/filter-bar"
-import type { FilterDef } from "@/components/filter-bar"
+import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, shiftApi, groupApi } from "@/lib/api"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 
 interface Company { id: string; company_name_en: string }
 interface Department { id: string; name: string }
+interface Section { id: string; name: string }
+interface Designation { id: string; name: string }
+interface Line { id: string; name: string }
+interface Shift { id: string; name: string }
+interface Group { id: string; name: string }
 
 interface MonthlyRecord {
   id: string
@@ -28,6 +30,8 @@ interface MonthlyRecord {
   leave: number
   weekend: number
   half_day: number
+  holiday: number
+  over_time: number
   total_days: number
 }
 
@@ -38,6 +42,8 @@ interface Totals {
   leave: number
   weekend: number
   half_day: number
+  holiday: number
+  over_time: number
 }
 
 const currentYear = new Date().getFullYear()
@@ -61,6 +67,8 @@ const columns: ColumnDef<MonthlyRecord>[] = [
   { accessorKey: "leave", header: "Leave" },
   { accessorKey: "weekend", header: "Weekend" },
   { accessorKey: "half_day", header: "Half Day" },
+  { accessorKey: "holiday", header: "Holiday" },
+  { accessorKey: "over_time", header: "OverTime" },
   { accessorKey: "total_days", header: "Total" },
 ]
 
@@ -69,38 +77,84 @@ export default function MonthlyAttendancePage() {
   const [totals, setTotals] = React.useState<Totals | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState("")
+
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [departments, setDepartments] = React.useState<Department[]>([])
+  const [sections, setSections] = React.useState<Section[]>([])
+  const [designations, setDesignations] = React.useState<Designation[]>([])
+  const [lines, setLines] = React.useState<Line[]>([])
+  const [shifts, setShifts] = React.useState<Shift[]>([])
+  const [groups, setGroups] = React.useState<Group[]>([])
+
   const [selectedMonth, setSelectedMonth] = React.useState(currentMonth)
   const [selectedYear, setSelectedYear] = React.useState(currentYear)
-  const [filters, setFilters] = React.useState<Record<string, string>>({})
-  const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
+  const [companyId, setCompanyId] = React.useState("")
+  const [departmentId, setDepartmentId] = React.useState("")
+  const [sectionId, setSectionId] = React.useState("")
+  const [designationId, setDesignationId] = React.useState("")
+  const [lineId, setLineId] = React.useState("")
+  const [shiftId, setShiftId] = React.useState("")
+  const [groupId, setGroupId] = React.useState("")
+  const [employeeId, setEmployeeId] = React.useState("")
 
-  const filterDefs: FilterDef[] = React.useMemo(() => [
-    {
-      key: "company_id", label: "Company", type: "select",
-      options: companies.map((c) => ({ value: c.id, label: c.company_name_en })),
-    },
-    {
-      key: "department_id", label: "Department", type: "select",
-      options: departments.map((d) => ({ value: d.id, label: d.name })),
-    },
-  ], [companies, departments])
+  const fetchSections = React.useCallback(async (deptId: string) => {
+    try {
+      const { data } = await sectionApi.list(deptId || undefined)
+      setSections(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setSections([]) }
+  }, [])
 
-  const fetchData = React.useCallback(async (params: Record<string, string>) => {
+  const fetchDesignations = React.useCallback(async (secId: string) => {
+    try {
+      const { data } = await designationApi.list(secId || undefined)
+      setDesignations(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setDesignations([]) }
+  }, [])
+
+  const fetchLines = React.useCallback(async (secId: string) => {
+    try {
+      const { data } = await lineApi.list(secId || undefined)
+      setLines(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setLines([]) }
+  }, [])
+
+  React.useEffect(() => {
+    fetchSections(departmentId)
+    setSectionId("")
+    setDesignationId("")
+    setLineId("")
+    setDesignations([])
+    setLines([])
+  }, [departmentId, fetchSections])
+
+  React.useEffect(() => {
+    fetchDesignations(sectionId)
+    fetchLines(sectionId)
+    setDesignationId("")
+    setLineId("")
+  }, [sectionId, fetchDesignations, fetchLines])
+
+  const fetchData = React.useCallback(async () => {
+    if (!companyId) return
     setLoading(true)
     setError("")
     try {
-      const apiParams: Record<string, string> = {
+      const params: Record<string, string> = {
         year: String(selectedYear),
         month: String(selectedMonth + 1),
-        company_id: params.company_id || "",
-        department_id: params.department_id || "",
+        company_id: companyId,
       }
-      const { data: res } = await attendanceApi.monthlyReport(apiParams)
+      if (departmentId) params.department_id = departmentId
+      if (sectionId) params.section_id = sectionId
+      if (designationId) params.designation_id = designationId
+      if (lineId) params.line_id = lineId
+      if (shiftId) params.shift_id = shiftId
+      if (groupId) params.group_id = groupId
+      if (employeeId) params.employee_id = employeeId
+
+      const { data: res } = await attendanceApi.monthlyReport(params)
       const records = (res?.records || []).map((r: any, i: number) => ({
-        ...r,
-        id: r.employee_id || `emp-${i}`,
+        ...r, id: r.employee_id || `emp-${i}`,
       }))
       setData(records)
       setTotals(res?.totals || null)
@@ -109,43 +163,50 @@ export default function MonthlyAttendancePage() {
     } finally {
       setLoading(false)
     }
-  }, [selectedYear, selectedMonth])
+  }, [selectedYear, selectedMonth, companyId, departmentId, sectionId, designationId, lineId, shiftId, groupId, employeeId])
 
   React.useEffect(() => {
     const init = async () => {
-      const [cRes, dRes] = await Promise.all([
+      const [cRes, dRes, shiftRes, groupRes] = await Promise.all([
         companyApi.list({ limit: "100" }),
         departmentApi.list({ limit: "100" }),
+        shiftApi.list({ limit: "100" }),
+        groupApi.list({ limit: "100" }),
       ])
-      let companyId = ""
       if (Array.isArray(cRes.data?.data) && cRes.data.data.length > 0) {
         setCompanies(cRes.data.data)
-        companyId = cRes.data.data[0].id
+        setCompanyId(cRes.data.data[0].id)
       }
       if (Array.isArray(dRes.data?.data)) setDepartments(dRes.data.data)
-      setFilters({ company_id: companyId })
-      if (companyId) fetchData({ company_id: companyId })
-      else setLoading(false)
+      if (Array.isArray(shiftRes.data?.data)) setShifts(shiftRes.data.data)
+      else if (Array.isArray(shiftRes.data)) setShifts(shiftRes.data)
+      if (Array.isArray(groupRes.data?.data)) setGroups(groupRes.data.data)
+      else if (Array.isArray(groupRes.data)) setGroups(groupRes.data)
     }
     init()
   }, [])
 
   React.useEffect(() => {
-    if (filters.company_id) fetchData(filters)
-  }, [selectedYear, selectedMonth])
-
-  const handleChange = (key: string, value: string) => {
-    setFilters((prev) => ({ ...prev, [key]: value }))
-  }
+    if (companyId) fetchData()
+  }, [selectedYear, selectedMonth, companyId, fetchData])
 
   const handleApply = () => {
-    fetchData(filters)
+    fetchData()
   }
 
   const handleReset = () => {
-    setFilters({})
-    fetchData({})
+    setCompanyId(companies[0]?.id || "")
+    setDepartmentId("")
+    setSectionId("")
+    setDesignationId("")
+    setLineId("")
+    setShiftId("")
+    setGroupId("")
+    setEmployeeId("")
   }
+
+  const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+  const labelCls = "text-xs font-medium text-muted-foreground"
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -157,108 +218,94 @@ export default function MonthlyAttendancePage() {
             <p className="text-muted-foreground mt-1">Per-employee monthly attendance breakdown</p>
           </div>
         </div>
-        <div className="md:hidden mt-3">
-          <ButtonGroup className="w-full">
-            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="flex-1">
-                  <FilterIcon className="mr-2 h-4 w-4" />
-                  Filters
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
-                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
-                  <SheetTitle className="text-base">Filters</SheetTitle>
-                  <SheetClose asChild>
-                    <Button variant="ghost" size="icon-sm">
-                      <XIcon className="h-4 w-4" />
-                    </Button>
-                  </SheetClose>
-                </SheetHeader>
-                <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-                  <div className="space-y-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Month</label>
-                      <select
-                        value={selectedMonth}
-                        onChange={(e) => { setSelectedMonth(Number(e.target.value)) }}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                      >
-                        {MONTHS.map((name, idx) => (
-                          <option key={name} value={idx}>{name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-xs font-medium text-muted-foreground">Year</label>
-                      <select
-                        value={selectedYear}
-                        onChange={(e) => { setSelectedYear(Number(e.target.value)) }}
-                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-                      >
-                        {YEARS.map((y) => (
-                          <option key={y} value={y}>{y}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <FilterBar
-                    filters={filterDefs}
-                    values={filters}
-                    onChange={handleChange}
-                    onApply={() => { handleApply(); setMobileFilterOpen(false) }}
-                    onReset={() => { handleReset(); setMobileFilterOpen(false) }}
-                    submitting={loading}
-                    singleColumn
-                    noBorder
+      </div>
+
+      <div className="px-4 lg:px-6">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Month</label>
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className={selectCls}>
+                  {MONTHS.map((name, idx) => <option key={name} value={idx}>{name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Year</label>
+                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className={selectCls}>
+                  {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Company</label>
+                <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} className={selectCls}>
+                  <option value="">All</option>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.company_name_en}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Department</label>
+                <select value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} className={selectCls}>
+                  <option value="">All</option>
+                  {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Section</label>
+                <select value={sectionId} onChange={(e) => setSectionId(e.target.value)} className={selectCls}>
+                  <option value="">All</option>
+                  {sections.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Designation</label>
+                <select value={designationId} onChange={(e) => setDesignationId(e.target.value)} className={selectCls}>
+                  <option value="">All</option>
+                  {designations.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Line</label>
+                <select value={lineId} onChange={(e) => setLineId(e.target.value)} className={selectCls}>
+                  <option value="">All</option>
+                  {lines.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Shift</label>
+                <select value={shiftId} onChange={(e) => setShiftId(e.target.value)} className={selectCls}>
+                  <option value="">All</option>
+                  {shifts.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Group</label>
+                <select value={groupId} onChange={(e) => setGroupId(e.target.value)} className={selectCls}>
+                  <option value="">All</option>
+                  {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Employee ID</label>
+                <div className="relative">
+                  <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    value={employeeId}
+                    onChange={(e) => setEmployeeId(e.target.value)}
+                    placeholder="Search..."
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent pl-8 pr-3 py-1 text-sm"
                   />
                 </div>
-              </SheetContent>
-            </Sheet>
-          </ButtonGroup>
-        </div>
-      </div>
-
-      <div className="px-4 lg:px-6 hidden md:block">
-        <div className="rounded-lg border bg-card p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Month</label>
-              <select
-                value={selectedMonth}
-                onChange={(e) => { setSelectedMonth(Number(e.target.value)) }}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-              >
-                {MONTHS.map((name, idx) => (
-                  <option key={name} value={idx}>{name}</option>
-                ))}
-              </select>
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Year</label>
-              <select
-                value={selectedYear}
-                onChange={(e) => { setSelectedYear(Number(e.target.value)) }}
-                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
-              >
-                {YEARS.map((y) => (
-                  <option key={y} value={y}>{y}</option>
-                ))}
-              </select>
+            <div className="flex gap-2 mt-4">
+              <Button onClick={handleApply} disabled={loading || !companyId}>
+                {loading ? "Loading..." : "Apply Filters"}
+              </Button>
+              <Button variant="outline" onClick={handleReset}>Reset</Button>
             </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="px-4 lg:px-6 hidden md:block">
-        <FilterBar
-          filters={filterDefs}
-          values={filters}
-          onChange={handleChange}
-          onApply={handleApply}
-          onReset={handleReset}
-          submitting={loading}
-        />
+          </CardContent>
+        </Card>
       </div>
 
       {error && (
@@ -279,11 +326,13 @@ export default function MonthlyAttendancePage() {
             <span>Leave: <strong className="text-foreground">{totals.leave}</strong></span>
             <span>Weekend: <strong className="text-foreground">{totals.weekend}</strong></span>
             <span>Half Day: <strong className="text-foreground">{totals.half_day}</strong></span>
+            <span>Holiday: <strong className="text-foreground">{totals.holiday}</strong></span>
+            <span>OverTime: <strong className="text-foreground">{totals.over_time}</strong></span>
           </div>
         )}
       </div>
 
-      <DataTable data={data} columns={columns} loading={loading} />
+      <DataTable data={data} columns={columns} loading={loading && !error} />
     </div>
   )
 }

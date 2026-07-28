@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { dataLogApi } from "@/lib/api"
 import { isSuperAdmin } from "@/lib/auth"
 
@@ -17,6 +17,7 @@ export default function LogCollectPage() {
   const [startDate, setStartDate] = React.useState<Date | undefined>(new Date())
   const [endDate, setEndDate] = React.useState<Date | undefined>(new Date())
   const [todayCount, setTodayCount] = React.useState(0)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
 
   const fetchStats = async () => {
     try {
@@ -40,8 +41,11 @@ export default function LogCollectPage() {
       const { data } = await dataLogApi.import(body)
       toast.success(`Imported ${data.imported || 0} records`)
       fetchStats()
-    } catch {
-      toast.error("Failed to import data logs")
+    } catch (err: unknown) {
+      const msg = err && typeof err === "object" && "response" in err
+        ? (err as { response: { data?: { error?: string } } }).response?.data?.error
+        : undefined
+      toast.error(msg || "Failed to import data logs")
     } finally {
       setImporting(false)
     }
@@ -53,6 +57,7 @@ export default function LogCollectPage() {
       await dataLogApi.deleteAll()
       toast.success("All data logs deleted permanently")
       setTodayCount(0)
+      setDeleteDialogOpen(false)
     } catch {
       toast.error("Failed to delete data logs")
     } finally {
@@ -81,29 +86,29 @@ export default function LogCollectPage() {
             <div className="flex items-center justify-between">
               <p className="text-4xl font-bold">{todayCount}</p>
               {isSuperAdmin() && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm">
-                      <Trash2Icon className="mr-2 h-4 w-4" />
-                      Delete All
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete all data logs from the database.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteAll} disabled={deleting}>
-                        {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <>
+                  <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
+                    <Trash2Icon className="mr-2 h-4 w-4" />
+                    Delete All
+                  </Button>
+                  <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete all data logs from the database.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteAll} disabled={deleting}>
+                          {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
               )}
             </div>
           </CardContent>

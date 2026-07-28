@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
@@ -34,16 +36,18 @@ function Badge({
   ...props
 }: React.ComponentProps<"span"> &
   VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "span"
+  const shared = {
+    "data-slot": "badge" as const,
+    "data-variant": variant,
+    className: cn(badgeVariants({ variant }), className),
+    ...props,
+  }
 
-  return (
-    <Comp
-      data-slot="badge"
-      data-variant={variant}
-      className={cn(badgeVariants({ variant }), className)}
-      {...props}
-    />
-  )
+  if (asChild) {
+    return <Slot.Root {...shared} />
+  }
+
+  return <span {...shared} />
 }
 
 export { Badge, badgeVariants }

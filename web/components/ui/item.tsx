@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
@@ -63,16 +65,19 @@ function Item({
   ...props
 }: React.ComponentProps<"div"> &
   VariantProps<typeof itemVariants> & { asChild?: boolean }) {
-  const Comp = asChild ? Slot.Root : "div"
-  return (
-    <Comp
-      data-slot="item"
-      data-variant={variant}
-      data-size={size}
-      className={cn(itemVariants({ variant, size, className }))}
-      {...props}
-    />
-  )
+  const shared = {
+    "data-slot": "item" as const,
+    "data-variant": variant,
+    "data-size": size,
+    className: cn(itemVariants({ variant, size, className })),
+    ...props,
+  }
+
+  if (asChild) {
+    return <Slot.Root {...shared} />
+  }
+
+  return <div {...shared} />
 }
 
 const itemMediaVariants = cva(

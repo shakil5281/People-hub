@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { cva, type VariantProps } from "class-variance-authority"
 import { Slot } from "radix-ui"
@@ -166,16 +168,17 @@ function AttachmentTrigger({
 }: React.ComponentProps<"button"> & {
   asChild?: boolean
 }) {
-  const Comp = asChild ? Slot.Root : "button"
+  const shared = {
+    "data-slot": "attachment-trigger" as const,
+    className: cn("absolute inset-0 z-10 outline-none", className),
+    ...props,
+  }
 
-  return (
-    <Comp
-      data-slot="attachment-trigger"
-      type={asChild ? undefined : (type ?? "button")}
-      className={cn("absolute inset-0 z-10 outline-none", className)}
-      {...props}
-    />
-  )
+  if (asChild) {
+    return <Slot.Root {...shared} />
+  }
+
+  return <button type={type ?? "button"} {...shared} />
 }
 
 function AttachmentGroup({ className, ...props }: React.ComponentProps<"div">) {

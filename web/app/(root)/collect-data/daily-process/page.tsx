@@ -7,7 +7,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { DatePicker } from "@/components/ui/date-picker"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { dataLogApi, attendanceApi, companyApi } from "@/lib/api"
 import type { Company } from "@/components/data/company-data"
 import { isSuperAdmin } from "@/lib/auth"
@@ -20,6 +20,7 @@ export default function DailyProcessPage() {
   const [companyId, setCompanyId] = React.useState("")
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [todayCount, setTodayCount] = React.useState(0)
+  const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
 
   const fetchStats = async () => {
     try {
@@ -76,6 +77,7 @@ export default function DailyProcessPage() {
       await attendanceApi.deleteAll()
       toast.success("All attendance records deleted permanently")
       setTodayCount(0)
+      setDeleteDialogOpen(false)
     } catch {
       toast.error("Failed to delete attendance records")
     } finally {
@@ -104,29 +106,29 @@ export default function DailyProcessPage() {
             <div className="flex items-center justify-between">
               <p className="text-4xl font-bold">{todayCount}</p>
               {isSuperAdmin() && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm">
-                      <Trash2Icon className="mr-2 h-4 w-4" />
-                      Delete All
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete all attendance records from the database.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteAll} disabled={deleting}>
-                        {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <>
+                  <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
+                    <Trash2Icon className="mr-2 h-4 w-4" />
+                    Delete All
+                  </Button>
+                  <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete all attendance records from the database.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteAll} disabled={deleting}>
+                          {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
               )}
             </div>
           </CardContent>

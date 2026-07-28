@@ -1,3 +1,5 @@
+"use client"
+
 import * as React from "react"
 import { Slot } from "radix-ui"
 
@@ -45,15 +47,17 @@ function BreadcrumbLink({
 }: React.ComponentProps<"a"> & {
   asChild?: boolean
 }) {
-  const Comp = asChild ? Slot.Root : "a"
+  const shared = {
+    "data-slot": "breadcrumb-link" as const,
+    className: cn("transition-colors hover:text-foreground", className),
+    ...props,
+  }
 
-  return (
-    <Comp
-      data-slot="breadcrumb-link"
-      className={cn("transition-colors hover:text-foreground", className)}
-      {...props}
-    />
-  )
+  if (asChild) {
+    return <Slot.Root {...shared} />
+  }
+
+  return <a {...shared} />
 }
 
 function BreadcrumbPage({ className, ...props }: React.ComponentProps<"span">) {

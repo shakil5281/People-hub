@@ -1,13 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { ReceiptIcon, Loader2, SearchIcon } from "lucide-react"
-import { salaryApi, companyApi, employeeApi } from "@/lib/api"
+import { ReceiptIcon, Loader2, SearchIcon, FileDownIcon } from "lucide-react"
+import { salaryApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
 interface Company { id: string; company_name_en: string }
-interface Employee { id: string; employee_id: string; name_en: string }
+interface Department { id: string; name: string }
+interface Section { id: string; name: string }
+interface Designation { id: string; name: string }
+interface Line { id: string; name: string }
+interface Group { id: string; name: string }
+interface Shift { id: string; name: string }
 
 interface PayslipData {
   employee?: { employee_id:string; name_en:string; designation_ref?:{name:string}; joining_date:string }
@@ -31,6 +36,7 @@ interface PayslipData {
   absent_days: number
   late_days: number
   leave_days: number
+  holiday_days: number
   weekend_days: number
   total_days: number
   status: string
@@ -41,25 +47,91 @@ const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth()
 const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
 
+const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
+const labelCls = "text-xs font-medium text-muted-foreground"
+
 export default function PaySlipPage() {
   const [companies, setCompanies] = React.useState<Company[]>([])
+  const [departments, setDepartments] = React.useState<Department[]>([])
+  const [sections, setSections] = React.useState<Section[]>([])
+  const [designations, setDesignations] = React.useState<Designation[]>([])
+  const [lines, setLines] = React.useState<Line[]>([])
+  const [groups, setGroups] = React.useState<Group[]>([])
+  const [shifts, setShifts] = React.useState<Shift[]>([])
+
   const [companyId, setCompanyId] = React.useState("")
-  const [employees, setEmployees] = React.useState<Employee[]>([])
+  const [departmentId, setDepartmentId] = React.useState("")
+  const [sectionId, setSectionId] = React.useState("")
+  const [designationId, setDesignationId] = React.useState("")
+  const [lineId, setLineId] = React.useState("")
+  const [groupId, setGroupId] = React.useState("")
+  const [shiftId, setShiftId] = React.useState("")
   const [employeeId, setEmployeeId] = React.useState("")
   const [month, setMonth] = React.useState(currentMonth)
   const [year, setYear] = React.useState(currentYear)
+
   const [payslip, setPayslip] = React.useState<PayslipData | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [searched, setSearched] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
 
-  React.useEffect(() => {
-    companyApi.list({ limit: "100" }).then(({data})=>{ const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []); if (list.length>0) { setCompanies(list); setCompanyId(list[0].id) } })
+  const fetchSections = React.useCallback(async (deptId: string) => {
+    try {
+      const { data } = await sectionApi.list(deptId || undefined)
+      setSections(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setSections([]) }
+  }, [])
+
+  const fetchDesignations = React.useCallback(async (secId: string) => {
+    try {
+      const { data } = await designationApi.list(secId || undefined)
+      setDesignations(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setDesignations([]) }
+  }, [])
+
+  const fetchLines = React.useCallback(async (secId: string) => {
+    try {
+      const { data } = await lineApi.list(secId || undefined)
+      setLines(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setLines([]) }
   }, [])
 
   React.useEffect(() => {
-    if (!companyId) return
-    employeeApi.list({ company_id: companyId, limit: "100" }).then(({data}:any)=>{ const list = Array.isArray(data?.data) ? data.data : (Array.isArray(data) ? data : []); setEmployees(list) })
-  }, [companyId])
+    fetchSections(departmentId)
+    setSectionId("")
+    setDesignationId("")
+    setLineId("")
+    setDesignations([])
+    setLines([])
+  }, [departmentId, fetchSections])
+
+  React.useEffect(() => {
+    fetchDesignations(sectionId)
+    fetchLines(sectionId)
+    setDesignationId("")
+    setLineId("")
+  }, [sectionId, fetchDesignations, fetchLines])
+
+  React.useEffect(() => {
+    const init = async () => {
+      const [cRes, dRes, gRes, sRes] = await Promise.all([
+        companyApi.list({ limit: "100" }),
+        departmentApi.list({ limit: "100" }),
+        groupApi.list({ limit: "100" }),
+        shiftApi.list({ limit: "100" }),
+      ])
+      if (Array.isArray(cRes.data?.data) && cRes.data.data.length > 0) {
+        setCompanies(cRes.data.data)
+        setCompanyId(cRes.data.data[0].id)
+      }
+      if (Array.isArray(dRes.data?.data)) setDepartments(dRes.data.data)
+      if (Array.isArray(gRes.data?.data)) setGroups(gRes.data.data)
+      else if (Array.isArray(gRes.data)) setGroups(gRes.data)
+      if (Array.isArray(sRes.data?.data)) setShifts(sRes.data.data)
+      else if (Array.isArray(sRes.data)) setShifts(sRes.data)
+    }
+    init()
+  }, [])
 
   const handleSearch = async () => {
     if (!employeeId) return
@@ -72,6 +144,17 @@ export default function PaySlipPage() {
       setPayslip(null)
     }
     finally { setLoading(false) }
+  }
+
+  const handleReset = () => {
+    setCompanyId(companies[0]?.id || "")
+    setDepartmentId("")
+    setSectionId("")
+    setDesignationId("")
+    setLineId("")
+    setGroupId("")
+    setShiftId("")
+    setEmployeeId("")
   }
 
   return (
@@ -88,37 +171,87 @@ export default function PaySlipPage() {
 
       <div className="px-4 lg:px-6">
         <div className="rounded-lg border bg-card p-4">
-          <div className="flex flex-wrap gap-4 items-end">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Company</label>
-              <select value={companyId} onChange={e=>{setCompanyId(e.target.value);setEmployeeId("")}} className="flex h-9 w-60 rounded-md border border-input bg-transparent px-3 py-1 text-sm">
+              <label className={labelCls}>Company</label>
+              <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={selectCls}>
                 <option value="">Select</option>
-                {companies.map(c=><option key={c.id} value={c.id}>{c.company_name_en}</option>)}
+                {companies.map(c => <option key={c.id} value={c.id}>{c.company_name_en}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Employee</label>
-              <select value={employeeId} onChange={e=>setEmployeeId(e.target.value)} className="flex h-9 w-60 rounded-md border border-input bg-transparent px-3 py-1 text-sm">
-                <option value="">Select employee</option>
-                {employees.map(e=><option key={e.id} value={e.id}>{e.employee_id} - {e.name_en}</option>)}
+              <label className={labelCls}>Month</label>
+              <select value={month} onChange={e => setMonth(Number(e.target.value))} className={selectCls}>
+                {MONTHS.map((n, i) => <option key={n} value={i}>{n}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Month</label>
-              <select value={month} onChange={e=>setMonth(Number(e.target.value))} className="flex h-9 w-40 rounded-md border border-input bg-transparent px-3 py-1 text-sm">
-                {MONTHS.map((n,i)=><option key={n} value={i}>{n}</option>)}
+              <label className={labelCls}>Year</label>
+              <select value={year} onChange={e => setYear(Number(e.target.value))} className={selectCls}>
+                {YEARS.map(y => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Year</label>
-              <select value={year} onChange={e=>setYear(Number(e.target.value))} className="flex h-9 w-28 rounded-md border border-input bg-transparent px-3 py-1 text-sm">
-                {YEARS.map(y=><option key={y} value={y}>{y}</option>)}
+              <label className={labelCls}>Department</label>
+              <select value={departmentId} onChange={e => setDepartmentId(e.target.value)} className={selectCls}>
+                <option value="">All</option>
+                {departments.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </div>
-            <Button onClick={handleSearch} disabled={loading||!employeeId}>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Section</label>
+              <select value={sectionId} onChange={e => setSectionId(e.target.value)} className={selectCls}>
+                <option value="">All</option>
+                {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Designation</label>
+              <select value={designationId} onChange={e => setDesignationId(e.target.value)} className={selectCls}>
+                <option value="">All</option>
+                {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Line</label>
+              <select value={lineId} onChange={e => setLineId(e.target.value)} className={selectCls}>
+                <option value="">All</option>
+                {lines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Group</label>
+              <select value={groupId} onChange={e => setGroupId(e.target.value)} className={selectCls}>
+                <option value="">All</option>
+                {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Shift</label>
+              <select value={shiftId} onChange={e => setShiftId(e.target.value)} className={selectCls}>
+                <option value="">All</option>
+                {shifts.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Employee ID</label>
+              <div className="relative">
+                <SearchIcon className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  value={employeeId}
+                  onChange={e => setEmployeeId(e.target.value)}
+                  placeholder="Search..."
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent pl-8 pr-3 py-1 text-sm"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <Button onClick={handleSearch} disabled={loading || !employeeId}>
               {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <SearchIcon className="mr-2 h-4 w-4" />}
               Search
             </Button>
+            <Button variant="outline" onClick={handleReset}>Reset</Button>
           </div>
         </div>
       </div>
@@ -137,6 +270,28 @@ export default function PaySlipPage() {
 
       {payslip && (
         <div className="px-4 lg:px-6">
+          <div className="flex justify-end mb-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={exporting}
+              onClick={async () => {
+                setExporting(true)
+                try {
+                  const res = await salaryApi.payslipExport({ employee_id: employeeId, month: String(month+1), year: String(year) })
+                  const url = window.URL.createObjectURL(new Blob([res.data]))
+                  const a = document.createElement("a")
+                  a.href = url
+                  a.download = `payslip_${employeeId}_${MONTHS[month]}_${year}.xlsx`
+                  a.click()
+                  window.URL.revokeObjectURL(url)
+                } finally { setExporting(false) }
+              }}
+            >
+              <FileDownIcon className="mr-2 h-4 w-4" />
+              {exporting ? "Exporting..." : "Export Excel"}
+            </Button>
+          </div>
           <Card>
             <CardHeader>
               <CardTitle className="text-xl">Payslip - {MONTHS[month]} {year}</CardTitle>
@@ -182,6 +337,7 @@ export default function PaySlipPage() {
                 <span>Absent: <strong>{payslip.absent_days}</strong></span>
                 <span>Late: <strong>{payslip.late_days}</strong></span>
                 <span>Leave: <strong>{payslip.leave_days}</strong></span>
+                <span>Holiday: <strong>{payslip.holiday_days}</strong></span>
                 <span>Weekend: <strong>{payslip.weekend_days}</strong></span>
                 <span>Total Days: <strong>{payslip.total_days}</strong></span>
               </div>

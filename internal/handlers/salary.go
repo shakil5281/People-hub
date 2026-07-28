@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shakil5281/peoplehub-api/internal/models"
@@ -78,10 +79,16 @@ func (h *SalaryHandler) Process(c *gin.Context) {
 // @Tags         Salary
 // @Security     BearerAuth
 // @Produce      json
-// @Param        company_id    query string true  "Company ID"
-// @Param        month         query int    true  "Month (1-12)"
-// @Param        year          query int    true  "Year"
-// @Param        department_id query string false "Filter by department"
+// @Param        company_id     query string true  "Company ID"
+// @Param        month          query int    true  "Month (1-12)"
+// @Param        year           query int    true  "Year"
+// @Param        department_id  query string false "Filter by department"
+// @Param        section_id     query string false "Filter by section"
+// @Param        designation_id query string false "Filter by designation"
+// @Param        line_id        query string false "Filter by line"
+// @Param        group_id       query string false "Filter by group"
+// @Param        shift_id       query string false "Filter by shift"
+// @Param        employee_id    query string false "Search by employee ID (partial match)"
 // @Success      200  {object}  map[string]interface{}
 // @Failure      500  {object}  map[string]string
 // @Router       /salary/sheet [get]
@@ -98,7 +105,18 @@ func (h *SalaryHandler) Sheet(c *gin.Context) {
 		return
 	}
 
-	salaries, err := h.salaryRepo.ListAllByMonth(companyID, month, year, c.Query("department_id"))
+	salaries, err := h.salaryRepo.ListAllByMonthFiltered(repository.SalaryFilter{
+		CompanyID:     companyID,
+		Month:         month,
+		Year:          year,
+		DepartmentID:  c.Query("department_id"),
+		SectionID:     c.Query("section_id"),
+		DesignationID: c.Query("designation_id"),
+		LineID:        c.Query("line_id"),
+		GroupID:       c.Query("group_id"),
+		ShiftID:       c.Query("shift_id"),
+		EmployeeID:    c.Query("employee_id"),
+	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -111,7 +129,7 @@ func (h *SalaryHandler) Sheet(c *gin.Context) {
 		"absent_deduction": 0, "total_deductions": 0, "net_salary": 0,
 		"overtime_hours": 0, "overtime_amount": 0, "attendance_bonus": 0,
 		"total_days": 0, "present_days": 0, "absent_days": 0,
-		"weekend_days": 0, "leave_days": 0,
+		"late_days": 0, "leave_days": 0, "holiday_days": 0, "weekend_days": 0,
 	}
 	for _, s := range salaries {
 		totals["basic_salary"] += s.BasicSalary
@@ -132,8 +150,10 @@ func (h *SalaryHandler) Sheet(c *gin.Context) {
 		totals["total_days"] += float64(s.TotalDays)
 		totals["present_days"] += float64(s.PresentDays)
 		totals["absent_days"] += float64(s.AbsentDays)
-		totals["weekend_days"] += float64(s.WeekendDays)
+		totals["late_days"] += float64(s.LateDays)
 		totals["leave_days"] += float64(s.LeaveDays)
+		totals["holiday_days"] += float64(s.HolidayDays)
+		totals["weekend_days"] += float64(s.WeekendDays)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -143,6 +163,160 @@ func (h *SalaryHandler) Sheet(c *gin.Context) {
 		"month":    month,
 		"year":     year,
 	})
+}
+
+// SheetExport godoc
+//
+// @Summary      Export salary sheet to Excel
+// @Description  Download monthly salary sheet as Excel file
+// @Tags         Salary
+// @Security     BearerAuth
+// @Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+// @Param        company_id     query string true  "Company ID"
+// @Param        month          query int    true  "Month (1-12)"
+// @Param        year           query int    true  "Year"
+// @Param        department_id  query string false "Filter by department"
+// @Param        section_id     query string false "Filter by section"
+// @Param        designation_id query string false "Filter by designation"
+// @Param        line_id        query string false "Filter by line"
+// @Param        group_id       query string false "Filter by group"
+// @Param        shift_id       query string false "Filter by shift"
+// @Param        employee_id    query string false "Search by employee ID (partial match)"
+// @Success      200  {file}  file
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /salary/sheet/export [get]
+func (h *SalaryHandler) SheetExport(c *gin.Context) {
+	companyID := c.Query("company_id")
+	monthStr := c.Query("month")
+	yearStr := c.Query("year")
+
+	month, _ := strconv.Atoi(monthStr)
+	year, _ := strconv.Atoi(yearStr)
+
+	if companyID == "" || month == 0 || year == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "company_id, month, and year are required"})
+		return
+	}
+
+	salaries, err := h.salaryRepo.ListAllByMonthFiltered(repository.SalaryFilter{
+		CompanyID:     companyID,
+		Month:         month,
+		Year:          year,
+		DepartmentID:  c.Query("department_id"),
+		SectionID:     c.Query("section_id"),
+		DesignationID: c.Query("designation_id"),
+		LineID:        c.Query("line_id"),
+		GroupID:       c.Query("group_id"),
+		ShiftID:       c.Query("shift_id"),
+		EmployeeID:    c.Query("employee_id"),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	monthName := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC).Format("January")
+
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 11, Color: "#FFFFFF"},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	moneyStyle, _ := f.NewStyle(&excelize.Style{
+		Font:  &excelize.Font{Size: 10},
+		NumFmt: 4,
+	})
+	dataStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Size: 10},
+		Alignment: &excelize.Alignment{Vertical: "center"},
+	})
+
+	headers := []string{
+		"Sl", "Employee ID", "Name", "Designation", "Department", "Working Days",
+		"Present", "Absent", "Late", "Leave", "Holiday", "Weekend",
+		"Transport", "Food", "Medical", "Other", "Gross",
+		"Absent Deduction", "PF", "Tax", "Total Deductions",
+		"OT Hours", "OT Rate", "OT Amount", "Att. Bonus", "Net Salary", "Status",
+	}
+	widths := []float64{4, 14, 24, 18, 18, 10, 8, 8, 6, 6, 8, 8, 10, 10, 10, 10, 12, 12, 10, 8, 12, 8, 8, 10, 10, 12, 10}
+
+	for i, h := range headers {
+		col := string(rune('A' + i))
+		f.SetCellValue("Sheet1", fmt.Sprintf("%s1", col), h)
+		f.SetColWidth("Sheet1", col, col, widths[i])
+		f.SetCellStyle("Sheet1", fmt.Sprintf("%s1", col), fmt.Sprintf("%s1", col), headerStyle)
+	}
+	f.SetRowHeight("Sheet1", 1, 30)
+
+	for i, s := range salaries {
+		row := i + 2
+		empID := s.Employee.EmployeeID
+		name := s.Employee.NameEn
+		desig := ""
+		dept := ""
+		if s.Employee.DesignationRef != nil {
+			desig = s.Employee.DesignationRef.Name
+		}
+		if s.Employee.Department != nil {
+			dept = s.Employee.Department.Name
+		}
+
+		vals := []interface{}{
+			i + 1, empID, name, desig, dept,
+			s.TotalDays, s.PresentDays, s.AbsentDays, s.LateDays, s.LeaveDays, s.HolidayDays, s.WeekendDays,
+			s.TransportAllowance, s.FoodAllowance, s.MedicalAllowance, s.OtherAllowance, s.GrossSalary,
+			s.AbsentDeduction, s.ProvidentFund, s.Tax, s.TotalDeductions,
+			s.OvertimeHours, s.OvertimeRate, s.OvertimeAmount, s.AttendanceBonus, s.NetSalary, s.Status,
+		}
+
+		for j, v := range vals {
+			col := string(rune('A' + j))
+			cell := fmt.Sprintf("%s%d", col, row)
+			f.SetCellValue("Sheet1", cell, v)
+			if j >= 12 && j <= 25 {
+				f.SetCellStyle("Sheet1", cell, cell, moneyStyle)
+			} else {
+				f.SetCellStyle("Sheet1", cell, cell, dataStyle)
+			}
+		}
+	}
+
+	totalRow := len(salaries) + 2
+	if len(salaries) > 0 {
+		totalStyle, _ := f.NewStyle(&excelize.Style{
+			Font: &excelize.Font{Bold: true, Size: 10, Color: "#006100"},
+			Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
+		})
+		for j := 0; j < len(headers); j++ {
+			col := string(rune('A' + j))
+			cell := fmt.Sprintf("%s%d", col, totalRow)
+			if j == 0 {
+				f.SetCellValue("Sheet1", cell, "")
+			} else if j == 1 {
+				f.SetCellValue("Sheet1", cell, "Total")
+			}
+			f.SetCellStyle("Sheet1", cell, cell, totalStyle)
+		}
+		netTotal := 0.0
+		grossTotal := 0.0
+		for _, s := range salaries {
+			netTotal += s.NetSalary
+			grossTotal += s.GrossSalary
+		}
+		f.SetCellValue("Sheet1", fmt.Sprintf("Q%d", totalRow), grossTotal)
+		f.SetCellValue("Sheet1", fmt.Sprintf("Z%d", totalRow), netTotal)
+		f.SetCellStyle("Sheet1", fmt.Sprintf("Q%d", totalRow), fmt.Sprintf("Q%d", totalRow), moneyStyle)
+		f.SetCellStyle("Sheet1", fmt.Sprintf("Z%d", totalRow), fmt.Sprintf("Z%d", totalRow), moneyStyle)
+	}
+
+	filename := fmt.Sprintf("salary_sheet_%s_%d.xlsx", monthName, year)
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	f.Write(c.Writer)
 }
 
 // GetPayslip godoc
@@ -179,6 +353,408 @@ func (h *SalaryHandler) Payslip(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, salary)
+}
+
+// PayslipExport godoc
+//
+// @Summary      Export payslip to Excel
+// @Description  Download a single employee payslip as Excel file
+// @Tags         Salary
+// @Security     BearerAuth
+// @Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+// @Param        employee_id query string true "Employee ID"
+// @Param        month       query int    true "Month (1-12)"
+// @Param        year        query int    true "Year"
+// @Success      200  {file}  file
+// @Failure      400  {object}  map[string]string
+// @Failure      404  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /salary/payslip/export [get]
+func (h *SalaryHandler) PayslipExport(c *gin.Context) {
+	employeeID := c.Query("employee_id")
+	monthStr := c.Query("month")
+	yearStr := c.Query("year")
+
+	month, _ := strconv.Atoi(monthStr)
+	year, _ := strconv.Atoi(yearStr)
+
+	if employeeID == "" || month == 0 || year == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "employee_id, month, and year are required"})
+		return
+	}
+
+	salary, err := h.salaryRepo.FindByEmployeeMonth(employeeID, month, year)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Salary not found for this employee/month"})
+		return
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	monthName := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC).Format("January")
+
+	empName := ""
+	if salary.Employee.NameEn != "" {
+		empName = salary.Employee.NameEn
+	}
+	desig := ""
+	if salary.Employee.DesignationRef != nil {
+		desig = salary.Employee.DesignationRef.Name
+	}
+
+	titleStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 16, Color: "#1F4E79"},
+		Alignment: &excelize.Alignment{Horizontal: "center"},
+	})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 11, Color: "#FFFFFF"},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	labelStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 11},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#D6E4F0"}},
+	})
+	valueStyle, _ := f.NewStyle(&excelize.Style{
+		Font:  &excelize.Font{Size: 11},
+		NumFmt: 4,
+	})
+	netStyle, _ := f.NewStyle(&excelize.Style{
+		Font:  &excelize.Font{Bold: true, Size: 14, Color: "#006100"},
+		NumFmt: 4,
+		Fill:  excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
+	})
+	sectionStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 12, Color: "#1F4E79"},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#D9E2F3"}},
+	})
+
+	f.SetCellValue("Sheet1", "A1", "PAYSLIP")
+	f.MergeCell("Sheet1", "A1", "B1")
+	f.SetCellStyle("Sheet1", "A1", "A1", titleStyle)
+	f.SetRowHeight("Sheet1", 1, 30)
+
+	f.SetCellValue("Sheet1", "A2", "")
+	f.SetCellValue("Sheet1", "B2", "")
+	f.SetRowHeight("Sheet1", 2, 6)
+
+	f.SetCellValue("Sheet1", "A3", fmt.Sprintf("Employee: %s", empName))
+	f.SetCellValue("Sheet1", "B3", fmt.Sprintf("Code: %s", salary.Employee.EmployeeID))
+	f.SetCellValue("Sheet1", "A4", fmt.Sprintf("Designation: %s", desig))
+	f.SetCellValue("Sheet1", "B4", fmt.Sprintf("Period: %s %d", monthName, year))
+
+	f.SetCellValue("Sheet1", "A6", "Earnings")
+	f.SetCellStyle("Sheet1", "A6", "B6", sectionStyle)
+	f.SetCellValue("Sheet1", "A7", "Component")
+	f.SetCellValue("Sheet1", "B7", "Amount")
+	f.SetCellStyle("Sheet1", "A7", "B7", headerStyle)
+
+	earnings := [][2]string{
+		{"Transport Allowance", fmt.Sprintf("%.2f", salary.TransportAllowance)},
+		{"Food Allowance", fmt.Sprintf("%.2f", salary.FoodAllowance)},
+		{"Medical Allowance", fmt.Sprintf("%.2f", salary.MedicalAllowance)},
+		{"Other Allowance", fmt.Sprintf("%.2f", salary.OtherAllowance)},
+		{"Gross Salary", fmt.Sprintf("%.2f", salary.GrossSalary)},
+	}
+	for i, e := range earnings {
+		row := 8 + i
+		f.SetCellValue("Sheet1", fmt.Sprintf("A%d", row), e[0])
+		f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), labelStyle)
+		f.SetCellValue("Sheet1", fmt.Sprintf("B%d", row), e[1])
+		if e[0] == "Gross Salary" {
+			f.SetCellStyle("Sheet1", fmt.Sprintf("B%d", row), fmt.Sprintf("B%d", row), netStyle)
+		} else {
+			f.SetCellStyle("Sheet1", fmt.Sprintf("B%d", row), fmt.Sprintf("B%d", row), valueStyle)
+		}
+	}
+
+	otRow := 8 + len(earnings) + 1
+	f.SetCellValue("Sheet1", fmt.Sprintf("A%d", otRow), "Overtime & Bonus")
+	f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", otRow), fmt.Sprintf("B%d", otRow), sectionStyle)
+
+	headerRow := otRow + 1
+	f.SetCellValue("Sheet1", fmt.Sprintf("A%d", headerRow), "Component")
+	f.SetCellValue("Sheet1", fmt.Sprintf("B%d", headerRow), "Amount")
+	f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", headerRow), fmt.Sprintf("B%d", headerRow), headerStyle)
+
+	otItems := [][2]string{
+		{"OT Hours", fmt.Sprintf("%.2f", salary.OvertimeHours)},
+		{"OT Rate", fmt.Sprintf("%.2f", salary.OvertimeRate)},
+		{"OT Amount", fmt.Sprintf("%.2f", salary.OvertimeAmount)},
+		{"Attendance Bonus", fmt.Sprintf("%.2f", salary.AttendanceBonus)},
+	}
+	for i, item := range otItems {
+		row := headerRow + 1 + i
+		f.SetCellValue("Sheet1", fmt.Sprintf("A%d", row), item[0])
+		f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), labelStyle)
+		f.SetCellValue("Sheet1", fmt.Sprintf("B%d", row), item[1])
+		f.SetCellStyle("Sheet1", fmt.Sprintf("B%d", row), fmt.Sprintf("B%d", row), valueStyle)
+	}
+
+	dedRow := headerRow + 1 + len(otItems) + 1
+	f.SetCellValue("Sheet1", fmt.Sprintf("A%d", dedRow), "Deductions")
+	f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", dedRow), fmt.Sprintf("B%d", dedRow), sectionStyle)
+
+	dedHeaderRow := dedRow + 1
+	f.SetCellValue("Sheet1", fmt.Sprintf("A%d", dedHeaderRow), "Component")
+	f.SetCellValue("Sheet1", fmt.Sprintf("B%d", dedHeaderRow), "Amount")
+	f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", dedHeaderRow), fmt.Sprintf("B%d", dedHeaderRow), headerStyle)
+
+	dedItems := [][2]string{
+		{"Provident Fund", fmt.Sprintf("%.2f", salary.ProvidentFund)},
+		{"Tax", fmt.Sprintf("%.2f", salary.Tax)},
+		{"Absent Deduction", fmt.Sprintf("%.2f", salary.AbsentDeduction)},
+		{"Total Deductions", fmt.Sprintf("%.2f", salary.TotalDeductions)},
+	}
+	for i, item := range dedItems {
+		row := dedHeaderRow + 1 + i
+		f.SetCellValue("Sheet1", fmt.Sprintf("A%d", row), item[0])
+		f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), labelStyle)
+		f.SetCellValue("Sheet1", fmt.Sprintf("B%d", row), item[1])
+		if item[0] == "Total Deductions" {
+			f.SetCellStyle("Sheet1", fmt.Sprintf("B%d", row), fmt.Sprintf("B%d", row), netStyle)
+		} else {
+			f.SetCellStyle("Sheet1", fmt.Sprintf("B%d", row), fmt.Sprintf("B%d", row), valueStyle)
+		}
+	}
+
+	netRow := dedHeaderRow + 1 + len(dedItems) + 1
+	f.SetCellValue("Sheet1", fmt.Sprintf("A%d", netRow), "Net Salary")
+	f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", netRow), fmt.Sprintf("A%d", netRow), netStyle)
+	f.SetCellValue("Sheet1", fmt.Sprintf("B%d", netRow), fmt.Sprintf("%.2f", salary.NetSalary))
+	f.SetCellStyle("Sheet1", fmt.Sprintf("B%d", netRow), fmt.Sprintf("B%d", netRow), netStyle)
+
+	attRow := netRow + 2
+	f.SetCellValue("Sheet1", fmt.Sprintf("A%d", attRow), "Attendance Summary")
+	f.SetCellStyle("Sheet1", fmt.Sprintf("A%d", attRow), fmt.Sprintf("B%d", attRow), sectionStyle)
+
+	attHeaderRow := attRow + 1
+	attHeaders := []string{"Present", "Absent", "Late", "Leave", "Holiday", "Weekend", "Total Days"}
+	for i, h := range attHeaders {
+		col := string(rune('A' + i))
+		f.SetCellValue("Sheet1", fmt.Sprintf("%s%d", col, attHeaderRow), h)
+		if col <= "B" {
+			f.SetCellStyle("Sheet1", fmt.Sprintf("%s%d", col, attHeaderRow), fmt.Sprintf("%s%d", col, attHeaderRow), headerStyle)
+		}
+	}
+
+	attDataRow := attHeaderRow + 1
+	f.SetCellValue("Sheet1", fmt.Sprintf("A%d", attDataRow), salary.PresentDays)
+	f.SetCellValue("Sheet1", fmt.Sprintf("B%d", attDataRow), salary.AbsentDays)
+	f.SetCellValue("Sheet1", fmt.Sprintf("C%d", attDataRow), salary.LateDays)
+	f.SetCellValue("Sheet1", fmt.Sprintf("D%d", attDataRow), salary.LeaveDays)
+	f.SetCellValue("Sheet1", fmt.Sprintf("E%d", attDataRow), salary.HolidayDays)
+	f.SetCellValue("Sheet1", fmt.Sprintf("F%d", attDataRow), salary.WeekendDays)
+	f.SetCellValue("Sheet1", fmt.Sprintf("G%d", attDataRow), salary.TotalDays)
+
+	f.SetColWidth("Sheet1", "A", "A", 30)
+	f.SetColWidth("Sheet1", "B", "B", 18)
+
+	filename := fmt.Sprintf("payslip_%s_%s_%d.xlsx", salary.Employee.EmployeeID, monthName, year)
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	f.Write(c.Writer)
+}
+
+// SummaryExport godoc
+//
+// @Summary      Export salary summary to Excel
+// @Description  Download monthly salary summary as Excel file grouped by department/section/designation/line
+// @Tags         Salary
+// @Security     BearerAuth
+// @Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+// @Param        company_id     query string true  "Company ID"
+// @Param        month          query int    true  "Month (1-12)"
+// @Param        year           query int    true  "Year"
+// @Param        group_by       query string false "Group by: department|section|designation|line"
+// @Param        department_id  query string false "Filter by department"
+// @Param        section_id     query string false "Filter by section"
+// @Param        designation_id query string false "Filter by designation"
+// @Param        line_id        query string false "Filter by line"
+// @Param        group_id       query string false "Filter by group"
+// @Success      200  {file}  file
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /salary/summary/export [get]
+func (h *SalaryHandler) SummaryExport(c *gin.Context) {
+	companyID := c.Query("company_id")
+	monthStr := c.Query("month")
+	yearStr := c.Query("year")
+
+	month, _ := strconv.Atoi(monthStr)
+	year, _ := strconv.Atoi(yearStr)
+
+	if companyID == "" || month == 0 || year == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "company_id, month, and year are required"})
+		return
+	}
+
+	groupBy := c.DefaultQuery("group_by", "department")
+
+	salaries, err := h.salaryRepo.ListAllByMonthFiltered(repository.SalaryFilter{
+		CompanyID:     companyID,
+		Month:         month,
+		Year:          year,
+		DepartmentID:  c.Query("department_id"),
+		SectionID:     c.Query("section_id"),
+		DesignationID: c.Query("designation_id"),
+		LineID:        c.Query("line_id"),
+		GroupID:       c.Query("group_id"),
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	type groupKey struct{ Name, ID string }
+	type groupData struct {
+		Employees   int
+		BasicSalary float64
+		HouseRent   float64
+		Medical     float64
+		Transport   float64
+		GrossSalary float64
+		Deductions  float64
+		NetSalary   float64
+	}
+	groupMap := make(map[groupKey]*groupData)
+
+	for _, s := range salaries {
+		var key groupKey
+		switch groupBy {
+		case "section":
+			if s.Employee.SectionRef != nil {
+				key = groupKey{Name: s.Employee.SectionRef.Name, ID: s.Employee.SectionRef.ID}
+			} else {
+				key = groupKey{Name: "Unknown", ID: ""}
+			}
+		case "designation":
+			if s.Employee.DesignationRef != nil {
+				key = groupKey{Name: s.Employee.DesignationRef.Name, ID: s.Employee.DesignationRef.ID}
+			} else {
+				key = groupKey{Name: "Unknown", ID: ""}
+			}
+		case "line":
+			if s.Employee.LineRef != nil {
+				key = groupKey{Name: s.Employee.LineRef.Name, ID: s.Employee.LineRef.ID}
+			} else {
+				key = groupKey{Name: "Unknown", ID: ""}
+			}
+		default:
+			if s.Employee.Department != nil {
+				key = groupKey{Name: s.Employee.Department.Name, ID: s.Employee.Department.ID}
+			} else {
+				key = groupKey{Name: "Unknown", ID: ""}
+			}
+		}
+		if groupMap[key] == nil {
+			groupMap[key] = &groupData{}
+		}
+		d := groupMap[key]
+		d.Employees++
+		d.BasicSalary += s.BasicSalary
+		d.HouseRent += s.HouseRent
+		d.Medical += s.MedicalAllowance
+		d.Transport += s.TransportAllowance
+		d.GrossSalary += s.GrossSalary
+		d.Deductions += s.TotalDeductions
+		d.NetSalary += s.NetSalary
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+
+	monthName := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC).Format("January")
+
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 11, Color: "#FFFFFF"},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	moneyStyle, _ := f.NewStyle(&excelize.Style{
+		Font:  &excelize.Font{Size: 10},
+		NumFmt: 4,
+	})
+	dataStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 10},
+		Alignment: &excelize.Alignment{Vertical: "center"},
+	})
+
+	labelMap := map[string]string{
+		"department": "Department",
+		"section":    "Section",
+		"designation": "Designation",
+		"line":       "Line",
+	}
+	groupLabel := labelMap[groupBy]
+	if groupLabel == "" {
+		groupLabel = "Group"
+	}
+
+	headers := []string{groupLabel, "Employees", "Gross Total", "Basic Total", "House Rent", "Medical", "Transport", "Deductions", "Net Total"}
+	widths := []float64{28, 10, 14, 14, 14, 14, 14, 14, 14}
+
+	for i, h := range headers {
+		col := string(rune('A' + i))
+		f.SetCellValue("Sheet1", fmt.Sprintf("%s1", col), h)
+		f.SetColWidth("Sheet1", col, col, widths[i])
+		f.SetCellStyle("Sheet1", fmt.Sprintf("%s1", col), fmt.Sprintf("%s1", col), headerStyle)
+	}
+	f.SetRowHeight("Sheet1", 1, 30)
+
+	row := 2
+	var grandTotal groupData
+	for key, d := range groupMap {
+		vals := []interface{}{
+			key.Name, d.Employees,
+			d.GrossSalary, d.BasicSalary, d.HouseRent, d.Medical, d.Transport,
+			d.Deductions, d.NetSalary,
+		}
+		for j, v := range vals {
+			col := string(rune('A' + j))
+			cell := fmt.Sprintf("%s%d", col, row)
+			f.SetCellValue("Sheet1", cell, v)
+			if j >= 2 {
+				f.SetCellStyle("Sheet1", cell, cell, moneyStyle)
+			} else {
+				f.SetCellStyle("Sheet1", cell, cell, dataStyle)
+			}
+		}
+		grandTotal.Employees += d.Employees
+		grandTotal.BasicSalary += d.BasicSalary
+		grandTotal.HouseRent += d.HouseRent
+		grandTotal.Medical += d.Medical
+		grandTotal.Transport += d.Transport
+		grandTotal.GrossSalary += d.GrossSalary
+		grandTotal.Deductions += d.Deductions
+		grandTotal.NetSalary += d.NetSalary
+		row++
+	}
+
+	totalStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Size: 10, Color: "#006100"},
+		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
+	})
+	grandVals := []interface{}{
+		"Grand Total", grandTotal.Employees,
+		grandTotal.GrossSalary, grandTotal.BasicSalary, grandTotal.HouseRent, grandTotal.Medical, grandTotal.Transport,
+		grandTotal.Deductions, grandTotal.NetSalary,
+	}
+	for j, v := range grandVals {
+		col := string(rune('A' + j))
+		cell := fmt.Sprintf("%s%d", col, row)
+		f.SetCellValue("Sheet1", cell, v)
+		f.SetCellStyle("Sheet1", cell, cell, totalStyle)
+		if j >= 2 {
+			f.SetCellStyle("Sheet1", cell, cell, moneyStyle)
+		}
+	}
+
+	filename := fmt.Sprintf("salary_summary_%s_%d.xlsx", monthName, year)
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	f.Write(c.Writer)
 }
 
 // ListSalaries godoc
