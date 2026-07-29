@@ -108,6 +108,7 @@ export default function JobAgePage() {
       if (Array.isArray(des.data?.data)) setDesignations(des.data.data)
       if (Array.isArray(l.data?.data)) setLines(l.data.data)
       if (Array.isArray(g.data?.data)) setGroups(g.data.data)
+      fetchData({})
     })
   }, [])
 
@@ -167,7 +168,7 @@ export default function JobAgePage() {
   }
 
   const handleApply = () => { fetchData(filters) }
-  const handleReset = () => { setFilters({}); setData([]); setFilteredData([]) }
+  const handleReset = () => { setFilters({}); fetchData({}) }
   const handleChange = (key: string, value: string) => setFilters((prev) => ({ ...prev, [key]: value }))
 
   React.useEffect(() => {

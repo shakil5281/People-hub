@@ -299,8 +299,8 @@ func (h *DatabaseHandler) Reset(c *gin.Context) {
 		&models.LeaveAllocation{}, &models.Leave{}, &models.TemporaryShift{},
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
 		&models.SystemSetting{}, &models.SalaryIncrement{},
-		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
-		&models.NightBillProcess{}, &models.Holiday{},
+		&models.Punishment{}, &models.DailySchedule{}, &models.TiffinBill{},
+		&models.Holiday{},
 		&models.SystemLog{},
 		&models.Notification{},
 		&models.EidBonus{},
@@ -322,8 +322,8 @@ func (h *DatabaseHandler) Reset(c *gin.Context) {
 		&models.LeaveAllocation{}, &models.Leave{}, &models.TemporaryShift{},
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
 		&models.SystemSetting{}, &models.SalaryIncrement{},
-		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
-		&models.NightBillProcess{}, &models.Holiday{},
+		&models.Punishment{}, &models.DailySchedule{}, &models.TiffinBill{},
+		&models.Holiday{},
 		&models.SystemLog{},
 		&models.Notification{},
 		&models.EidBonus{},
@@ -346,7 +346,6 @@ func (h *DatabaseHandler) Reset(c *gin.Context) {
 	alterCol("punishments", "employee_id")
 	alterCol("daily_schedules", "employee_id")
 	alterCol("night_bills", "employee_id")
-	alterCol("tiffin_bills", "employee_id")
 	alterCol("eid_bonuses", "employee_id")
 	alterCol("id_cards", "employee_id")
 	alterCol("separations", "employee_id")

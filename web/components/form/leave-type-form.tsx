@@ -37,7 +37,7 @@ export function LeaveTypeForm({ initialData, onSuccess, onCancel, isEditing = fa
 
   React.useEffect(() => {
     companyApi.list().then((res) => {
-      const list = Array.isArray(res.data) ? res.data : []
+      const list: Company[] = res.data?.data ?? []
       setCompanies(list)
       if (!initialData?.company_id && list.length === 1) {
         setValue("company_id", list[0].id)

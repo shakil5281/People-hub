@@ -38,20 +38,21 @@ func Connect(cfg *config.Config) {
 		&models.LeaveAllocation{}, &models.Leave{}, &models.TemporaryShift{},
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
 		&models.SystemSetting{}, &models.SalaryIncrement{},
-		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
-		&models.NightBillProcess{}, &models.Holiday{},
+		&models.Punishment{}, &models.DailySchedule{}, &models.TiffinBill{},
+		&models.Holiday{},
 	)
 	// Ensure new tables were created; if not, create them explicitly.
 	db.Exec("CREATE TABLE IF NOT EXISTS punishments (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS daily_schedules (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
-	db.Exec("CREATE TABLE IF NOT EXISTS night_bills (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS tiffin_bills (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
-	db.Exec("CREATE TABLE IF NOT EXISTS night_bill_processes (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
+	// Drop removed tables
+	db.Exec("DROP TABLE IF EXISTS night_bill_processes")
+	db.Exec("DROP TABLE IF EXISTS night_bills")
 	// Re-run AutoMigrate after ensuring tables exist so columns/indexes are added.
 	db.AutoMigrate(
 		&models.SalaryIncrement{},
-		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
-		&models.NightBillProcess{}, &models.Holiday{},
+		&models.Punishment{}, &models.DailySchedule{}, &models.TiffinBill{},
+		&models.Holiday{},
 		&models.SystemLog{},
 		&models.Notification{},
 		&models.EidBonus{},
@@ -72,7 +73,6 @@ func Connect(cfg *config.Config) {
 	alterCol("salary_increments", "employee_id")
 	alterCol("punishments", "employee_id")
 	alterCol("daily_schedules", "employee_id")
-	alterCol("night_bills", "employee_id")
 	alterCol("tiffin_bills", "employee_id")
 	alterCol("eid_bonuses", "employee_id")
 	alterCol("id_cards", "employee_id")

@@ -403,6 +403,8 @@ func (r *AttendanceRepository) Overtime(startDate, endDate, companyID, departmen
 		Select("attendances.id, attendances.employee_id, attendances.date, attendances.check_in, attendances.check_out, attendances.over_time, employees.name_en as employee_name, employees.employee_id as emp_id, employees.over_time_status").
 		Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
 		Where("attendances.date BETWEEN ? AND ? AND attendances.deleted_at IS NULL AND attendances.check_in IS NOT NULL AND attendances.check_out IS NOT NULL", startDate, endDate)
+	query = query.Where("employees.over_time_status = ?", true)
+	query = query.Where("attendances.over_time IS NOT NULL AND attendances.over_time != '' AND CAST(attendances.over_time AS numeric) > 0")
 	if companyID != "" {
 		query = query.Where("attendances.company_id = ?", companyID)
 	}
@@ -464,6 +466,54 @@ func (r *AttendanceRepository) OvertimeSummary(startDate, endDate, companyID, de
 	}
 	var results []map[string]interface{}
 	err := query.Group("employees.department_id, departments.name").Find(&results).Error
+	return results, err
+}
+
+func (r *AttendanceRepository) OvertimeSummaryGrouped(startDate, endDate, companyID, groupBy string, departmentID, sectionID, designationID, lineID string) ([]map[string]interface{}, error) {
+	var selectCols, joinClause, groupClause string
+	switch groupBy {
+	case "section":
+		selectCols = "employees.section_id as id, sections.name as name, COUNT(DISTINCT attendances.employee_id) as employee_count, COALESCE(SUM(CAST(attendances.over_time AS numeric)), 0) as total_hours"
+		joinClause = "JOIN sections ON sections.id = employees.section_id AND sections.deleted_at IS NULL"
+		groupClause = "employees.section_id, sections.name"
+	case "designation":
+		selectCols = "employees.designation_id as id, designations.name as name, COUNT(DISTINCT attendances.employee_id) as employee_count, COALESCE(SUM(CAST(attendances.over_time AS numeric)), 0) as total_hours"
+		joinClause = "JOIN designations ON designations.id = employees.designation_id AND designations.deleted_at IS NULL"
+		groupClause = "employees.designation_id, designations.name"
+	case "line":
+		selectCols = "employees.line_id as id, lines.name as name, COUNT(DISTINCT attendances.employee_id) as employee_count, COALESCE(SUM(CAST(attendances.over_time AS numeric)), 0) as total_hours"
+		joinClause = "JOIN lines ON lines.id = employees.line_id AND lines.deleted_at IS NULL"
+		groupClause = "employees.line_id, lines.name"
+	default:
+		selectCols = "employees.department_id as id, departments.name as name, COUNT(DISTINCT attendances.employee_id) as employee_count, COALESCE(SUM(CAST(attendances.over_time AS numeric)), 0) as total_hours"
+		joinClause = "JOIN departments ON departments.id = employees.department_id AND departments.deleted_at IS NULL"
+		groupClause = "employees.department_id, departments.name"
+	}
+
+	query := r.db.Table("attendances").
+		Select(selectCols).
+		Joins("JOIN employees ON employees.employee_id = attendances.employee_id AND employees.deleted_at IS NULL").
+		Joins(joinClause).
+		Where("attendances.date BETWEEN ? AND ? AND attendances.deleted_at IS NULL AND attendances.check_in IS NOT NULL AND attendances.check_out IS NOT NULL", startDate, endDate)
+	query = query.Where("employees.over_time_status = ?", true)
+	query = query.Where("attendances.over_time IS NOT NULL AND attendances.over_time != '' AND CAST(attendances.over_time AS numeric) > 0")
+	if companyID != "" {
+		query = query.Where("attendances.company_id = ?", companyID)
+	}
+	if departmentID != "" {
+		query = query.Where("employees.department_id = ?", departmentID)
+	}
+	if sectionID != "" {
+		query = query.Where("employees.section_id = ?", sectionID)
+	}
+	if designationID != "" {
+		query = query.Where("employees.designation_id = ?", designationID)
+	}
+	if lineID != "" {
+		query = query.Where("employees.line_id = ?", lineID)
+	}
+	var results []map[string]interface{}
+	err := query.Group(groupClause).Order("name ASC").Find(&results).Error
 	return results, err
 }
 

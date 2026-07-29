@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { MoonIcon, PlusIcon, CheckIcon, XIcon, FilterIcon } from "lucide-react"
+import { MoonIcon, PlusIcon, FilterIcon, XIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
@@ -18,34 +18,23 @@ interface NightBill {
   id: string
   company_id: string
   employee_id: string
-  department_id?: string
-  section_id?: string
-  designation_id?: string
   date: string
+  bill_type: string
   night_hours: number
   rate: number
   amount: number
-  month: number
-  year: number
   status: string
-  remarks: string
-  is_processed: boolean
   employee?: {
     name_en: string
     name_bn: string
-    department?: { name: string; name_bn: string }
-    designation_ref?: { name: string; name_bn: string }
   }
-  department?: { name: string; name_bn: string }
-  designation?: { name: string; name_bn: string }
-  created_at: string
 }
 
 const statusBadge = (status: string) => {
   const map: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
     pending: "outline",
     approved: "default",
-    rejected: "destructive",
+    paid: "secondary",
   }
   return <Badge variant={map[status] || "outline"} className="capitalize">{status}</Badge>
 }
@@ -58,9 +47,7 @@ export default function NightBillPage() {
   const [departments, setDepartments] = React.useState<Array<{ id: string; name: string }>>([])
   const [sections, setSections] = React.useState<Array<{ id: string; name: string }>>([])
   const [designations, setDesignations] = React.useState<Array<{ id: string; name: string }>>([])
-  const [filters, setFilters] = React.useState<Record<string, string>>({
-    date: new Date().toISOString().slice(0, 10),
-  })
+  const [filters, setFilters] = React.useState<Record<string, string>>({})
   const [page, setPage] = React.useState(1)
   const [limit, setLimit] = React.useState(20)
   const [total, setTotal] = React.useState(0)
@@ -92,46 +79,41 @@ export default function NightBillPage() {
 
   const filterDefs: FilterDef[] = React.useMemo(() => [
     {
-      key: "date", label: "Current Date", type: "datepicker",
-      placeholder: "Pick a date",
-    },
-    {
       key: "company_id", label: "Company", type: "select",
       options: companies.map((c) => ({ value: c.id, label: c.company_name_en })),
     },
     {
-      key: "department_id", label: "Department", type: "select",
-      options: departments.map((d) => ({ value: d.id, label: d.name })),
+      key: "date_from", label: "Date From", type: "datepicker",
     },
     {
-      key: "section_id", label: "Section", type: "select",
-      options: sections.map((s) => ({ value: s.id, label: s.name })),
+      key: "date_to", label: "Date To", type: "datepicker",
     },
     {
-      key: "designation_id", label: "Designation", type: "select",
-      options: designations.map((d) => ({ value: d.id, label: d.name })),
-    },
-    {
-      key: "status", label: "Status", type: "select",
+      key: "bill_type", label: "Bill Type", type: "select",
       options: [
-        { value: "pending", label: "Pending" },
-        { value: "approved", label: "Approved" },
-        { value: "rejected", label: "Rejected" },
+        { value: "fixed", label: "Fixed" },
+        { value: "hourly", label: "Hourly" },
       ],
     },
     {
       key: "employee_id", label: "Employee ID", type: "text", placeholder: "EMP-001",
     },
-  ], [companies, departments, sections, designations])
+  ], [companies])
 
   const summaryColumns: ColumnDef<NightBill>[] = [
     { accessorKey: "employee_id", header: "Employee ID" },
     {
-      header: "Employee Name",
+      header: "Name",
       accessorFn: (r) => r.employee?.name_en || "-",
     },
     { accessorKey: "date", header: "Date" },
-    { accessorKey: "night_hours", header: "Hours" },
+    {
+      accessorKey: "bill_type", header: "Type",
+      cell: ({ row }) => <span className="capitalize">{row.original.bill_type}</span>,
+    },
+    { accessorKey: "night_hours", header: "Hours",
+      cell: ({ row }) => row.original.night_hours > 0 ? row.original.night_hours.toFixed(2) : "—",
+    },
     {
       accessorKey: "rate", header: "Rate",
       cell: ({ row }) => `৳${row.original.rate.toFixed(2)}`,
@@ -144,56 +126,15 @@ export default function NightBillPage() {
       accessorKey: "status", header: "Status",
       cell: ({ row }) => statusBadge(row.original.status),
     },
-    {
-      header: "Dept",
-      accessorFn: (r) => r.employee?.department?.name || r.department?.name || "-",
-    },
-    {
-      header: "Designation",
-      accessorFn: (r) => r.employee?.designation_ref?.name || r.designation?.name || "-",
-    },
-    {
-      id: "actions",
-      header: "Actions",
-      cell: ({ row }) => {
-        const r = row.original
-        if (r.status !== "pending") return <span className="text-muted-foreground text-xs">--</span>
-        return (
-          <div className="flex gap-1">
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" onClick={() => {
-              nightBillApi.approve(r.id).then(() => {
-                toast.success("Night bill approved")
-                fetchData(filters, page)
-              }).catch(() => toast.error("Failed to approve"))
-            }} title="Approve">
-              <CheckIcon className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-600" onClick={() => {
-              nightBillApi.reject(r.id).then(() => {
-                toast.success("Night bill rejected")
-                fetchData(filters, page)
-              }).catch(() => toast.error("Failed to reject"))
-            }} title="Reject">
-              <XIcon className="h-4 w-4" />
-            </Button>
-          </div>
-        )
-      },
-    },
   ]
 
   const fetchData = React.useCallback(async (f: Record<string, string>, p?: number, l?: number) => {
     setLoading(true)
     try {
-      const params: Record<string, string> = { page: String(p ?? page), limit: String(l ?? limit) };
-      ["company_id", "department_id", "section_id", "designation_id", "employee_id", "status", "date"].forEach((k) => {
+      const params: Record<string, string> = { page: String(p ?? page), limit: String(l ?? limit) }
+      ;["company_id", "employee_id", "bill_type", "date_from", "date_to"].forEach((k) => {
         if (f[k]) params[k] = f[k]
       })
-      if (f.date) {
-        const d = new Date(f.date + "T00:00:00")
-        params.month = String(d.getMonth() + 1)
-        params.year = String(d.getFullYear())
-      }
       const { data: res } = await nightBillApi.list(params)
       setData(Array.isArray(res.data) ? res.data : [])
       setTotal(res.total ?? 0)
@@ -209,8 +150,7 @@ export default function NightBillPage() {
   React.useEffect(() => {
     companyApi.list({ limit: "100" }).then((res) => {
       const list = res?.data?.data || res?.data || []
-      const arr = Array.isArray(list) ? list : []
-      setCompanies(arr)
+      setCompanies(Array.isArray(list) ? list : [])
     }).catch(() => { })
     fetchData(filters)
   }, [])
@@ -245,9 +185,8 @@ export default function NightBillPage() {
   const handleReset = () => {
     setPage(1)
     setLimit(20)
-    const defaults = { date: new Date().toISOString().slice(0, 10) }
-    setFilters(defaults)
-    fetchData(defaults, 1, 20)
+    setFilters({})
+    fetchData({}, 1, 20)
   }
 
   return (

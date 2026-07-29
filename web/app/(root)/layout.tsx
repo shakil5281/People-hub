@@ -29,6 +29,7 @@ export default function DashboardLayout({
           </div>
         </SidebarInset>
       </SidebarProvider>
+
       <SearchDialog />
     </SearchProvider>
   )

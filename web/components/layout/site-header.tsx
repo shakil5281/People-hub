@@ -2,10 +2,10 @@
 
 import * as React from "react"
 import { useRouter } from "next/navigation"
+import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,11 +17,10 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { authApi, notificationApi } from "@/lib/api"
+import { authApi, notificationApi, companyApi } from "@/lib/api"
 import {
   SearchIcon,
   SettingsIcon,
-  BellIcon,
   LogOutIcon,
   Loader2,
   UserIcon,
@@ -43,6 +42,7 @@ export function SiteHeader() {
   const [loading, setLoading] = React.useState(true)
   const [loggingOut, setLoggingOut] = React.useState(false)
   const [notifCount, setNotifCount] = React.useState(0)
+  const [companyName, setCompanyName] = React.useState("")
 
   React.useEffect(() => {
     authApi.me()
@@ -61,6 +61,15 @@ export function SiteHeader() {
     fetchCount()
     const interval = setInterval(fetchCount, 30000)
     return () => clearInterval(interval)
+  }, [])
+
+  React.useEffect(() => {
+    companyApi.list({ limit: "1" })
+      .then((res) => {
+        const companies = res.data?.data
+        if (companies?.length > 0) setCompanyName(companies[0].company_name_en || "")
+      })
+      .catch(() => {})
   }, [])
 
   const handleLogout = async () => {
@@ -88,7 +97,7 @@ export function SiteHeader() {
       <div className="flex w-full items-center gap-2 px-4 lg:gap-3 lg:px-6">
         <SidebarTrigger className="-ml-1" />
 
-        <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-4" />
+        {/* <Separator orientation="vertical" className="mx-1 data-[orientation=vertical]:h-4" /> */}
 
         <div className="relative hidden sm:flex flex-1 max-w-sm">
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -101,17 +110,28 @@ export function SiteHeader() {
         </div>
 
         <div className="flex items-center gap-1 ml-auto">
-          <Button variant="ghost" size="icon" className="relative h-9 w-9" onClick={() => router.push("/notifications")}>
-            <BellIcon className="h-4 w-4" />
+          {companyName && (
+            <div className="hidden md:flex items-center mr-1 pr-2 border-r border-border">
+              <span className="text-sm font-semibold text-foreground truncate max-w-[180px]">{companyName}</span>
+            </div>
+          )}
+          <Button variant="ghost" size="icon" className="relative h-9 w-9 group" onClick={() => router.push("/notifications")}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 transition-all duration-300 group-hover:scale-110 group-hover:text-amber-500 group-hover:rotate-12">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
             {notifCount > 0 && (
-              <Badge className="absolute -top-1 -right-1 h-4 min-w-4 px-1 text-[10px] flex items-center justify-center">
+              <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[10px] font-bold flex items-center justify-center rounded-full bg-red-500 text-white animate-pulse">
                 {notifCount > 99 ? "99+" : notifCount}
-              </Badge>
+              </span>
             )}
           </Button>
 
-          <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => router.push("/admin/settings")}>
-            <SettingsIcon className="h-4 w-4" />
+          <Button variant="ghost" size="icon" className="h-9 w-9 group" onClick={() => router.push("/admin/settings")}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="h-4 w-4 transition-all duration-500 group-hover:rotate-90 group-hover:text-primary">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+            </svg>
           </Button>
 
           <Separator orientation="vertical" className="mx-1 h-6" />

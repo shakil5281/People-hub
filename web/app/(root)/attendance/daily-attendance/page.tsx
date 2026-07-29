@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ClipboardCheckIcon, DownloadIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
+import { ClipboardCheckIcon, FileSpreadsheetIcon, UserXIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { format } from "date-fns"
@@ -66,6 +66,7 @@ export default function DailyAttendancePage() {
   const [loading, setLoading] = React.useState(true)
   const [exporting, setExporting] = React.useState(false)
   const [exportingAbsent, setExportingAbsent] = React.useState(false)
+  const [exportingMissing, setExportingMissing] = React.useState(false)
   const [error, setError] = React.useState("")
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [departments, setDepartments] = React.useState<Department[]>([])
@@ -256,10 +257,19 @@ export default function DailyAttendancePage() {
     setMobileFilterOpen(false)
   }
 
+  const buildExportParams = () => {
+    const params: Record<string, string> = { date: filters.date || today }
+    const filterKeys = ["company_id", "department_id", "section_id", "designation_id", "line_id", "group_id", "shift_id", "status", "employee_id"]
+    for (const key of filterKeys) {
+      if (filters[key]) params[key] = filters[key]
+    }
+    return params
+  }
+
   const handleExport = async () => {
     setExporting(true)
     try {
-      const res = await attendanceApi.exportExcel({ date: filters.date || today })
+      const res = await attendanceApi.exportExcel(buildExportParams())
       const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -274,10 +284,15 @@ export default function DailyAttendancePage() {
     }
   }
 
+  const buildAbsentExportParams = () => {
+    const date = filters.date || today
+    return { start_date: date, end_date: date }
+  }
+
   const handleExportAbsent = async () => {
     setExportingAbsent(true)
     try {
-      const res = await attendanceApi.exportAbsentExcel({ start_date: filters.date || today, end_date: filters.date || today })
+      const res = await attendanceApi.exportAbsentExcel(buildAbsentExportParams())
       const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -289,6 +304,29 @@ export default function DailyAttendancePage() {
       setError("Failed to export absent report")
     } finally {
       setExportingAbsent(false)
+    }
+  }
+
+  const buildMissingExportParams = () => {
+    const date = filters.date || today
+    return { start_date: date, end_date: date }
+  }
+
+  const handleExportMissing = async () => {
+    setExportingMissing(true)
+    try {
+      const res = await attendanceApi.exportMissingExcel(buildMissingExportParams())
+      const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `missing_attendance_${filters.date || today}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError("Failed to export missing attendance")
+    } finally {
+      setExportingMissing(false)
     }
   }
 
@@ -304,13 +342,17 @@ export default function DailyAttendancePage() {
             </div>
           </div>
           <div className="hidden md:flex gap-2">
-            <Button onClick={handleExport} disabled={exporting} variant="outline">
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
+            <Button onClick={handleExport} disabled={exporting} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-2 h-4 w-4" />}
               {exporting ? "Exporting..." : "Export Excel"}
             </Button>
-            <Button onClick={handleExportAbsent} disabled={exportingAbsent} variant="outline">
-              {exportingAbsent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
+            <Button onClick={handleExportAbsent} disabled={exportingAbsent} variant="destructive">
+              {exportingAbsent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserXIcon className="mr-2 h-4 w-4" />}
               {exportingAbsent ? "Exporting..." : "Export Absent"}
+            </Button>
+            <Button onClick={handleExportMissing} disabled={exportingMissing} variant="secondary">
+              {exportingMissing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheckIcon className="mr-2 h-4 w-4" />}
+              {exportingMissing ? "Exporting..." : "Export Missing"}
             </Button>
           </div>
         </div>
@@ -346,13 +388,17 @@ export default function DailyAttendancePage() {
                 </div>
               </SheetContent>
             </Sheet>
-            <Button onClick={handleExport} disabled={exporting} variant="outline" className="flex-1">
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
+            <Button onClick={handleExport} disabled={exporting} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90">
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-2 h-4 w-4" />}
               {exporting ? "Exporting..." : "Export"}
             </Button>
-            <Button onClick={handleExportAbsent} disabled={exportingAbsent} variant="outline" className="flex-1">
-              {exportingAbsent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
+            <Button onClick={handleExportAbsent} disabled={exportingAbsent} variant="destructive" className="flex-1">
+              {exportingAbsent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserXIcon className="mr-2 h-4 w-4" />}
               {exportingAbsent ? "Exporting..." : "Absent"}
+            </Button>
+            <Button onClick={handleExportMissing} disabled={exportingMissing} variant="secondary" className="flex-1">
+              {exportingMissing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheckIcon className="mr-2 h-4 w-4" />}
+              {exportingMissing ? "Exporting..." : "Missing"}
             </Button>
           </ButtonGroup>
         </div>

@@ -41,7 +41,6 @@ func Setup(
 	settingsHandler *handlers.SettingsHandler,
 	punishmentHandler *handlers.PunishmentHandler,
 	dailyScheduleHandler *handlers.DailyScheduleHandler,
-	nightBillHandler *handlers.NightBillHandler,
 	tiffinBillHandler *handlers.TiffinBillHandler,
 	holidayHandler *handlers.HolidayHandler,
 	systemLogHandler *handlers.SystemLogHandler,
@@ -272,12 +271,15 @@ func Setup(
 		attendance.GET("/summary", attendanceHandler.Summary)
 		attendance.GET("/summary/export/excel", attendanceHandler.ExportSummaryExcel)
 		attendance.GET("/overtime", attendanceHandler.Overtime)
+		attendance.GET("/overtime/export/excel", attendanceHandler.ExportOvertimeExcel)
 		attendance.GET("/overtime-summary", attendanceHandler.OvertimeSummary)
+		attendance.GET("/overtime-summary/export/excel", attendanceHandler.ExportOvertimeSummaryExcel)
 		attendance.GET("/job-card", attendanceHandler.ListJobCard)
 		attendance.GET("/stats", attendanceHandler.Stats)
 		attendance.GET("/missing", attendanceHandler.MissingAttendance)
 		attendance.GET("/absent", attendanceHandler.AbsentAttendance)
 		attendance.GET("/absent/export/excel", attendanceHandler.ExportAbsentExcel)
+		attendance.GET("/missing/export/excel", attendanceHandler.ExportMissingAttendanceExcel)
 		attendance.POST("", attendanceHandler.Create)
 		attendance.PUT("/:id", attendanceHandler.Update)
 		attendance.DELETE("/:id", attendanceHandler.Delete)
@@ -451,25 +453,6 @@ func Setup(
 		eidBonus.GET("/summary", eidBonusHandler.Summary)
 		eidBonus.GET("/bank-sheet", eidBonusHandler.BankSheet)
 		eidBonus.GET("/export/excel", eidBonusHandler.ExportExcel)
-	}
-
-	// Protected night-bill routes
-	nightBill := api.Group("/night-bills")
-	nightBill.Use(middleware.AuthMiddleware(jwtSecret))
-	{
-		nightBill.GET("", nightBillHandler.List)
-		nightBill.POST("", nightBillHandler.Create)
-		nightBill.POST("/bulk", nightBillHandler.BulkCreate)
-		nightBill.POST("/process", nightBillHandler.Process)
-		nightBill.GET("/processes", nightBillHandler.ListProcesses)
-		nightBill.GET("/eligible-employees", nightBillHandler.ListEligibleEmployees)
-		nightBill.GET("/employees-with-rates", nightBillHandler.ListEligibleWithRates)
-		nightBill.POST("/calculate-rate", nightBillHandler.CalculateRate)
-		nightBill.GET("/summary", nightBillHandler.Summary)
-		nightBill.PUT("/:id", nightBillHandler.Update)
-		nightBill.PUT("/:id/approve", nightBillHandler.Approve)
-		nightBill.PUT("/:id/reject", nightBillHandler.Reject)
-		nightBill.DELETE("/:id", nightBillHandler.Delete)
 	}
 
 	// Protected tiffin-bill routes

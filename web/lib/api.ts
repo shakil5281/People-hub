@@ -204,10 +204,13 @@ export const attendanceApi = {
   missing: (params: Record<string, string>) => api.get("/attendance/missing", { params }),
   absent: (params: Record<string, string>) => api.get("/attendance/absent", { params }),
   exportAbsentExcel: (params?: Record<string, string>) => api.get("/attendance/absent/export/excel", { params, responseType: "blob" }),
+  exportMissingExcel: (params?: Record<string, string>) => api.get("/attendance/missing/export/excel", { params, responseType: "blob" }),
   summary: (params?: Record<string, string>) => api.get("/attendance/summary", { params }),
   exportSummaryExcel: (params?: Record<string, string>) => api.get("/attendance/summary/export/excel", { params, responseType: "blob" }),
   overtime: (params?: Record<string, string>) => api.get("/attendance/overtime", { params }),
+  exportOvertimeExcel: (params?: Record<string, string>) => api.get("/attendance/overtime/export/excel", { params, responseType: "blob" }),
   overtimeSummary: (params?: Record<string, string>) => api.get("/attendance/overtime-summary", { params }),
+  exportOvertimeSummaryExcel: (params?: Record<string, string>) => api.get("/attendance/overtime-summary/export/excel", { params, responseType: "blob" }),
   monthlyReport: (params?: Record<string, string>) => api.get("/attendance/monthly-report", { params }),
   customSummary: (data: { company_id: string; date: string; sections: Record<string, unknown>[] }) => api.post("/attendance/custom-summary?company_id=" + data.company_id + "&date=" + data.date, data.sections),
   exportExcel: (params?: Record<string, string>) => api.get("/attendance/export/excel", { params, responseType: "blob" }),
@@ -356,17 +359,8 @@ export const dailyScheduleApi = {
 
 export const nightBillApi = {
   list: (params?: Record<string, string>) => api.get("/night-bills", { params }),
-  create: (data: Record<string, unknown>) => api.post("/night-bills", data),
   bulkCreate: (data: Record<string, unknown>) => api.post("/night-bills/bulk", data),
-  process: (data: Record<string, unknown>) => api.post("/night-bills/process", data),
-  listProcesses: (params?: Record<string, string>) => api.get("/night-bills/processes", { params }),
-  listEligibleEmployees: (params?: Record<string, string>) => api.get("/night-bills/eligible-employees", { params }),
-  listEligibleWithRates: (params?: Record<string, string>) => api.get("/night-bills/employees-with-rates", { params }),
-  calculateRate: (data: { employee_id: string; date: string }) => api.post("/night-bills/calculate-rate", data),
-  getSummary: (params?: Record<string, string>) => api.get("/night-bills/summary", { params }),
-  approve: (id: string) => api.put(`/night-bills/${id}/approve`),
-  reject: (id: string) => api.put(`/night-bills/${id}/reject`),
-  update: (id: string, data: Record<string, unknown>) => api.put(`/night-bills/${id}`, data),
+  listEligible: (params?: Record<string, string>) => api.get("/night-bills/eligible", { params }),
   delete: (id: string) => api.delete(`/night-bills/${id}`),
 }
 

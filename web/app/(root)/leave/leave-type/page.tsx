@@ -33,7 +33,7 @@ export default function LeaveTypePage() {
     setLoading(true)
     try {
       const { data: res } = await leaveTypeApi.list(undefined, { page: String(page), limit: String(limit) })
-      setData(Array.isArray(res.data) ? res.data : [])
+      setData(res?.data ?? [])
       setTotal(res.total ?? 0)
       setTotalPages(res.total_pages ?? 0)
     } catch {

@@ -810,15 +810,13 @@ func (h *AttendanceHandler) OvertimeSummary(c *gin.Context) {
 	startDate := c.DefaultQuery("start_date", time.Now().Format("2006-01-02"))
 	endDate := c.DefaultQuery("end_date", startDate)
 	companyID := c.Query("company_id")
+	groupBy := c.DefaultQuery("group_by", "department")
 	departmentID := c.Query("department_id")
 	sectionID := c.Query("section_id")
 	designationID := c.Query("designation_id")
 	lineID := c.Query("line_id")
-	groupID := c.Query("group_id")
-	shiftID := c.Query("shift_id")
-	statusFilter := c.Query("status")
 
-	result, err := h.attendanceRepo.OvertimeSummary(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, statusFilter)
+	result, err := h.attendanceRepo.OvertimeSummaryGrouped(startDate, endDate, companyID, groupBy, departmentID, sectionID, designationID, lineID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1313,14 +1311,45 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 	var company models.Company
 	database.DB.First(&company)
 
-	var attendances []models.Attendance
-	if err := database.DB.
+	query := database.DB.
 		Preload("Employee.DesignationRef").
 		Preload("Employee.Department").
 		Preload("Employee.SectionRef").
 		Preload("Employee.LineRef").
 		Preload("Employee").
-		Where("date = ? AND deleted_at IS NULL", date).
+		Where("attendances.date = ? AND attendances.deleted_at IS NULL", date)
+
+	if empID := c.Query("employee_id"); empID != "" {
+		query = query.Where("attendances.employee_id = ?", empID)
+	}
+	if companyID := c.Query("company_id"); companyID != "" {
+		query = query.Where("attendances.company_id = ?", companyID)
+	}
+	if deptID := c.Query("department_id"); deptID != "" {
+		query = query.Where("employees.department_id = ?", deptID)
+	}
+	if sectionID := c.Query("section_id"); sectionID != "" {
+		query = query.Where("employees.section_id = ?", sectionID)
+	}
+	if desigID := c.Query("designation_id"); desigID != "" {
+		query = query.Where("employees.designation_id = ?", desigID)
+	}
+	if lineID := c.Query("line_id"); lineID != "" {
+		query = query.Where("employees.line_id = ?", lineID)
+	}
+	if groupID := c.Query("group_id"); groupID != "" {
+		query = query.Where("employees.group_id = ?", groupID)
+	}
+	if shiftID := c.Query("shift_id"); shiftID != "" {
+		query = query.Where("attendances.shift_id = ?", shiftID)
+	}
+	if status := c.Query("status"); status != "" {
+		query = query.Where("attendances.status = ?", status)
+	}
+
+	var attendances []models.Attendance
+	if err := query.
+		Joins("LEFT JOIN employees ON employees.employee_id = attendances.employee_id AND employees.deleted_at IS NULL").
 		Order("LENGTH(attendances.employee_id) ASC, attendances.employee_id ASC").
 		Find(&attendances).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1343,7 +1372,7 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 	}
 
 	// -- Styles --
-	borderColor := "333333"
+	borderColor := "262626"
 
 	thinBorder := []excelize.Border{
 		{Type: "left", Color: borderColor, Style: 1},
@@ -1358,7 +1387,7 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 		Border:    thinBorder,
 	})
 
-	dataFont := &excelize.Font{Size: 10, Family: "Calibri", Color: "000000"}
+	dataFont := &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"}
 	styleData, _ := f.NewStyle(&excelize.Style{Font: dataFont, Border: thinBorder, Alignment: &excelize.Alignment{Vertical: "center", WrapText: true}})
 	styleDataCenter, _ := f.NewStyle(&excelize.Style{Font: dataFont, Border: thinBorder, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
 
@@ -1454,13 +1483,13 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 
 		checkIn := ""
 		if att.CheckIn != nil {
-			checkIn = att.CheckIn.Format("2006-01-02 15:04:05")
+			checkIn = att.CheckIn.Format("15:04")
 		}
 		svc(4, checkIn)
 
 		checkOut := ""
 		if att.CheckOut != nil {
-			checkOut = att.CheckOut.Format("2006-01-02 15:04:05")
+			checkOut = att.CheckOut.Format("15:04")
 		}
 		svc(5, checkOut)
 
@@ -1490,7 +1519,7 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 		}
 
 		summary[att.Status]++
-		f.SetRowHeight(sheet, row, 20)
+		f.SetRowHeight(sheet, row, 25)
 	}
 
 	// --- Footer: Summary (no border, full row merge) ---
@@ -1856,6 +1885,686 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=absent_report_%s.xlsx", startDate))
+	f.Write(c.Writer)
+}
+
+// ExportMissingAttendanceExcel godoc
+//
+//	@Summary      Export missing attendance to Excel
+//	@Description  Export employees with missing punches (only check_in or only check_out) to Excel
+//	@Tags         Attendance
+//	@Security     BearerAuth
+//	@Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+//	@Param        start_date query string true "Start date (YYYY-MM-DD)"
+//	@Param        end_date query string true "End date (YYYY-MM-DD)"
+//	@Param        company_id  query string false "Filter by company"
+//	@Param        department_id  query string false "Filter by department"
+//	@Param        section_id  query string false "Filter by section"
+//	@Param        designation_id  query string false "Filter by designation"
+//	@Param        line_id  query string false "Filter by line"
+//	@Param        group_id  query string false "Filter by group"
+//	@Success      200  {file}  binary
+//	@Router       /attendance/missing/export/excel [get]
+func (h *AttendanceHandler) ExportMissingAttendanceExcel(c *gin.Context) {
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	if startDate == "" {
+		startDate = time.Now().Format("2006-01-02")
+	}
+	if endDate == "" {
+		endDate = startDate
+	}
+
+	companyFilter := c.Query("company_id")
+	departmentFilter := c.Query("department_id")
+	sectionFilter := c.Query("section_id")
+	designationFilter := c.Query("designation_id")
+	lineFilter := c.Query("line_id")
+	groupFilter := c.Query("group_id")
+
+	var company models.Company
+	database.DB.First(&company)
+
+	baseQuery := database.DB.Model(&models.Attendance{}).
+		Preload("Employee.DesignationRef").
+		Preload("Employee.Department").
+		Preload("Employee.SectionRef").
+		Preload("Employee.LineRef").
+		Preload("Employee").
+		Where(`(
+			(attendances.check_in IS NULL AND attendances.check_out IS NOT NULL)
+			OR
+			(attendances.check_in IS NOT NULL AND attendances.check_out IS NULL)
+			OR
+			(
+			  attendances.check_in IS NOT NULL
+			  AND attendances.check_out IS NOT NULL
+			  AND attendances.shift_id IS NOT NULL
+			  AND attendances.check_out < (attendances.date::text || ' ' || (SELECT s.start_time FROM shifts s WHERE s.id = attendances.shift_id))::timestamp + INTERVAL '2 hours'
+			)
+			OR
+			(
+			  attendances.check_in IS NOT NULL
+			  AND attendances.check_out IS NOT NULL
+			  AND attendances.shift_id IS NOT NULL
+			  AND attendances.check_out < (attendances.date::text || ' ' || (SELECT s.end_time FROM shifts s WHERE s.id = attendances.shift_id))::timestamp
+			)
+		) AND attendances.date BETWEEN ? AND ? AND attendances.deleted_at IS NULL`, startDate, endDate)
+
+	if companyFilter != "" {
+		baseQuery = baseQuery.Where("attendances.company_id = ?", companyFilter)
+	}
+	if departmentFilter != "" {
+		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
+			Where("employees.department_id = ?", departmentFilter)
+	}
+	if sectionFilter != "" {
+		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
+			Where("employees.section_id = ?", sectionFilter)
+	}
+	if designationFilter != "" {
+		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
+			Where("employees.designation_id = ?", designationFilter)
+	}
+	if lineFilter != "" {
+		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
+			Where("employees.line_id = ?", lineFilter)
+	}
+	if groupFilter != "" {
+		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
+			Where("employees.group_id = ?", groupFilter)
+	}
+
+	var attendances []models.Attendance
+	if err := baseQuery.Order("LENGTH(attendances.employee_id) ASC, attendances.employee_id ASC, attendances.date ASC").
+		Find(&attendances).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	f := excelize.NewFile()
+	sheet := "Missing Attendance"
+	index, _ := f.GetSheetIndex("Sheet1")
+	f.SetActiveSheet(index)
+	f.SetSheetName("Sheet1", sheet)
+
+	nCols := 5
+	cols := []struct {
+		header string
+		width  float64
+	}{
+		{"Employee ID", 15},
+		{"Name", 25},
+		{"Designation", 25},
+		{"Check In", 14},
+		{"Check Out", 14},
+	}
+
+	borderColor := "808080"
+	thinBorder := []excelize.Border{
+		{Type: "left", Color: borderColor, Style: 1},
+		{Type: "top", Color: borderColor, Style: 1},
+		{Type: "bottom", Color: borderColor, Style: 1},
+		{Type: "right", Color: borderColor, Style: 1},
+	}
+
+	companyNameStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 20, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	normalCenter, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+		Border:    thinBorder,
+	})
+	dataCenter, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	dataLeft, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Vertical: "center", WrapText: true},
+	})
+
+	companyName := company.CompanyNameEn
+	if companyName == "" {
+		companyName = "Company Name"
+	}
+	companyAddress := company.AddressEn
+	if companyAddress == "" {
+		companyAddress = "Company Address"
+	}
+
+	parsedDate, _ := time.Parse("2006-01-02", startDate)
+	dateDisplay := parsedDate.Format("02 Jan 2006")
+
+	endCol := colNameAttendance(nCols)
+
+	f.SetCellValue(sheet, "A1", companyName)
+	f.MergeCell(sheet, "A1", endCol+"1")
+	f.SetCellStyle(sheet, "A1", endCol+"1", companyNameStyle)
+	f.SetRowHeight(sheet, 1, 32)
+
+	f.SetCellValue(sheet, "A2", companyAddress)
+	f.MergeCell(sheet, "A2", endCol+"2")
+	f.SetCellStyle(sheet, "A2", endCol+"2", normalCenter)
+	f.SetRowHeight(sheet, 2, 20)
+
+	f.SetCellValue(sheet, "A3", "MISSING ATTENDANCE REPORT")
+	f.MergeCell(sheet, "A3", endCol+"3")
+	f.SetCellStyle(sheet, "A3", endCol+"3", normalCenter)
+	f.SetRowHeight(sheet, 3, 20)
+
+	f.SetCellValue(sheet, "A4", "Date: "+dateDisplay)
+	f.MergeCell(sheet, "A4", endCol+"4")
+	f.SetCellStyle(sheet, "A4", endCol+"4", normalCenter)
+	f.SetRowHeight(sheet, 4, 20)
+
+	for i, c := range cols {
+		cell := colNameAttendance(i+1) + "5"
+		f.SetCellValue(sheet, cell, c.header)
+		f.SetCellStyle(sheet, cell, cell, headerStyle)
+		f.SetColWidth(sheet, colNameAttendance(i+1), colNameAttendance(i+1), c.width)
+	}
+	f.SetRowHeight(sheet, 5, 36)
+
+	for rowIdx, a := range attendances {
+		row := rowIdx + 6
+		svc := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+		}
+		svl := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+		}
+
+		svc(1, a.EmployeeID)
+		svl(2, a.Employee.NameEn)
+
+		designation := ""
+		if a.Employee.DesignationRef != nil {
+			designation = a.Employee.DesignationRef.Name
+		}
+		svl(3, designation)
+
+		checkIn := "-"
+		if a.CheckIn != nil {
+			checkIn = a.CheckIn.Format("15:04")
+		}
+		svc(4, checkIn)
+
+		checkOut := "-"
+		if a.CheckOut != nil {
+			checkOut = a.CheckOut.Format("15:04")
+		}
+		svc(5, checkOut)
+
+		f.SetRowHeight(sheet, row, 30)
+	}
+
+	lastRow := len(attendances) + 5
+	footerRow := lastRow + 2
+	footerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
+	})
+	uniqueCount := len(attendances)
+	f.SetCellValue(sheet, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Missing: %d Records", uniqueCount))
+	f.MergeCell(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
+	f.SetCellStyle(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
+	f.SetRowHeight(sheet, footerRow, 22)
+
+	for _, s := range f.GetSheetList() {
+		orientation := "portrait"
+		paperSize := 9
+		fitWidth := 1
+		fitHeight := 0
+		f.SetPageLayout(s, &excelize.PageLayoutOptions{
+			Orientation: &orientation,
+			Size:        &paperSize,
+			FitToWidth:  &fitWidth,
+			FitToHeight: &fitHeight,
+		})
+		f.SetPageMargins(s, &excelize.PageLayoutMarginsOptions{
+			Left:   func(f float64) *float64 { return &f }(0.25),
+			Right:  func(f float64) *float64 { return &f }(0.25),
+			Top:    func(f float64) *float64 { return &f }(0.75),
+			Bottom: func(f float64) *float64 { return &f }(0.75),
+			Header: func(f float64) *float64 { return &f }(0.3),
+			Footer: func(f float64) *float64 { return &f }(0.3),
+		})
+		f.SetHeaderFooter(s, &excelize.HeaderFooterOptions{
+			OddFooter: "&LProduction manager&CAdmin (A.G.M)&RApproved By",
+		})
+		f.SetSheetView(s, -1, &excelize.ViewOptions{ShowGridLines: func(b bool) *bool { return &b }(false)})
+	}
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=missing_attendance_%s.xlsx", startDate))
+	f.Write(c.Writer)
+}
+
+// ExportOvertimeExcel godoc
+//
+//	@Summary      Export overtime sheet to Excel
+//	@Description  Export employee overtime records for a date range to Excel
+//	@Tags         Attendance
+//	@Security     BearerAuth
+//	@Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+//	@Param        start_date    query string true "Start date (YYYY-MM-DD)"
+//	@Param        end_date      query string true "End date (YYYY-MM-DD)"
+//	@Param        company_id    query string false "Filter by company"
+//	@Param        department_id query string false "Filter by department"
+//	@Param        section_id    query string false "Filter by section"
+//	@Param        designation_id query string false "Filter by designation"
+//	@Param        line_id       query string false "Filter by line"
+//	@Param        group_id      query string false "Filter by group"
+//	@Success      200  {file}  binary
+//	@Router       /attendance/overtime/export/excel [get]
+func (h *AttendanceHandler) ExportOvertimeExcel(c *gin.Context) {
+	startDate := c.DefaultQuery("start_date", time.Now().Format("2006-01-02"))
+	endDate := c.DefaultQuery("end_date", startDate)
+	companyID := c.Query("company_id")
+	departmentID := c.Query("department_id")
+	sectionID := c.Query("section_id")
+	designationID := c.Query("designation_id")
+	lineID := c.Query("line_id")
+	groupID := c.Query("group_id")
+
+	records, err := h.attendanceRepo.Overtime(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, "", "")
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	var company models.Company
+	database.DB.First(&company)
+
+	f := excelize.NewFile()
+	sheet := "Over Time Sheet"
+	index, _ := f.GetSheetIndex("Sheet1")
+	f.SetActiveSheet(index)
+	f.SetSheetName("Sheet1", sheet)
+
+	nCols := 7
+	cols := []struct {
+		header string
+		width  float64
+	}{
+		{"Sl No", 8},
+		{"Employee Name", 28},
+		{"Employee ID", 15},
+		{"Date", 14},
+		{"In Time", 14},
+		{"Out Time", 14},
+		{"Over Time (Hr)", 13},
+	}
+
+	borderColor := "808080"
+	thinBorder := []excelize.Border{
+		{Type: "left", Color: borderColor, Style: 1},
+		{Type: "top", Color: borderColor, Style: 1},
+		{Type: "bottom", Color: borderColor, Style: 1},
+		{Type: "right", Color: borderColor, Style: 1},
+	}
+
+	companyNameStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 20, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	normalCenter, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+		Border:    thinBorder,
+	})
+	dataCenter, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	dataLeft, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Vertical: "center", WrapText: true},
+	})
+
+	companyName := company.CompanyNameEn
+	if companyName == "" {
+		companyName = "Company Name"
+	}
+	companyAddress := company.AddressEn
+	if companyAddress == "" {
+		companyAddress = "Company Address"
+	}
+
+	parsedHeaderDate, _ := time.Parse("2006-01-02", startDate)
+	dateDisplay := parsedHeaderDate.Format("02-01-2006")
+
+	endCol := colNameAttendance(nCols)
+
+	f.SetCellValue(sheet, "A1", companyName)
+	f.MergeCell(sheet, "A1", endCol+"1")
+	f.SetCellStyle(sheet, "A1", endCol+"1", companyNameStyle)
+	f.SetRowHeight(sheet, 1, 32)
+
+	f.SetCellValue(sheet, "A2", companyAddress)
+	f.MergeCell(sheet, "A2", endCol+"2")
+	f.SetCellStyle(sheet, "A2", endCol+"2", normalCenter)
+	f.SetRowHeight(sheet, 2, 20)
+
+	f.SetCellValue(sheet, "A3", "OVER TIME SHEET")
+	f.MergeCell(sheet, "A3", endCol+"3")
+	f.SetCellStyle(sheet, "A3", endCol+"3", normalCenter)
+	f.SetRowHeight(sheet, 3, 20)
+
+	f.SetCellValue(sheet, "A4", "Date: "+dateDisplay)
+	f.MergeCell(sheet, "A4", endCol+"4")
+	f.SetCellStyle(sheet, "A4", endCol+"4", normalCenter)
+	f.SetRowHeight(sheet, 4, 20)
+
+	for i, c := range cols {
+		cell := colNameAttendance(i+1) + "5"
+		f.SetCellValue(sheet, cell, c.header)
+		f.SetCellStyle(sheet, cell, cell, headerStyle)
+		f.SetColWidth(sheet, colNameAttendance(i+1), colNameAttendance(i+1), c.width)
+	}
+	f.SetRowHeight(sheet, 5, 36)
+
+	for rowIdx, rec := range records {
+		row := rowIdx + 6
+		svc := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+		}
+		svl := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+		}
+
+		svc(1, strconv.Itoa(rowIdx+1))
+		svl(2, toString(rec["employee_name"]))
+		svc(3, toString(rec["employee_id"]))
+		dateStr := toString(rec["date"])
+		if t, err := time.Parse("2006-01-02", dateStr); err == nil {
+			dateStr = t.Format("02-01-2006")
+		}
+		svc(4, dateStr)
+
+		checkIn := "-"
+		if v, ok := rec["check_in"].(string); ok && v != "" {
+			if t, err := time.Parse("2006-01-02 15:04:05", v); err == nil {
+				checkIn = t.Format("15:04")
+			}
+		}
+		svc(5, checkIn)
+
+		checkOut := "-"
+		if v, ok := rec["check_out"].(string); ok && v != "" {
+			if t, err := time.Parse("2006-01-02 15:04:05", v); err == nil {
+				checkOut = t.Format("15:04")
+			}
+		}
+		svc(6, checkOut)
+
+		svc(7, toString(rec["over_time"]))
+
+		f.SetRowHeight(sheet, row, 25)
+	}
+
+	lastRow := len(records) + 5
+	footerRow := lastRow + 2
+	footerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
+	})
+	f.SetCellValue(sheet, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Records: %d", len(records)))
+	f.MergeCell(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
+	f.SetCellStyle(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
+	f.SetRowHeight(sheet, footerRow, 22)
+
+	for _, s := range f.GetSheetList() {
+		orientation := "portrait"
+		paperSize := 9
+		fitWidth := 1
+		fitHeight := 0
+		f.SetPageLayout(s, &excelize.PageLayoutOptions{
+			Orientation: &orientation,
+			Size:        &paperSize,
+			FitToWidth:  &fitWidth,
+			FitToHeight: &fitHeight,
+		})
+		f.SetPageMargins(s, &excelize.PageLayoutMarginsOptions{
+			Left:   func(f float64) *float64 { return &f }(0.25),
+			Right:  func(f float64) *float64 { return &f }(0.25),
+			Top:    func(f float64) *float64 { return &f }(0.75),
+			Bottom: func(f float64) *float64 { return &f }(0.75),
+			Header: func(f float64) *float64 { return &f }(0.3),
+			Footer: func(f float64) *float64 { return &f }(0.3),
+		})
+		f.SetSheetView(s, -1, &excelize.ViewOptions{ShowGridLines: func(b bool) *bool { return &b }(false)})
+	}
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=overtime_sheet_%s.xlsx", startDate))
+	f.Write(c.Writer)
+}
+
+// ExportOvertimeSummaryExcel godoc
+//
+//	@Summary      Export overtime summary to Excel
+//	@Description  Export department-level overtime summary to Excel
+//	@Tags         Attendance
+//	@Security     BearerAuth
+//	@Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+//	@Param        start_date    query string true "Start date (YYYY-MM-DD)"
+//	@Param        end_date      query string true "End date (YYYY-MM-DD)"
+//	@Param        company_id    query string false "Filter by company"
+//	@Param        department_id query string false "Filter by department"
+//	@Param        section_id    query string false "Filter by section"
+//	@Param        designation_id query string false "Filter by designation"
+//	@Param        line_id       query string false "Filter by line"
+//	@Param        group_id      query string false "Filter by group"
+//	@Success      200  {file}  binary
+//	@Router       /attendance/overtime-summary/export/excel [get]
+func (h *AttendanceHandler) ExportOvertimeSummaryExcel(c *gin.Context) {
+	startDate := c.DefaultQuery("start_date", time.Now().Format("2006-01-02"))
+	endDate := c.DefaultQuery("end_date", startDate)
+	companyID := c.Query("company_id")
+	groupBy := c.DefaultQuery("group_by", "department")
+	departmentID := c.Query("department_id")
+	sectionID := c.Query("section_id")
+	designationID := c.Query("designation_id")
+	lineID := c.Query("line_id")
+
+	summaries, err := h.attendanceRepo.OvertimeSummaryGrouped(startDate, endDate, companyID, groupBy, departmentID, sectionID, designationID, lineID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	groupLabel := "Department"
+	switch groupBy {
+	case "section":
+		groupLabel = "Section"
+	case "designation":
+		groupLabel = "Designation"
+	case "line":
+		groupLabel = "Line"
+	}
+
+	var company models.Company
+	database.DB.First(&company)
+
+	f := excelize.NewFile()
+	sheet := "Over Time Summary"
+	index, _ := f.GetSheetIndex("Sheet1")
+	f.SetActiveSheet(index)
+	f.SetSheetName("Sheet1", sheet)
+
+	nCols := 4
+	cols := []struct {
+		header string
+		width  float64
+	}{
+		{"Sl No", 8},
+		{groupLabel, 32},
+		{"Employees", 14},
+		{"Total Hours", 14},
+	}
+
+	borderColor := "808080"
+	thinBorder := []excelize.Border{
+		{Type: "left", Color: borderColor, Style: 1},
+		{Type: "top", Color: borderColor, Style: 1},
+		{Type: "bottom", Color: borderColor, Style: 1},
+		{Type: "right", Color: borderColor, Style: 1},
+	}
+
+	companyNameStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 20, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	normalCenter, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+		Border:    thinBorder,
+	})
+	dataCenter, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	dataLeft, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Vertical: "center", WrapText: true},
+	})
+
+	companyName := company.CompanyNameEn
+	if companyName == "" {
+		companyName = "Company Name"
+	}
+	companyAddress := company.AddressEn
+	if companyAddress == "" {
+		companyAddress = "Company Address"
+	}
+
+	parsedHeaderDate, _ := time.Parse("2006-01-02", startDate)
+	dateDisplay := parsedHeaderDate.Format("02-01-2006")
+
+	endCol := colNameAttendance(nCols)
+
+	f.SetCellValue(sheet, "A1", companyName)
+	f.MergeCell(sheet, "A1", endCol+"1")
+	f.SetCellStyle(sheet, "A1", endCol+"1", companyNameStyle)
+	f.SetRowHeight(sheet, 1, 32)
+
+	f.SetCellValue(sheet, "A2", companyAddress)
+	f.MergeCell(sheet, "A2", endCol+"2")
+	f.SetCellStyle(sheet, "A2", endCol+"2", normalCenter)
+	f.SetRowHeight(sheet, 2, 20)
+
+	f.SetCellValue(sheet, "A3", "OVER TIME SUMMARY ("+groupLabel+")")
+	f.MergeCell(sheet, "A3", endCol+"3")
+	f.SetCellStyle(sheet, "A3", endCol+"3", normalCenter)
+	f.SetRowHeight(sheet, 3, 20)
+
+	f.SetCellValue(sheet, "A4", "Date: "+dateDisplay)
+	f.MergeCell(sheet, "A4", endCol+"4")
+	f.SetCellStyle(sheet, "A4", endCol+"4", normalCenter)
+	f.SetRowHeight(sheet, 4, 20)
+
+	for i, c := range cols {
+		cell := colNameAttendance(i+1) + "5"
+		f.SetCellValue(sheet, cell, c.header)
+		f.SetCellStyle(sheet, cell, cell, headerStyle)
+		f.SetColWidth(sheet, colNameAttendance(i+1), colNameAttendance(i+1), c.width)
+	}
+	f.SetRowHeight(sheet, 5, 36)
+
+	for rowIdx, rec := range summaries {
+		row := rowIdx + 6
+		svc := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+		}
+		svl := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+		}
+
+		svc(1, strconv.Itoa(rowIdx+1))
+		svl(2, toString(rec["name"]))
+		employeeCount := toString(fmt.Sprintf("%v", rec["employee_count"]))
+		if employeeCount == "<nil>" {
+			employeeCount = "0"
+		}
+		svc(3, employeeCount)
+		if totalHours, ok := rec["total_hours"].(float64); ok {
+			svc(4, fmt.Sprintf("%.2f", totalHours))
+		} else {
+			svc(4, "0.00")
+		}
+
+		f.SetRowHeight(sheet, row, 25)
+	}
+
+	lastRow := len(summaries) + 5
+	footerRow := lastRow + 2
+	footerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
+	})
+	totalEmp := 0
+	for _, rec := range summaries {
+		if c, ok := rec["employee_count"].(float64); ok {
+			totalEmp += int(c)
+		}
+	}
+	f.SetCellValue(sheet, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Departments: %d | Total Employees: %d", len(summaries), totalEmp))
+	f.MergeCell(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
+	f.SetCellStyle(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
+	f.SetRowHeight(sheet, footerRow, 22)
+
+	for _, s := range f.GetSheetList() {
+		orientation := "portrait"
+		paperSize := 9
+		fitWidth := 1
+		fitHeight := 0
+		f.SetPageLayout(s, &excelize.PageLayoutOptions{
+			Orientation: &orientation,
+			Size:        &paperSize,
+			FitToWidth:  &fitWidth,
+			FitToHeight: &fitHeight,
+		})
+		f.SetPageMargins(s, &excelize.PageLayoutMarginsOptions{
+			Left:   func(f float64) *float64 { return &f }(0.25),
+			Right:  func(f float64) *float64 { return &f }(0.25),
+			Top:    func(f float64) *float64 { return &f }(0.75),
+			Bottom: func(f float64) *float64 { return &f }(0.75),
+			Header: func(f float64) *float64 { return &f }(0.3),
+			Footer: func(f float64) *float64 { return &f }(0.3),
+		})
+		f.SetSheetView(s, -1, &excelize.ViewOptions{ShowGridLines: func(b bool) *bool { return &b }(false)})
+	}
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=overtime_summary_%s.xlsx", startDate))
 	f.Write(c.Writer)
 }
 
@@ -2316,6 +3025,26 @@ func addDailySummarySheet(f *excelize.File, sheetName, companyName, companyAddre
 	f.MergeCell(sheetName, "A"+strconv.Itoa(fr), endCol+strconv.Itoa(fr))
 	f.SetCellStyle(sheetName, "A"+strconv.Itoa(fr), endCol+strconv.Itoa(fr), ftStyle)
 	f.SetRowHeight(sheetName, fr, 22)
+}
+
+func toString(v interface{}) string {
+	if v == nil {
+		return ""
+	}
+	switch x := v.(type) {
+	case string:
+		return x
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case int:
+		return strconv.Itoa(x)
+	case int64:
+		return strconv.FormatInt(x, 10)
+	case bool:
+		return strconv.FormatBool(x)
+	default:
+		return fmt.Sprintf("%v", x)
+	}
 }
 
 func toInt64(v interface{}) int64 {

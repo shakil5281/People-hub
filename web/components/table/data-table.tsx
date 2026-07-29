@@ -309,13 +309,14 @@ export function DataTable<TData extends { id: number | string }>({
 
   const skeletonRowCount = table.getState().pagination.pageSize
 
+  const skeletonWidths = [32, 24, 12, 56, 36, 48, 28, 64, 40, 20, 52, 16]
   const SkeletonRows = () => (
     <>
       {Array.from({ length: skeletonRowCount }).map((_, idx) => (
         <TableRow key={`skeleton-${idx}`}>
           {allColumns.map((_, colIdx) => (
             <TableCell key={`skeleton-cell-${idx}-${colIdx}`}>
-              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-5" style={{ width: `${skeletonWidths[colIdx % skeletonWidths.length]}%` }} />
             </TableCell>
           ))}
         </TableRow>

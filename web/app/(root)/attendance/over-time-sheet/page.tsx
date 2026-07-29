@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { ClockIcon, FilterIcon, XIcon } from "lucide-react"
+import { ClockIcon, FileSpreadsheetIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -38,7 +38,7 @@ const columns: ColumnDef<OvertimeRecord>[] = [
   { id: "sl", header: "Sl", cell: ({ row }) => row.index + 1 },
   { accessorKey: "employee_name", header: "Employee Name" },
   { accessorKey: "emp_id", header: "Emp. ID" },
-  { accessorKey: "date", header: "Date" },
+  { accessorKey: "date", header: "Date", cell: ({ row }) => { const d = row.original.date; return d ? d.split("-").reverse().join("-") : "-" } },
   { accessorKey: "check_in", header: "Check In", cell: ({ row }) => formatCheck(row.original.check_in) },
   { accessorKey: "check_out", header: "Check Out", cell: ({ row }) => formatCheck(row.original.check_out) },
   { accessorKey: "over_time", header: "Over Time" },
@@ -70,6 +70,41 @@ export default function OverTimeSheetPage() {
   const [groups, setGroups] = React.useState<Group[]>([])
   const [shifts, setShifts] = React.useState<Shift[]>([])
   const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
+
+  const buildExportParams = () => {
+    const date = filters.date || today
+    const params: Record<string, string> = { start_date: date, end_date: date }
+    if (filters.company_id) params.company_id = filters.company_id
+    if (filters.department_id) params.department_id = filters.department_id
+    if (filters.section_id) params.section_id = filters.section_id
+    if (filters.designation_id) params.designation_id = filters.designation_id
+    if (filters.line_id) params.line_id = filters.line_id
+    if (filters.group_id) params.group_id = filters.group_id
+    if (filters.shift_id) params.shift_id = filters.shift_id
+    if (filters.status) params.status = filters.status
+    return params
+  }
+
+  const handleExport = async () => {
+    setExporting(true)
+    try {
+      const res = await attendanceApi.exportOvertimeExcel(buildExportParams())
+      const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `overtime_sheet_${filters.date || today}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError("Failed to export overtime sheet")
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const [error, setError] = React.useState("")
 
   React.useEffect(() => {
     Promise.all([
@@ -174,11 +209,19 @@ export default function OverTimeSheetPage() {
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
-        <div className="flex items-center gap-2">
-          <ClockIcon className="h-6 w-6 text-muted-foreground" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Over Time Sheet</h1>
-            <p className="text-muted-foreground mt-1">Manage overtime records and sheets</p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ClockIcon className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">Over Time Sheet</h1>
+              <p className="text-muted-foreground mt-1">Manage overtime records and sheets</p>
+            </div>
+          </div>
+          <div className="hidden md:flex gap-2">
+            <Button onClick={handleExport} disabled={exporting} className="bg-primary text-primary-foreground hover:bg-primary/90">
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-2 h-4 w-4" />}
+              {exporting ? "Exporting..." : "Export Excel"}
+            </Button>
           </div>
         </div>
         <div className="md:hidden mt-3">
@@ -213,6 +256,10 @@ export default function OverTimeSheetPage() {
                 </div>
               </SheetContent>
             </Sheet>
+            <Button onClick={handleExport} disabled={exporting} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90">
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-2 h-4 w-4" />}
+              {exporting ? "Exporting..." : "Export"}
+            </Button>
           </ButtonGroup>
         </div>
       </div>
@@ -227,6 +274,12 @@ export default function OverTimeSheetPage() {
           submitting={submitting}
         />
       </div>
+
+      {error && (
+        <div className="px-4 lg:px-6">
+          <div className="rounded-md bg-destructive/15 px-4 py-3 text-sm text-destructive">{error}</div>
+        </div>
+      )}
 
       <DataTable data={data} columns={columns} loading={loading} />
     </div>
