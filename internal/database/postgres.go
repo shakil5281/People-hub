@@ -75,6 +75,8 @@ func Connect(cfg *config.Config) {
 	alterCol("night_bills", "employee_id")
 	alterCol("tiffin_bills", "employee_id")
 	alterCol("eid_bonuses", "employee_id")
+	alterCol("id_cards", "employee_id")
+	alterCol("separations", "employee_id")
 	silentDB.Exec("ALTER TABLE separations ADD COLUMN IF NOT EXISTS company_id uuid")
 	silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS nid varchar(50)")
 	silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS present_post_office varchar(100)")

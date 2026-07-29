@@ -84,7 +84,7 @@ export function SiteHeader() {
     : "U"
 
   return (
-    <header className="flex h-(--header-height) shrink-0 items-center gap-2 border-b transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
+    <header className="sticky top-0 z-10 flex h-(--header-height) shrink-0 items-center gap-2 border-b border-border/50 bg-background/80 backdrop-blur-sm transition-[width,height] ease-linear group-has-data-[collapsible=icon]/sidebar-wrapper:h-(--header-height)">
       <div className="flex w-full items-center gap-2 px-4 lg:gap-3 lg:px-6">
         <SidebarTrigger className="-ml-1" />
 
@@ -94,7 +94,7 @@ export function SiteHeader() {
           <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search... (Ctrl+K)"
-            className="pl-9 h-9 text-sm cursor-pointer"
+            className="pl-9 h-9 text-sm cursor-pointer rounded-2xl"
             onFocus={() => setOpen(true)}
             readOnly
           />

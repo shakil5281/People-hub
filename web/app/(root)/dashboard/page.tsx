@@ -27,11 +27,11 @@ interface DashboardStats {
   separations_month: number
   gender_distribution: { gender: string; count: number }[]
   department_counts: { name: string; count: number }[]
-  monthly_attendance: { month: string; present: number; absent: number; late: number }[]
+  last_7_days: { date: string; present: number; absent: number; late: number }[]
   recent_activity: { type: string; description: string; date: string }[]
 }
 
-const cardBg = "bg-gradient-to-b from-white to-gray-100 dark:from-gray-900 dark:to-gray-800/80"
+const cardBg = "bg-gradient-to-b from-white to-neutral-100 dark:from-gray-900 dark:to-gray-800/80"
 
 export default function DashboardPage() {
   const [data, setData] = React.useState<DashboardStats | null>(null)
@@ -152,23 +152,23 @@ export default function DashboardPage() {
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7 px-4 lg:px-6">
         <Card className={`xl:col-span-4 ${cardBg}`}>
           <CardHeader>
-            <CardTitle>Monthly Attendance Trend</CardTitle>
+            <CardTitle>Last 7 Days Attendance</CardTitle>
           </CardHeader>
           <CardContent>
-            {data?.monthly_attendance && data.monthly_attendance.length > 0 ? (
+            {data?.last_7_days && data.last_7_days.length > 0 ? (
               <div className="space-y-1">
                 <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground font-medium pb-2 border-b">
-                  <span>Month</span>
+                  <span>Date</span>
                   <span className="text-right">Present</span>
                   <span className="text-right">Absent</span>
                   <span className="text-right">Late</span>
                 </div>
-                {data.monthly_attendance.map((m) => (
-                  <div key={m.month} className="grid grid-cols-4 gap-2 text-sm py-2 border-b last:border-0 hover:bg-muted/30 transition-colors rounded-sm px-1">
-                    <span className="font-medium">{m.month}</span>
-                    <span className="text-right text-emerald-600 font-medium tabular-nums">{m.present}</span>
-                    <span className="text-right text-red-600 font-medium tabular-nums">{m.absent}</span>
-                    <span className="text-right text-amber-600 font-medium tabular-nums">{m.late}</span>
+                {data.last_7_days.map((d, i) => (
+                  <div key={`${d.date}-${i}`} className="grid grid-cols-4 gap-2 text-sm py-2 border-b last:border-0 hover:bg-muted/30 transition-colors rounded-sm px-1">
+                    <span className="font-medium">{d.date}</span>
+                    <span className="text-right text-emerald-600 font-medium tabular-nums">{d.present}</span>
+                    <span className="text-right text-red-600 font-medium tabular-nums">{d.absent}</span>
+                    <span className="text-right text-amber-600 font-medium tabular-nums">{d.late}</span>
                   </div>
                 ))}
               </div>

@@ -11,9 +11,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/shakil5281/peoplehub-api/internal/auth"
 	"github.com/shakil5281/peoplehub-api/internal/config"
 	"github.com/shakil5281/peoplehub-api/internal/database"
 	"github.com/shakil5281/peoplehub-api/internal/models"
+	"gorm.io/gorm"
 )
 
 type DatabaseHandler struct {
@@ -296,6 +298,12 @@ func (h *DatabaseHandler) Reset(c *gin.Context) {
 		&models.Separation{}, &models.IdCard{}, &models.Shift{}, &models.LeaveType{},
 		&models.LeaveAllocation{}, &models.Leave{}, &models.TemporaryShift{},
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
+		&models.SystemSetting{}, &models.SalaryIncrement{},
+		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
+		&models.NightBillProcess{}, &models.Holiday{},
+		&models.SystemLog{},
+		&models.Notification{},
+		&models.EidBonus{},
 	); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to drop tables: " + err.Error()})
 		return
@@ -313,15 +321,131 @@ func (h *DatabaseHandler) Reset(c *gin.Context) {
 		&models.Separation{}, &models.IdCard{}, &models.Shift{}, &models.LeaveType{},
 		&models.LeaveAllocation{}, &models.Leave{}, &models.TemporaryShift{},
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
+		&models.SystemSetting{}, &models.SalaryIncrement{},
+		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
+		&models.NightBillProcess{}, &models.Holiday{},
+		&models.SystemLog{},
+		&models.Notification{},
+		&models.EidBonus{},
 	); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "migration failed: " + err.Error()})
 		return
 	}
 
-	// Re-apply the employee_id column type fixes
-	_ = db.Exec("ALTER TABLE employees ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)")
+	// Re-apply all post-migration fixes (column types, missing columns, indexes)
+	alterCol := func(table, col string) {
+		db.Exec("ALTER TABLE " + table + " ALTER COLUMN " + col + " TYPE varchar(50) USING " + col + "::varchar(50)")
+	}
+	alterCol("employees", "employee_id")
+	alterCol("attendances", "employee_id")
+	alterCol("leaves", "employee_id")
+	alterCol("leave_allocations", "employee_id")
+	alterCol("salaries", "employee_id")
+	alterCol("temporary_shifts", "employee_id")
+	alterCol("salary_increments", "employee_id")
+	alterCol("punishments", "employee_id")
+	alterCol("daily_schedules", "employee_id")
+	alterCol("night_bills", "employee_id")
+	alterCol("tiffin_bills", "employee_id")
+	alterCol("eid_bonuses", "employee_id")
+	alterCol("id_cards", "employee_id")
+	alterCol("separations", "employee_id")
+
+	db.Exec("ALTER TABLE separations ADD COLUMN IF NOT EXISTS company_id uuid")
+	db.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS nid varchar(50)")
+	db.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS present_post_office varchar(100)")
+	db.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS present_post_code varchar(20)")
+	db.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS permanent_post_office varchar(100)")
+	db.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS permanent_post_code varchar(20)")
+	db.Exec("ALTER TABLE requirements ADD COLUMN IF NOT EXISTS section_id uuid")
+	db.Exec("ALTER TABLE requirements ADD COLUMN IF NOT EXISTS designation_id uuid")
+	db.Exec("ALTER TABLE requirements ADD COLUMN IF NOT EXISTS group_type varchar(20) DEFAULT 'Worker'")
+
+	db.Exec(`
+		ALTER TABLE attendances ALTER COLUMN check_in TYPE timestamp USING CASE
+			WHEN check_in IS NOT NULL AND length(check_in::text) <= 5 THEN (date || ' ' || check_in)::timestamp
+			WHEN check_in IS NOT NULL THEN check_in::timestamp
+			ELSE NULL
+		END
+	`)
+	db.Exec(`
+		ALTER TABLE attendances ALTER COLUMN check_out TYPE timestamp USING CASE
+			WHEN check_out IS NOT NULL AND length(check_out::text) <= 5 THEN (date || ' ' || check_out)::timestamp
+			WHEN check_out IS NOT NULL THEN check_out::timestamp
+			ELSE NULL
+		END
+	`)
+
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_salaries_company_month_year ON salaries(company_id, year, month)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_employees_company_status ON employees(company_id, status) WHERE deleted_at IS NULL")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department_id) WHERE deleted_at IS NULL")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_leave_allocations_emp_year ON leave_allocations(employee_id, year)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_temporary_shifts_company_date ON temporary_shifts(company_id, date)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_data_logs_date_processed ON data_logs(date, processed) WHERE deleted_at IS NULL")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_attendances_date_status ON attendances(date, status)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_leaves_status_dates ON leaves(status, from_date, to_date)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id) WHERE deleted_at IS NULL")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_source ON system_logs(source)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_user ON system_logs(user_id)")
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_created ON system_logs(created_at)")
+
+	// Seed superadmin user so the system remains accessible after reset
+	seedSuperadmin(db)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Database reset completed — all tables dropped and re-created",
 	})
+}
+
+func seedSuperadmin(db *gorm.DB) {
+	email := os.Getenv("SUPERADMIN_EMAIL")
+	password := os.Getenv("SUPERADMIN_PASSWORD")
+	name := os.Getenv("SUPERADMIN_NAME")
+
+	if email == "" {
+		email = "superadmin@peoplehub.com"
+	}
+	if password == "" {
+		password = "superadmin1234"
+	}
+	if name == "" {
+		name = "Super Admin"
+	}
+
+	var role models.Role
+	err := db.Where("name = ? AND is_system = ?", "super_admin", true).First(&role).Error
+	if err != nil {
+		role = models.Role{
+			Name:        "super_admin",
+			Description: "Super administrator with full system access",
+			IsSystem:    true,
+		}
+		db.Create(&role)
+	}
+
+	var user models.User
+	err = db.Where("email = ?", email).First(&user).Error
+	if err != nil {
+		hash, hashErr := auth.HashPassword(password)
+		if hashErr != nil {
+			return
+		}
+		now := time.Now()
+		user = models.User{
+			Email:              email,
+			PasswordHash:       hash,
+			Name:               name,
+			Status:             "active",
+			EmailVerifiedAt:    &now,
+			ForcePasswordChange: false,
+		}
+		db.Create(&user)
+	}
+
+	var count int64
+	db.Model(&models.UserRole{}).Where("user_id = ? AND role_id = ?", user.ID, role.ID).Count(&count)
+	if count == 0 {
+		db.Create(&models.UserRole{UserID: user.ID, RoleID: role.ID})
+	}
 }

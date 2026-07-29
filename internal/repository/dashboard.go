@@ -24,6 +24,13 @@ type MonthlyAttendanceCount struct {
 	Late    int64  `json:"late"`
 }
 
+type DailyAttendanceCount struct {
+	Date    string `json:"date"`
+	Present int64  `json:"present"`
+	Absent  int64  `json:"absent"`
+	Late    int64  `json:"late"`
+}
+
 type ActivityItem struct {
 	Type        string `json:"type"`
 	Description string `json:"description"`
@@ -64,7 +71,7 @@ func (r *DashboardRepository) CountSections() int64 {
 
 func (r *DashboardRepository) CountTodayAttendance(today string) int64 {
 	var count int64
-	r.db.Model(&models.Attendance{}).Where("date = ?", today).Count(&count)
+	r.db.Model(&models.Attendance{}).Where("date = ? AND status IN ?", today, []string{"present", "late"}).Count(&count)
 	return count
 }
 
@@ -136,6 +143,34 @@ func (r *DashboardRepository) MonthlyAttendanceTrend(monthsBack int) []MonthlyAt
 
 		result = append(result, MonthlyAttendanceCount{
 			Month:   monthStr,
+			Present: present,
+			Absent:  absent,
+			Late:    late,
+		})
+	}
+	return result
+}
+
+func (r *DashboardRepository) Last7DaysAttendance() []DailyAttendanceCount {
+	var result []DailyAttendanceCount
+	today := time.Now()
+	for i := 6; i >= 0; i-- {
+		d := today.AddDate(0, 0, -i)
+		dateStr := d.Format("2006-01-02")
+
+		var present, absent, late int64
+		r.db.Model(&models.Attendance{}).
+			Where("date = ? AND status = ?", dateStr, "present").
+			Count(&present)
+		r.db.Model(&models.Attendance{}).
+			Where("date = ? AND status = ?", dateStr, "absent").
+			Count(&absent)
+		r.db.Model(&models.Attendance{}).
+			Where("date = ? AND late_minutes > 0", dateStr).
+			Count(&late)
+
+		result = append(result, DailyAttendanceCount{
+			Date:    d.Format("Jan 02"),
 			Present: present,
 			Absent:  absent,
 			Late:    late,

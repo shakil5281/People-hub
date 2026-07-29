@@ -14,9 +14,9 @@ import {
   ActivityIcon,
   BarChart3Icon,
   SparklesIcon,
+  CalendarDaysIcon,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { dashboardApi } from "@/lib/api"
 import { toast } from "sonner"
 
@@ -32,7 +32,7 @@ interface DashboardStats {
   separations_month: number
   gender_distribution: { gender: string; count: number }[]
   department_counts: { name: string; count: number }[]
-  monthly_attendance: { month: string; present: number; absent: number; late: number }[]
+  last_7_days: { date: string; present: number; absent: number; late: number }[]
   recent_activity: { type: string; description: string; date: string }[]
 }
 
@@ -54,9 +54,9 @@ export default function HomePage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const totalPresent = data?.monthly_attendance?.reduce((s, m) => s + m.present, 0) || 0
-  const totalAbsent = data?.monthly_attendance?.reduce((s, m) => s + m.absent, 0) || 0
-  const totalLate = data?.monthly_attendance?.reduce((s, m) => s + m.late, 0) || 0
+  const totalPresent = data?.last_7_days?.reduce((s, m) => s + m.present, 0) || 0
+  const totalAbsent = data?.last_7_days?.reduce((s, m) => s + m.absent, 0) || 0
+  const totalLate = data?.last_7_days?.reduce((s, m) => s + m.late, 0) || 0
   const attendanceRate = data?.active_employees
     ? Math.round((data.today_attendance / data.active_employees) * 100)
     : 0
@@ -65,8 +65,8 @@ export default function HomePage() {
     return (
       <div className="flex items-center justify-center min-h-[80vh]">
         <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse">Loading dashboard...</p>
+          <Loader2 className="h-10 w-10 animate-spin text-sky-500" />
+          <p className="text-sky-600 animate-pulse font-medium">Loading dashboard...</p>
         </div>
       </div>
     )
@@ -77,31 +77,31 @@ export default function HomePage() {
 
       {/* Hero */}
       <div className="px-4 lg:px-6">
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary/10 via-primary/5 to-background border p-6 md:p-8">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-48 h-48 bg-primary/5 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl" />
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-sky-50 via-indigo-50/50 to-background border border-sky-100 p-6 md:p-8">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-sky-200/30 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-indigo-200/30 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl" />
           <div className="relative flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <SparklesIcon className="h-5 w-5 text-primary" />
-                <span className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">PeopleHub</span>
+                <SparklesIcon className="h-5 w-5 text-sky-500" />
+                <span className="text-xs font-semibold uppercase tracking-widest text-sky-600">PeopleHub</span>
               </div>
-              <h1 className="text-3xl md:text-4xl font-bold tracking-tight">
-                Good to see you, <span className="text-primary">Admin</span>
+              <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-slate-800">
+                Good to see you, <span className="text-sky-600">Admin</span>
               </h1>
-              <p className="text-muted-foreground mt-1 max-w-lg">
+              <p className="text-slate-500 mt-1 max-w-lg">
                 Here&apos;s what&apos;s happening across your organization today.
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right">
-                <p className="text-2xl font-bold tabular-nums">{attendanceRate}%</p>
-                <p className="text-xs text-muted-foreground">Today Attendance</p>
+                <p className="text-2xl font-bold tabular-nums text-sky-600">{attendanceRate}%</p>
+                <p className="text-xs text-slate-500">Today Attendance</p>
               </div>
-              <div className="h-12 w-px bg-border" />
+              <div className="h-12 w-px bg-sky-200" />
               <div className="text-right">
-                <p className="text-2xl font-bold tabular-nums">{data?.pending_leaves ?? 0}</p>
-                <p className="text-xs text-muted-foreground">Pending Leaves</p>
+                <p className="text-2xl font-bold tabular-nums text-amber-500">{data?.pending_leaves ?? 0}</p>
+                <p className="text-xs text-slate-500">Pending Leaves</p>
               </div>
             </div>
           </div>
@@ -112,30 +112,30 @@ export default function HomePage() {
       <div className="px-4 lg:px-6">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
           {[
-            { title: "Total Employees", value: data?.total_employees ?? 0, icon: UsersIcon, change: "+12%", trend: "up" as const, color: "text-blue-600" },
-            { title: "Active Employees", value: data?.active_employees ?? 0, icon: UsersIcon, change: `${attendanceRate}% today`, trend: attendanceRate > 70 ? "up" as const : "down" as const, color: "text-emerald-600" },
-            { title: "Today Attendance", value: data?.today_attendance ?? 0, icon: ClockIcon, change: `${data?.today_logs ?? 0} logs`, trend: "up" as const, color: "text-violet-600" },
-            { title: "Pending Leaves", value: data?.pending_leaves ?? 0, icon: CalendarCheckIcon, change: `${data?.new_hires_month ?? 0} new hires`, trend: "up" as const, color: "text-amber-600" },
+            { title: "Total Employees", value: data?.total_employees ?? 0, icon: UsersIcon, change: "+12%", trend: "up" as const, color: "text-sky-500", bg: "bg-sky-50" },
+            { title: "Active Employees", value: data?.active_employees ?? 0, icon: UsersIcon, change: `${attendanceRate}% today`, trend: attendanceRate > 70 ? "up" as const : "down" as const, color: "text-emerald-500", bg: "bg-emerald-50" },
+            { title: "Today Attendance", value: data?.today_attendance ?? 0, icon: ClockIcon, change: `${data?.today_logs ?? 0} logs`, trend: "up" as const, color: "text-violet-500", bg: "bg-violet-50" },
+            { title: "Pending Leaves", value: data?.pending_leaves ?? 0, icon: CalendarCheckIcon, change: `${data?.new_hires_month ?? 0} new hires`, trend: "up" as const, color: "text-amber-500", bg: "bg-amber-50" },
           ].map((stat) => {
             const Icon = stat.icon
             return (
-              <Card key={stat.title} className="relative overflow-hidden group hover:shadow-md transition-all duration-300">
-                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-primary/[0.03] to-transparent rounded-bl-full" />
+              <Card key={stat.title} className="relative overflow-hidden group hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 border-slate-200/60">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-bl from-sky-100/40 to-transparent rounded-bl-full" />
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-xs font-medium text-muted-foreground">{stat.title}</CardTitle>
-                  <div className={`p-1.5 rounded-md bg-background border ${stat.color}`}>
+                  <CardTitle className="text-xs font-medium text-slate-500">{stat.title}</CardTitle>
+                  <div className={`p-1.5 rounded-md ${stat.bg} ${stat.color}`}>
                     <Icon className="h-3.5 w-3.5" />
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold tabular-nums">{stat.value.toLocaleString()}</div>
+                  <div className="text-2xl font-bold tabular-nums text-slate-800">{stat.value.toLocaleString()}</div>
                   <div className="flex items-center gap-1 mt-1">
                     {stat.trend === "up" ? (
                       <TrendingUpIcon className="h-3 w-3 text-emerald-500" />
                     ) : (
-                      <TrendingDownIcon className="h-3 w-3 text-red-500" />
+                      <TrendingDownIcon className="h-3 w-3 text-red-400" />
                     )}
-                    <span className={`text-xs ${stat.trend === "up" ? "text-emerald-600" : "text-red-600"}`}>
+                    <span className={`text-xs ${stat.trend === "up" ? "text-emerald-600" : "text-red-500"}`}>
                       {stat.change}
                     </span>
                   </div>
@@ -148,7 +148,10 @@ export default function HomePage() {
 
       {/* Quick Links */}
       <div className="px-4 lg:px-6">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3">Quick Access</h2>
+        <h2 className="text-sm font-semibold text-sky-700 uppercase tracking-wider mb-3 flex items-center gap-2">
+          <SparklesIcon className="h-4 w-4 text-sky-500" />
+          Quick Access
+        </h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {QUICK_LINKS.map((link) => {
             const Icon = link.icon
@@ -156,7 +159,7 @@ export default function HomePage() {
               <a
                 key={link.label}
                 href={link.href}
-                className="group relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-white shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
+                className="group relative overflow-hidden rounded-xl bg-gradient-to-br p-4 text-black shadow-md hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5"
                 style={{ backgroundImage: `linear-gradient(135deg, ${link.color.replace("from-", "").split(" ")[0]}, ${link.color.replace("to-", "").split(" ")[0]})` }}
               >
                 <div className="absolute top-2 right-2 opacity-10">
@@ -173,10 +176,10 @@ export default function HomePage() {
       {/* Charts & Data */}
       <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 md:gap-6 px-4 lg:px-6">
         {/* Department Distribution */}
-        <Card className="lg:col-span-4">
+        <Card className="lg:col-span-4 border-slate-200/60">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <BuildingIcon className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base flex items-center gap-2 text-sky-800">
+              <BuildingIcon className="h-4 w-4 text-sky-500" />
               Department Distribution
             </CardTitle>
           </CardHeader>
@@ -188,32 +191,32 @@ export default function HomePage() {
                   const pct = Math.round((dept.count / (data.active_employees || 1)) * 100)
                   return (
                     <div key={dept.name} className="flex items-center gap-3 group">
-                      <span className="text-sm font-medium w-36 md:w-48 truncate">{dept.name}</span>
-                      <div className="flex-1 h-5 bg-muted rounded-full overflow-hidden">
+                      <span className="text-sm font-medium text-slate-700 w-36 md:w-48 truncate">{dept.name}</span>
+                      <div className="flex-1 h-5 bg-sky-100 rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full transition-all duration-500 group-hover:from-primary/90 group-hover:to-primary/50"
+                          className="h-full bg-gradient-to-r from-sky-400 to-sky-500 rounded-full transition-all duration-500 group-hover:from-sky-500 group-hover:to-sky-600"
                           style={{ width: `${Math.min(100, (dept.count / maxCount) * 100)}%` }}
                         />
                       </div>
-                      <span className="text-sm text-muted-foreground w-8 text-right tabular-nums">{dept.count}</span>
-                      <span className="text-xs text-muted-foreground w-10 text-right tabular-nums">{pct}%</span>
+                      <span className="text-sm text-slate-600 w-8 text-right tabular-nums">{dept.count}</span>
+                      <span className="text-xs text-slate-500 w-10 text-right tabular-nums">{pct}%</span>
                     </div>
                   )
                 })}
               </div>
             ) : (
-              <div className="py-8 text-center text-sm text-muted-foreground">No department data available</div>
+              <div className="py-8 text-center text-sm text-slate-400">No department data available</div>
             )}
           </CardContent>
         </Card>
 
-        {/* Gender + Monthly Attendance */}
+        {/* Gender + Weekly Overview */}
         <div className="lg:col-span-3 flex flex-col gap-4 md:gap-6">
           {/* Gender Distribution */}
-          <Card>
+          <Card className="border-slate-200/60">
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <UsersIcon className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-base flex items-center gap-2 text-violet-800">
+                <UsersIcon className="h-4 w-4 text-violet-500" />
                 Gender Distribution
               </CardTitle>
             </CardHeader>
@@ -224,45 +227,45 @@ export default function HomePage() {
                     const maxCount = Math.max(...data.gender_distribution.map(d => d.count))
                     return (
                       <div key={g.gender} className="flex items-center gap-3">
-                        <span className="text-sm font-medium w-16">{g.gender}</span>
-                        <div className="flex-1 h-4 bg-muted rounded-full overflow-hidden">
+                        <span className="text-sm font-medium text-slate-700 w-16">{g.gender}</span>
+                        <div className="flex-1 h-4 bg-violet-100 rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-gradient-to-r from-primary to-primary/60 rounded-full transition-all duration-500"
+                            className="h-full bg-gradient-to-r from-violet-400 to-violet-500 rounded-full transition-all duration-500"
                             style={{ width: `${Math.min(100, (g.count / maxCount) * 100)}%` }}
                           />
                         </div>
-                        <span className="text-sm text-muted-foreground w-8 text-right tabular-nums">{g.count}</span>
+                        <span className="text-sm text-slate-600 w-8 text-right tabular-nums">{g.count}</span>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <div className="py-6 text-center text-sm text-muted-foreground">No gender data</div>
+                <div className="py-6 text-center text-sm text-slate-400">No gender data</div>
               )}
             </CardContent>
           </Card>
 
           {/* Quick Stats */}
-          <Card>
+          <Card className="border-slate-200/60">
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <ActivityIcon className="h-4 w-4 text-muted-foreground" />
-                Monthly Overview
+              <CardTitle className="text-base flex items-center gap-2 text-emerald-800">
+                <ActivityIcon className="h-4 w-4 text-emerald-500" />
+                Weekly Overview
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-3 gap-3">
-                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 p-3 text-center">
-                  <p className="text-2xl font-bold text-emerald-600 tabular-nums">{totalPresent}</p>
-                  <p className="text-xs text-emerald-600/70 mt-0.5">Present</p>
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-center">
+                  <p className="text-2xl font-bold text-emerald-500 tabular-nums">{totalPresent}</p>
+                  <p className="text-xs text-emerald-600/80 mt-0.5 font-medium">Present</p>
                 </div>
-                <div className="rounded-lg bg-red-50 dark:bg-red-950/30 p-3 text-center">
-                  <p className="text-2xl font-bold text-red-600 tabular-nums">{totalAbsent}</p>
-                  <p className="text-xs text-red-600/70 mt-0.5">Absent</p>
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3 text-center">
+                  <p className="text-2xl font-bold text-red-400 tabular-nums">{totalAbsent}</p>
+                  <p className="text-xs text-red-500/80 mt-0.5 font-medium">Absent</p>
                 </div>
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/30 p-3 text-center">
-                  <p className="text-2xl font-bold text-amber-600 tabular-nums">{totalLate}</p>
-                  <p className="text-xs text-amber-600/70 mt-0.5">Late</p>
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-center">
+                  <p className="text-2xl font-bold text-amber-500 tabular-nums">{totalLate}</p>
+                  <p className="text-xs text-amber-600/80 mt-0.5 font-medium">Late</p>
                 </div>
               </div>
             </CardContent>
@@ -270,45 +273,45 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Bottom Row: Monthly Attendance Table + Recent Activity */}
+      {/* Bottom Row: Last 7 Days Attendance + Recent Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-7 gap-4 md:gap-6 px-4 lg:px-6 pb-6">
-        {/* Monthly Attendance */}
-        <Card className="lg:col-span-4">
+        {/* Last 7 Days Attendance */}
+        <Card className="lg:col-span-4 border-slate-200/60">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <BarChart3Icon className="h-4 w-4 text-muted-foreground" />
-              Monthly Attendance Trend
+            <CardTitle className="text-base flex items-center gap-2 text-indigo-800">
+              <CalendarDaysIcon className="h-4 w-4 text-indigo-500" />
+              Last 7 Days Attendance
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {data?.monthly_attendance && data.monthly_attendance.length > 0 ? (
+            {data?.last_7_days && data.last_7_days.length > 0 ? (
               <div className="space-y-1">
-                <div className="grid grid-cols-4 gap-2 text-xs text-muted-foreground font-medium pb-2 border-b">
-                  <span>Month</span>
-                  <span className="text-right">Present</span>
-                  <span className="text-right">Absent</span>
-                  <span className="text-right">Late</span>
+                <div className="grid grid-cols-4 gap-2 text-xs font-medium pb-2 border-b border-indigo-100">
+                  <span className="text-indigo-600">Date</span>
+                  <span className="text-right text-emerald-600">Present</span>
+                  <span className="text-right text-red-500">Absent</span>
+                  <span className="text-right text-amber-600">Late</span>
                 </div>
-                {data.monthly_attendance.map((m) => (
-                  <div key={m.month} className="grid grid-cols-4 gap-2 text-sm py-2 border-b last:border-0 hover:bg-muted/30 transition-colors rounded-sm px-1">
-                    <span className="font-medium">{m.month}</span>
-                    <span className="text-right text-emerald-600 font-medium tabular-nums">{m.present}</span>
-                    <span className="text-right text-red-600 font-medium tabular-nums">{m.absent}</span>
-                    <span className="text-right text-amber-600 font-medium tabular-nums">{m.late}</span>
+                {data.last_7_days.map((d, i) => (
+                  <div key={`${d.date}-${i}`} className="grid grid-cols-4 gap-2 text-sm py-2 border-b border-slate-100 last:border-0 hover:bg-indigo-50/50 transition-colors rounded-sm px-1">
+                    <span className="font-medium text-slate-700">{d.date}</span>
+                    <span className="text-right text-emerald-500 font-medium tabular-nums">{d.present}</span>
+                    <span className="text-right text-red-400 font-medium tabular-nums">{d.absent}</span>
+                    <span className="text-right text-amber-500 font-medium tabular-nums">{d.late}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center text-sm text-muted-foreground">No attendance data</div>
+              <div className="py-8 text-center text-sm text-slate-400">No attendance data</div>
             )}
           </CardContent>
         </Card>
 
         {/* Recent Activity */}
-        <Card className="lg:col-span-3">
+        <Card className="lg:col-span-3 border-slate-200/60">
           <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <ActivityIcon className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-base flex items-center gap-2 text-amber-800">
+              <ActivityIcon className="h-4 w-4 text-amber-500" />
               Recent Activity
             </CardTitle>
           </CardHeader>
@@ -316,25 +319,25 @@ export default function HomePage() {
             {data?.recent_activity && data.recent_activity.length > 0 ? (
               <div className="space-y-1">
                 {data.recent_activity.map((activity, index) => (
-                  <div key={index} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-all duration-200">
+                  <div key={index} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-all duration-200">
                     <div className={`shrink-0 p-1.5 rounded-full ${
-                      activity.type === "leave_request" ? "bg-orange-100 text-orange-600 dark:bg-orange-950/40" :
-                      activity.type === "new_employee" ? "bg-green-100 text-green-600 dark:bg-green-950/40" :
-                      "bg-gray-100 text-gray-600 dark:bg-gray-800"
+                      activity.type === "leave_request" ? "bg-amber-100 text-amber-600" :
+                      activity.type === "new_employee" ? "bg-emerald-100 text-emerald-600" :
+                      "bg-slate-100 text-slate-500"
                     }`}>
                       {activity.type === "leave_request" ? <CalendarCheckIcon className="h-3.5 w-3.5" /> :
                        activity.type === "new_employee" ? <UserPlusIcon className="h-3.5 w-3.5" /> :
                        <ActivityIcon className="h-3.5 w-3.5" />}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm truncate">{activity.description}</p>
+                      <p className="text-sm text-slate-700 truncate">{activity.description}</p>
                     </div>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{activity.date}</span>
+                    <span className="text-xs text-slate-400 whitespace-nowrap">{activity.date}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="py-8 text-center text-sm text-muted-foreground">No recent activity</div>
+              <div className="py-8 text-center text-sm text-slate-400">No recent activity</div>
             )}
           </CardContent>
         </Card>

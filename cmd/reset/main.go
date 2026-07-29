@@ -79,6 +79,12 @@ func dropAllTables(db *gorm.DB) {
 		&models.Separation{}, &models.IdCard{}, &models.Shift{}, &models.LeaveType{},
 		&models.LeaveAllocation{}, &models.Leave{}, &models.TemporaryShift{},
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
+		&models.SystemSetting{}, &models.SalaryIncrement{},
+		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
+		&models.NightBillProcess{}, &models.Holiday{},
+		&models.SystemLog{},
+		&models.Notification{},
+		&models.EidBonus{},
 	}
 	if err := db.Migrator().DropTable(tables...); err != nil {
 		log.Fatal("Failed to drop tables:", err)
@@ -98,6 +104,12 @@ func runMigration(db *gorm.DB) {
 		&models.Separation{}, &models.IdCard{}, &models.Shift{}, &models.LeaveType{},
 		&models.LeaveAllocation{}, &models.Leave{}, &models.TemporaryShift{},
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
+		&models.SystemSetting{}, &models.SalaryIncrement{},
+		&models.Punishment{}, &models.DailySchedule{}, &models.NightBill{}, &models.TiffinBill{},
+		&models.NightBillProcess{}, &models.Holiday{},
+		&models.SystemLog{},
+		&models.Notification{},
+		&models.EidBonus{},
 	); err != nil {
 		log.Fatal("Migration failed:", err)
 	}
@@ -112,6 +124,14 @@ func runPostMigrationFixes(db *gorm.DB) {
 		"ALTER TABLE leave_allocations ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
 		"ALTER TABLE salaries ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
 		"ALTER TABLE temporary_shifts ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
+		"ALTER TABLE salary_increments ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
+		"ALTER TABLE punishments ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
+		"ALTER TABLE daily_schedules ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
+		"ALTER TABLE night_bills ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
+		"ALTER TABLE tiffin_bills ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
+		"ALTER TABLE eid_bonuses ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
+		"ALTER TABLE id_cards ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
+		"ALTER TABLE separations ALTER COLUMN employee_id TYPE varchar(50) USING employee_id::varchar(50)",
 		"CREATE INDEX IF NOT EXISTS idx_salaries_company_month_year ON salaries(company_id, year, month)",
 		"CREATE INDEX IF NOT EXISTS idx_employees_company_status ON employees(company_id, status) WHERE deleted_at IS NULL",
 		"CREATE INDEX IF NOT EXISTS idx_employees_department ON employees(department_id) WHERE deleted_at IS NULL",

@@ -20,7 +20,7 @@ type TemporaryShift struct {
 	CreatedBy  *string        `json:"created_by" gorm:"type:uuid"`
 	UpdatedBy  *string        `json:"updated_by" gorm:"type:uuid"`
 
-	Employee Employee `json:"employee,omitempty" gorm:"foreignKey:EmployeeID"`
+	Employee Employee `json:"employee,omitempty" gorm:"foreignKey:EmployeeID;references:EmployeeID"`
 	Shift    Shift    `json:"shift,omitempty" gorm:"foreignKey:ShiftID"`
 	Company  Company  `json:"company" gorm:"foreignKey:CompanyID"`
 }

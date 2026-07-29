@@ -9,13 +9,6 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Separator } from "@/components/ui/separator"
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
   Tooltip,
@@ -180,27 +173,18 @@ function Sidebar({
 
   if (isMobile) {
     return (
-      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
-        <SheetContent
-          dir={dir}
-          data-sidebar="sidebar"
-          data-slot="sidebar"
-          data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-          style={
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
-          side={side}
-        >
-          <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
-          </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
-        </SheetContent>
-      </Sheet>
+      <MobileSidebarPanel
+        open={openMobile}
+        onClose={() => setOpenMobile(false)}
+        side={side}
+        style={
+          {
+            "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+          } as React.CSSProperties
+        }
+      >
+        <div className="flex h-full w-full flex-col">{children}</div>
+      </MobileSidebarPanel>
     )
   }
 
@@ -666,11 +650,93 @@ function SidebarMenuSubButton({
       data-size={size}
       data-active={isActive}
       className={cn(
-        "flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden group-data-[collapsible=icon]:hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-[size=md]:text-sm data-[size=sm]:text-xs data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground",
+        "flex h-7 min-w-0 items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground ring-sidebar-ring outline-hidden transition-[width,height,padding] focus-visible:ring-2 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 data-active:bg-sidebar-accent data-active:text-sidebar-accent-foreground [&>span:last-child]:truncate",
+        size === "sm" && "text-xs",
+        size === "md" && "text-sm",
+        "group-data-[collapsible=icon]:hidden",
         className
       )}
       {...props}
     />
+  )
+}
+
+function MobileSidebarPanel({
+  open,
+  onClose,
+  side = "left",
+  style,
+  children,
+}: {
+  open: boolean
+  onClose: () => void
+  side?: "left" | "right"
+  style?: React.CSSProperties
+  children: React.ReactNode
+}) {
+  const [mounted, setMounted] = React.useState(open)
+  const [visible, setVisible] = React.useState(open)
+
+  React.useEffect(() => {
+    if (open) {
+      setMounted(true)
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          setVisible(true)
+        })
+      })
+    } else {
+      setVisible(false)
+    }
+  }, [open])
+
+  const handleTransitionEnd = React.useCallback(
+    (e: React.TransitionEvent) => {
+      if (e.propertyName === "opacity" && !visible) {
+        setMounted(false)
+      }
+    },
+    [visible]
+  )
+
+  React.useEffect(() => {
+    if (visible) {
+      document.body.style.overflow = "hidden"
+    }
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [visible])
+
+  if (!mounted) return null
+
+  const translateFrom =
+    side === "right" ? "translate-x-full" : "-translate-x-full"
+  const sideClass = side === "right" ? "right-0" : "left-0"
+
+  return (
+    <>
+      <div
+        className={cn(
+          "fixed inset-0 z-40 bg-black/50 transition-opacity duration-300 ease-in-out",
+          visible ? "opacity-100" : "opacity-0"
+        )}
+        onClick={onClose}
+        onTransitionEnd={handleTransitionEnd}
+      />
+      <div
+        data-sidebar="sidebar"
+        data-slot="sidebar"
+        data-mobile="true"
+        className={cn(
+          `fixed top-0 ${sideClass} z-50 h-full w-(--sidebar-width) bg-sidebar text-sidebar-foreground shadow-lg transition-transform duration-300 ease-in-out`,
+          visible ? "translate-x-0" : translateFrom
+        )}
+        style={style}
+      >
+        {children}
+      </div>
+    </>
   )
 }
 

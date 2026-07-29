@@ -110,6 +110,9 @@ func New(cfg *config.Config) *gin.Engine {
 	notificationRepo := repository.NewNotificationRepository(database.DB)
 	notificationHandler := handlers.NewNotificationHandler(notificationRepo)
 
+	notificationChecker := service.NewNotificationChecker(database.DB, notificationRepo, employeeRepo)
+	notificationChecker.Start(2 * time.Hour)
+
 	eidBonusRepo := repository.NewEidBonusRepository(database.DB)
 	eidBonusService := service.NewEidBonusService(employeeRepo, eidBonusRepo)
 	eidBonusHandler := handlers.NewEidBonusHandler(eidBonusService, eidBonusRepo)
