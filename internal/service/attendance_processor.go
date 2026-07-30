@@ -417,11 +417,6 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 
 	status = "present"
 
-	// Government holiday overrides everything
-	if isGovHoliday {
-		return nil, nil, nil, nil, "holiday", 0, nil
-	}
-
 	// Resolve shift — key uses business employee_id
 	var shift *models.Shift
 	tempKey := employee.EmployeeID + "|" + date
@@ -437,13 +432,15 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 		}
 	}
 
-	// Weekend check: skip if this date is a general duty date (weekend turned working)
-	isWeekendDay := false
-	if isCompWeekend {
-		isWeekendDay = true
+	isSpecialDay := false
+	if isGovHoliday {
+		isSpecialDay = true
+		status = "holiday"
+	} else if isCompWeekend {
+		isSpecialDay = true
 		status = "weekend"
 	} else if !isGenDuty && shift != nil && shift.WeekendDays != "" && utils.IsWeekend(date, shift.WeekendDays) {
-		isWeekendDay = true
+		isSpecialDay = true
 		status = "weekend"
 	}
 
@@ -564,7 +561,7 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 	}
 
 	// Status from punches
-	if !isWeekendDay {
+	if !isSpecialDay {
 		if checkIn == nil && checkOut == nil {
 			status = "absent"
 		} else if checkIn == nil {
@@ -574,7 +571,7 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 	}
 
 	// Late minutes + late status when check-in after grace
-	if !isWeekendDay && shift != nil && checkIn != nil && hasShiftStart {
+	if !isSpecialDay && shift != nil && checkIn != nil && hasShiftStart {
 		grace := time.Duration(shift.LateGraceMinutes) * time.Minute
 		deadlineMins := shiftStartMins + int(grace.Minutes())
 		actualInMins := mins(*checkIn)
@@ -590,34 +587,47 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 	totalHoursStr = calcTotalHours(checkIn, checkOut)
 
 	// Half day: present/late with very short worked hours (< 4h) when both punches exist
-	if !isWeekendDay && (status == "present" || status == "late") && totalHoursStr != nil {
+	if !isSpecialDay && (status == "present" || status == "late") && totalHoursStr != nil {
 		if m, ok := parseHHMMToMinutes(*totalHoursStr); ok && m > 0 && m < 4*60 {
 			status = "half_day"
 		}
 	}
 
 	// Leave override (business employee_id) — keeps punches but marks on_leave
-	if !isWeekendDay && onLeaveSet[employee.EmployeeID] {
+	if !isSpecialDay && onLeaveSet[employee.EmployeeID] {
 		status = "on_leave"
 	}
 
-	// Overtime: calculate if employee has OT enabled and has check_out past shift end.
-	if !isWeekendDay && employee.OverTimeStatus && checkOut != nil && hasShiftEnd {
-		checkOutMins := mins(*checkOut)
-		var otMinutes int
-		if isOvernight {
-			if hasShiftStart && checkOutMins < shiftStartMins && checkOutMins > shiftEndMins {
-				otMinutes = checkOutMins - shiftEndMins
+	if checkOut != nil {
+		if isSpecialDay && employee.OverTimeStatus && totalHoursStr != nil {
+			if m, ok := parseHHMMToMinutes(*totalHoursStr); ok {
+				otMin := m
+				if checkOut.Hour()*60+checkOut.Minute() > 14*60 {
+					otMin -= 60
+				}
+				if otMin < 0 {
+					otMin = 0
+				}
+				s := strconv.Itoa(otMin / 60)
+				overTime = &s
 			}
-		} else {
-			if hasShiftStart && checkOutMins > shiftEndMins {
-				otMinutes = checkOutMins - shiftEndMins
+		} else if !isSpecialDay && employee.OverTimeStatus && hasShiftEnd {
+			checkOutMins := mins(*checkOut)
+			var otMinutes int
+			if isOvernight {
+				if hasShiftStart && checkOutMins < shiftStartMins && checkOutMins > shiftEndMins {
+					otMinutes = checkOutMins - shiftEndMins
+				}
+			} else {
+				if hasShiftStart && checkOutMins > shiftEndMins {
+					otMinutes = checkOutMins - shiftEndMins
+				}
 			}
-		}
-		if otMinutes >= 45 {
-			otHours := 1 + (otMinutes-45)/60
-			s := strconv.Itoa(otHours)
-			overTime = &s
+			if otMinutes >= 45 {
+				otHours := 1 + (otMinutes-45)/60
+				s := strconv.Itoa(otHours)
+				overTime = &s
+			}
 		}
 	}
 

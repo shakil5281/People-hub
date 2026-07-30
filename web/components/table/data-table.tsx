@@ -427,51 +427,47 @@ export function DataTable<TData extends { id: number | string }>({
           )}
         </div>
 
-        <div className="flex items-center justify-between px-4">
+        <div className="flex items-center justify-between lg:px-4">
           <div className="hidden flex-1 text-sm text-muted-foreground lg:flex">
             {serverSide && total !== undefined
               ? `Showing ${data.length} of ${total} records`
               : `${table.getFilteredSelectedRowModel().rows.length} of ${table.getFilteredRowModel().rows.length} row(s) selected.`}
           </div>
-          <div className="flex w-full items-center gap-8 lg:w-fit">
-            <div className="hidden items-center gap-2 lg:flex">
-              <Label htmlFor="rows-per-page" className="text-sm font-medium">
-                Rows per page
-              </Label>
-              <Select
-                value={`${table.getState().pagination.pageSize}`}
-                onValueChange={(value) => {
-                  const size = Number(value)
-                  table.setPageSize(size)
-                  if (serverSide) {
-                    onPageSizeChange?.(size)
-                  }
-                }}
-              >
-                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
-                  <SelectValue
-                    placeholder={table.getState().pagination.pageSize}
-                  />
-                </SelectTrigger>
-                <SelectContent side="top">
-                  <SelectGroup>
-                    {[10, 20, 30, 40, 50].map((pageSize) => (
-                      <SelectItem key={pageSize} value={`${pageSize}`}>
-                        {pageSize}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="flex w-full items-center justify-center gap-8 lg:w-fit lg:justify-start">
+            <Select
+              value={`${table.getState().pagination.pageSize}`}
+              onValueChange={(value) => {
+                const size = Number(value)
+                table.setPageSize(size)
+                if (serverSide) {
+                  onPageSizeChange?.(size)
+                }
+              }}
+            >
+              <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                <SelectValue
+                  placeholder={table.getState().pagination.pageSize}
+                />
+              </SelectTrigger>
+              <SelectContent side="top">
+                <SelectGroup>
+                  {[10, 20, 30, 40, 50].map((pageSize) => (
+                    <SelectItem key={pageSize} value={`${pageSize}`}>
+                      {pageSize}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
             <div className="flex w-fit items-center justify-center text-sm font-medium">
               Page {currentPage} of{" "}
               {totalPages}
             </div>
-            <div className="ml-auto flex items-center gap-2 lg:ml-0">
+            <div className="flex items-center gap-2">
               <Button
                 variant="outline"
-                className="hidden h-8 w-8 p-0 lg:flex"
+                className="size-8"
+                size="icon"
                 onClick={() => {
                   if (serverSide) onPageChange?.(1)
                   else table.setPageIndex(0)
@@ -509,7 +505,7 @@ export function DataTable<TData extends { id: number | string }>({
               </Button>
               <Button
                 variant="outline"
-                className="hidden size-8 lg:flex"
+                className="size-8"
                 size="icon"
                 onClick={() => {
                   if (serverSide) onPageChange?.(totalPages)
