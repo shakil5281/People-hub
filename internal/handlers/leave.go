@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strconv"
 	"time"
 
@@ -720,17 +719,27 @@ func (h *LeaveHandler) MonthlyLeaveReport(c *gin.Context) {
 // @Security     BearerAuth
 // @Produce      application/pdf
 // @Param        id path string true "Leave ID"
+// @Param        lang query string false "Language: en|bn (default en)"
 // @Success      200  {file}  binary
 // @Failure      404  {object}  map[string]string
 // @Failure      500  {object}  map[string]string
 // @Router       /leaves/{id}/export/pdf [get]
 func (h *LeaveHandler) ExportLeaveFormPDF(c *gin.Context) {
 	id := c.Param("id")
+
+	lang := c.DefaultQuery("lang", "en")
+	if lang != "bn" {
+		lang = "en"
+	}
+
 	var leave models.Leave
 	if err := database.DB.
 		Preload("Company").
 		Preload("Employee.Department").
+		Preload("Employee.SectionRef").
 		Preload("Employee.DesignationRef").
+		Preload("Employee.Shift").
+		Preload("Employee.Manager").
 		Preload("LeaveType").
 		Where("id = ? AND deleted_at IS NULL", id).
 		First(&leave).Error; err != nil {
@@ -738,234 +747,35 @@ func (h *LeaveHandler) ExportLeaveFormPDF(c *gin.Context) {
 		return
 	}
 
+	labels := leaveEnLabels
+	if lang == "bn" {
+		labels = leaveBnLabels
+	}
+
+	year := time.Now().Year()
+	if len(leave.FromDate) >= 4 {
+		if y, err := strconv.Atoi(leave.FromDate[:4]); err == nil {
+			year = y
+		}
+	}
+	allocs, _, _ := h.leaveRepo.ListAllocations(leave.EmployeeID, year, 1, 100)
+
+	data := buildLeaveFormData(&leave, lang, labels, allocs)
+
 	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(20, 15, 20)
+	pdf.SetMargins(0, 0, 0)
+	pdf.SetAutoPageBreak(false, 0)
 	pdf.AddPage()
+	font := leaveFormFont(pdf, lang)
+	renderLeaveFormPDFPage(pdf, font, lang, data, labels)
 
-	// Try to load font for Bangla support
-	banglaFont := ""
-	// Prefer Nirmala (true Unicode Bengali) then SutonnyMJ
-	fontCandidates := []struct {
-		path string
-		bold string
-	}{
-		{"C:\\Windows\\Fonts\\Nirmala.ttf", "C:\\Windows\\Fonts\\Nirmala.ttf"},
-		{"C:\\Windows\\Fonts\\SutonnyMJ.ttf", "C:\\Windows\\Fonts\\SutonnyMJ-Bold.ttf"},
+	langSuffix := lang
+	if langSuffix == "" {
+		langSuffix = "en"
 	}
-	for _, f := range fontCandidates {
-		if _, err := os.Stat(f.path); err == nil {
-			pdf.AddUTF8Font("Bangla", "", f.path)
-			pdf.AddUTF8Font("Bangla", "B", f.bold)
-			banglaFont = "Bangla"
-			break
-		}
-	}
-	if banglaFont == "" {
-		banglaFont = "Arial"
-	}
-
-	// Helper functions
-	fieldRow := func(label, value string) {
-		pdf.SetFont(banglaFont, "B", 10)
-		pdf.CellFormat(50, 7, label, "", 0, "L", false, 0, "")
-		pdf.SetFont(banglaFont, "", 10)
-		pdf.CellFormat(0, 7, value, "", 1, "L", false, 0, "")
-		pdf.Ln(1)
-	}
-
-	sectionHeader := func(title string) {
-		pdf.Ln(3)
-		pdf.SetFont(banglaFont, "B", 11)
-		pdf.SetFillColor(240, 245, 255)
-		pdf.SetTextColor(40, 40, 40)
-		pdf.CellFormat(0, 8, "  "+title, "", 1, "L", true, 0, "")
-		pdf.SetTextColor(0, 0, 0)
-		pdf.Ln(2)
-	}
-
-	// --- Company Header ---
-	companyName := ""
-	if leave.Company.CompanyNameBn != "" {
-		companyName = leave.Company.CompanyNameBn
-	} else {
-		companyName = leave.Company.CompanyNameEn
-	}
-	companyAddress := ""
-	if leave.Company.AddressBn != "" {
-		companyAddress = leave.Company.AddressBn
-	} else {
-		companyAddress = leave.Company.AddressEn
-	}
-
-	// Company name (center)
-	pdf.SetFont(banglaFont, "B", 16)
-	pdf.CellFormat(0, 10, companyName, "", 1, "C", false, 0, "")
-
-	// Address (center)
-	pdf.SetFont(banglaFont, "", 8)
-	pdf.SetTextColor(100, 100, 100)
-	pdf.CellFormat(0, 5, companyAddress, "", 1, "C", false, 0, "")
-	pdf.SetTextColor(0, 0, 0)
-
-	// Date on the right side
-	pdf.Ln(2)
-	pdf.SetFont(banglaFont, "", 9)
-	dateStr := time.Now().Format("2006-01-02")
-	rightX := 190.0 - pdf.GetStringWidth("ZvwiL: "+dateStr)
-	pdf.SetXY(20, pdf.GetY())
-	pdf.SetX(rightX)
-	pdf.CellFormat(0, 6, "ZvwiL: "+dateStr, "", 1, "R", false, 0, "")
-
-	// Separator line
-	pdf.SetDrawColor(68, 114, 196)
-	pdf.SetLineWidth(0.8)
-	pdf.Line(20, pdf.GetY()+2, 190, pdf.GetY()+2)
-	pdf.Ln(6)
-
-	// Title
-	pdf.SetFont(banglaFont, "B", 14)
-	pdf.SetFillColor(68, 114, 196)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.CellFormat(0, 10, " AvwW bv¤^vi: ", "", 1, "C", true, 0, "")
-	pdf.Ln(8)
-	pdf.SetTextColor(0, 0, 0)
-
-	// --- Employee Information ---
-	sectionHeader("AvwW bv¤^vi:")
-
-	empName := ""
-	if leave.Employee.NameBn != "" {
-		empName = leave.Employee.NameBn
-	} else if leave.Employee.NameEn != "" {
-		empName = leave.Employee.NameEn
-	}
-	fieldRow("AvwW bv¤^vi:", leave.EmployeeID)
-	fieldRow("bvg:", empName)
-
-	deptName := ""
-	if leave.Employee.Department != nil {
-		if leave.Employee.Department.NameBn != "" {
-			deptName = leave.Employee.Department.NameBn
-		} else {
-			deptName = leave.Employee.Department.Name
-		}
-	}
-	fieldRow("wefvM:", deptName)
-
-	desigName := ""
-	if leave.Employee.DesignationRef != nil {
-		if leave.Employee.DesignationRef.NameBn != "" {
-			desigName = leave.Employee.DesignationRef.NameBn
-		} else {
-			desigName = leave.Employee.DesignationRef.Name
-		}
-	}
-	fieldRow("c`^`:", desigName)
-
-	// --- Leave Details ---
-	sectionHeader("QvUvi weeiY")
-
-	leaveTypeName := ""
-	if leave.LeaveType.Name != "" {
-		leaveTypeName = leave.LeaveType.Name
-	}
-	fieldRow("QvUvi cÖKvi:", leaveTypeName)
-	fieldRow("ïiæ ZvwiL:", leave.FromDate)
-	fieldRow("†kl ZvwiL:", leave.ToDate)
-	fieldRow("g‡Wv wiU:", strconv.Itoa(leave.TotalDays))
-	fieldRow("KviY:", leave.Reason)
-
-	// --- Approval Section ---
-	sectionHeader("Aby‡gv`b")
-
-	statusLabel := leave.Status
-	switch leave.Status {
-	case "approved":
-		statusLabel = "Aby‡gv`b Kiv n‡q‡Q"
-	case "rejected":
-		statusLabel = "F‡Ü Kiv n‡q‡Q"
-	case "pending":
-		statusLabel = "w¯’iZ cv‡k"
-	}
-	statusColor := [3]int{0, 0, 0}
-	switch leave.Status {
-	case "approved":
-		statusColor = [3]int{0, 128, 0}
-	case "rejected":
-		statusColor = [3]int{200, 0, 0}
-	case "pending":
-		statusColor = [3]int{200, 150, 0}
-	}
-	pdf.SetFont(banglaFont, "B", 10)
-	pdf.CellFormat(50, 7, "Aby‡gv`b:", "", 0, "L", false, 0, "")
-	pdf.SetTextColor(statusColor[0], statusColor[1], statusColor[2])
-	pdf.SetFont(banglaFont, "B", 10)
-	pdf.CellFormat(0, 7, statusLabel, "", 1, "L", false, 0, "")
-	pdf.SetTextColor(0, 0, 0)
-	pdf.Ln(1)
-
-	rejectionReason := ""
-	if leave.RejectionReason != "" {
-		rejectionReason = leave.RejectionReason
-	}
-	fieldRow("F‡Üi KviY:", rejectionReason)
-
-	// --- Signature Section ---
-	pdf.Ln(8)
-	pdf.SetDrawColor(180, 180, 180)
-	pdf.SetLineWidth(0.3)
-	pdf.Line(20, pdf.GetY(), 190, pdf.GetY())
-	pdf.Ln(6)
-
-	signatureHeader := func(title string) {
-		pdf.SetFont(banglaFont, "B", 11)
-		pdf.SetFillColor(240, 245, 255)
-		pdf.SetTextColor(40, 40, 40)
-		pdf.CellFormat(0, 8, "  "+title, "", 1, "L", true, 0, "")
-		pdf.SetTextColor(0, 0, 0)
-		pdf.Ln(4)
-	}
-
-	signatureHeader("†iwRó¡")
-
-	signatories := []string{
-		"FvZ¥v cÖKvwkZ",
-		"cÖ¯‘Zwe` cÖKvwkZ",
-		"BwÂwU (G.Rg.G)",
-		"Aby‡gv`bKvix",
-	}
-
-	colW := 170.0 / float64(len(signatories))
-	xStart := 20.0
-
-	for i := range signatories {
-		x := xStart + float64(i)*colW
-		pdf.Line(x, pdf.GetY()+20, x+colW-5, pdf.GetY()+20)
-	}
-
-	pdf.Ln(22)
-
-	for i, s := range signatories {
-		x := xStart + float64(i)*colW
-		pdf.SetFont(banglaFont, "B", 9)
-		pdf.SetTextColor(80, 80, 80)
-		pdf.CellFormat(colW, 6, s, "", 0, "C", false, 0, "")
-		_ = x
-	}
-	pdf.Ln(8)
-
-	// Footer
-	pdf.SetDrawColor(180, 180, 180)
-	pdf.SetLineWidth(0.3)
-	pdf.Line(20, pdf.GetY(), 190, pdf.GetY())
-	pdf.Ln(3)
-	pdf.SetFont(banglaFont, "", 7)
-	pdf.SetTextColor(150, 150, 150)
-	pdf.CellFormat(0, 4, fmt.Sprintf("ZvwiL: %s  |  AvwW bv¤^vi: %s", time.Now().Format("2006-01-02 15:04"), leave.ID), "", 1, "C", false, 0, "")
-	pdf.SetTextColor(0, 0, 0)
-
+	filename := fmt.Sprintf("leave_application_%s_%s.pdf", leave.EmployeeID, langSuffix)
 	c.Header("Content-Type", "application/pdf")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=leave_application_%s.pdf", leave.EmployeeID))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	if err := pdf.Output(c.Writer); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
 	}

@@ -469,19 +469,7 @@ func (h *AttendanceHandler) ListJobCard(c *gin.Context) {
 	}
 
 	// Cap end_date to separation date if employee has been separated
-	if employeeID != "" {
-		sep, err := h.separationRepo.FindProcessedByEmployeeID(employeeID)
-		if err == nil && sep != nil && sep.Date != "" {
-			sepDate, parseErr := time.Parse("2006-01-02", sep.Date)
-			endDateParsed, endParseErr := time.Parse("2006-01-02", endDate)
-			if parseErr == nil && endParseErr == nil {
-				dayBeforeSep := sepDate.AddDate(0, 0, -1)
-				if dayBeforeSep.Before(endDateParsed) {
-					endDate = dayBeforeSep.Format("2006-01-02")
-				}
-			}
-		}
-	}
+	endDate = capEndDateToSeparation(h, employeeID, endDate)
 
 	// List mode: return only distinct employee IDs/names for navigation
 	if listMode == "true" {

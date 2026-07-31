@@ -77,7 +77,7 @@ export default function RequirementsPage() {
 
       <div className="px-4 lg:px-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="h-9 flex-wrap">
+          <TabsList className="h-9 flex-nowrap">
             {sectionTabOptions.map((tab) => (
               <TabsTrigger key={tab} value={tab} className="h-8 px-4 text-sm">{tab}</TabsTrigger>
             ))}

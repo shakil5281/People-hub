@@ -138,9 +138,13 @@ export default function LeavePage() {
                 </>
               )}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => handleExportPdf(leave)}>
+              <DropdownMenuItem onClick={() => handleExportPdf(leave, "en")}>
                 <FileText className="mr-2 h-4 w-4" />
-                Export PDF
+                Export PDF (En)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => handleExportPdf(leave, "bn")}>
+                <FileText className="mr-2 h-4 w-4" />
+                Export PDF (Bn)
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => handleDelete(leave)}>
@@ -248,14 +252,14 @@ export default function LeavePage() {
     }
   }
 
-  const handleExportPdf = async (leave: LeaveRecord) => {
+  const handleExportPdf = async (leave: LeaveRecord, lang: string) => {
     try {
-      const res = await leaveApi.exportFormPdf(leave.id)
+      const res = await leaveApi.exportFormPdf(leave.id, lang)
       const blob = new Blob([res.data], { type: "application/pdf" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `leave_application_${leave.employee_id}.pdf`
+      a.download = `leave_application_${leave.employee_id}_${lang}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch {

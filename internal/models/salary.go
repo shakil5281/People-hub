@@ -21,11 +21,13 @@ type Salary struct {
 	OtherAllowance     float64 `json:"other_allowance" gorm:"type:decimal(12,2);default:0"`
 	GrossSalary        float64 `json:"gross_salary" gorm:"type:decimal(12,2);default:0"`
 
-	ProvidentFund   float64 `json:"provident_fund" gorm:"type:decimal(12,2);default:0"`
-	Tax             float64 `json:"tax" gorm:"type:decimal(12,2);default:0"`
-	AbsentDeduction float64 `json:"absent_deduction" gorm:"type:decimal(12,2);default:0"`
-	OtherDeduction  float64 `json:"other_deduction" gorm:"type:decimal(12,2);default:0"`
-	TotalDeductions float64 `json:"total_deductions" gorm:"type:decimal(12,2);default:0"`
+	ProvidentFund    float64 `json:"provident_fund" gorm:"type:decimal(12,2);default:0"`
+	Tax              float64 `json:"tax" gorm:"type:decimal(12,2);default:0"`
+	LoanDeduction    float64 `json:"loan_deduction" gorm:"type:decimal(12,2);default:0"`
+	AdvanceDeduction float64 `json:"advance_deduction" gorm:"type:decimal(12,2);default:0"`
+	AbsentDeduction  float64 `json:"absent_deduction" gorm:"type:decimal(12,2);default:0"`
+	OtherDeduction   float64 `json:"other_deduction" gorm:"type:decimal(12,2);default:0"`
+	TotalDeductions  float64 `json:"total_deductions" gorm:"type:decimal(12,2);default:0"`
 
 	OvertimeHours   float64 `json:"overtime_hours" gorm:"type:decimal(6,2);default:0"`
 	OvertimeRate    float64 `json:"overtime_rate" gorm:"type:decimal(12,2);default:0"`

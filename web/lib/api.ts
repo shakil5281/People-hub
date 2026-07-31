@@ -94,7 +94,12 @@ export const employeeApi = {
   list: (params?: Record<string, string>) => api.get("/employees", { params }),
   get: (id: string) => api.get(`/employees/${id}`),
   getByCode: (code: string) => api.get(`/employees/by-code/${code}`),
-  getProfile: (id: string, params?: { month?: number; year?: number }) => api.get(`/employees/${id}/profile`, { params }),
+  getProfile: (id: string, params?: { month?: number; year?: number }) =>
+    api.get(`/employees/${id}/profile`, { params }),
+  exportProfileExcel: (id: string, params?: { month?: number; year?: number }) =>
+    api.get(`/employees/${id}/profile/export/excel`, { params, responseType: "blob" }),
+  exportProfilePdf: (id: string, params?: { month?: number; year?: number }) =>
+    api.get(`/employees/${id}/profile/export/pdf`, { params, responseType: "blob" }),
   create: (data: Record<string, unknown>) => api.post("/employees", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/employees/${id}`, data),
   delete: (id: string) => api.delete(`/employees/${id}`),
@@ -199,6 +204,8 @@ export const attendanceApi = {
   clockIn: (data: Record<string, unknown>) => api.post("/attendance/clock-in", data),
   clockOut: (data: Record<string, unknown>) => api.post("/attendance/clock-out", data),
   jobCard: (params?: Record<string, string>) => api.get("/attendance/job-card", { params }),
+  exportJobCardPdf: (params?: Record<string, string>) => api.get("/attendance/job-card/export", { params: { ...params, format: "pdf" }, responseType: "blob" }),
+  exportJobCardExcel: (params?: Record<string, string>) => api.get("/attendance/job-card/export", { params: { ...params, format: "excel" }, responseType: "blob" }),
   stats: () => api.get("/attendance/stats"),
   deleteAll: () => api.delete("/attendance/delete-all"),
   missing: (params: Record<string, string>) => api.get("/attendance/missing", { params }),
@@ -301,7 +308,7 @@ export const leaveApi = {
   cancel: (id: string) => api.delete(`/leaves/${id}`),
   approve: (id: string) => api.put(`/leaves/${id}/approve`),
   reject: (id: string, reason: string) => api.put(`/leaves/${id}/reject`, { rejection_reason: reason }),
-  exportFormPdf: (id: string) => api.get(`/leaves/${id}/export/pdf`, { responseType: "blob" }),
+  exportFormPdf: (id: string, lang?: string) => api.get(`/leaves/${id}/export/pdf`, { params: { lang }, responseType: "blob" }),
 }
 
 export const leaveBalanceApi = {
@@ -326,6 +333,7 @@ export const salaryApi = {
   sheetExport: (params: Record<string, string>) => api.get("/salary/sheet/export", { params, responseType: "blob" }),
   payslip: (params?: Record<string, string>) => api.get("/salary/payslip", { params }),
   payslipExport: (params: Record<string, string>) => api.get("/salary/payslip/export", { params, responseType: "blob" }),
+  payslipExportPdf: (params: Record<string, string>) => api.get("/salary/payslip/export/pdf", { params, responseType: "blob" }),
   list: (params?: Record<string, string>) => api.get("/salary/list", { params }),
   summary: (params?: Record<string, string>) => api.get("/salary/summary", { params }),
   summaryExport: (params: Record<string, string>) => api.get("/salary/summary/export", { params, responseType: "blob" }),

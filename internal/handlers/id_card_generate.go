@@ -20,37 +20,10 @@ type GenerateIdCardRequest struct {
 	EmployeeIDs []string `json:"employee_ids" binding:"required"`
 }
 
-// findWorkingFont tries candidate fonts in a throwaway PDF to avoid polluting the real PDF on failure.
-func findWorkingFont() (fontName string, fontPath string, boldPath string) {
-	candidates := []struct{ name, path, bold string }{
-		{"Bangla", "C:\\Windows\\Fonts\\SutonnyMJ.ttf", "C:\\Windows\\Fonts\\SutonnyMJ-Bold.ttf"},
-		{"Bangla", "C:\\Windows\\Fonts\\Nirmala.ttf", "C:\\Windows\\Fonts\\Nirmala.ttf"},
-	}
-	for _, c := range candidates {
-		if _, err := os.Stat(c.path); err != nil {
-			service.WriteLog("debug", "idcard", "font not found: "+c.path)
-			continue
-		}
-		service.WriteLog("debug", "idcard", "testing font: "+c.path)
-		testPdf := gofpdf.New("P", "mm", "A4", "")
-		testPdf.AddUTF8Font(c.name, "", c.path)
-		if c.bold != "" {
-			testPdf.AddUTF8Font(c.name, "B", c.bold)
-		}
-		if testPdf.Error() == nil {
-			service.WriteLog("debug", "idcard", "font OK: "+c.path)
-			return c.name, c.path, c.bold
-		}
-		service.WriteLog("error", "idcard", "font failed: "+c.path+" error="+testPdf.Error().Error())
-	}
-	service.WriteLog("warn", "idcard", "falling back to Helvetica")
-	return "Helvetica", "", ""
-}
-
 // GenerateIdCards godoc
 //
 //	@Summary      Generate ID cards PDF
-//	@Description  Generate printable ID cards (front + back on same page, 6 per A4 portrait page). Uses SutonnyMJ or Nirmala for Bangla.
+//	@Description  Generate printable ID cards (front + back on same page, 3 employees per A4 portrait page, 35x45mm photo). English design without QR or barcode.
 //	@Tags         ID Cards
 //	@Security     BearerAuth
 //	@Accept       json
@@ -77,6 +50,7 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		Preload("Department").
 		Preload("DesignationRef").
 		Preload("SectionRef").
+		Preload("LineRef").
 		Where("employee_id IN ? AND deleted_at IS NULL", req.EmployeeIDs).
 		Order("LENGTH(employee_id) ASC, employee_id ASC").
 		Find(&employees).Error; err != nil {
@@ -84,78 +58,48 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// --- Font setup ---
-	fontName, fontPath, boldPath := findWorkingFont()
-	service.WriteLog("info", "idcard", "selected font="+fontName+" path="+fontPath+" bold="+boldPath)
+	// --- Font setup (SutonnyMJ or embedded Noto Sans Bengali) ---
 	pdf := gofpdf.New("P", "mm", "A4", "")
 	pdf.SetMargins(0, 0, 0)
 	pdf.SetAutoPageBreak(false, 0)
-
-	if fontPath != "" {
-		pdf.AddUTF8Font(fontName, "", fontPath)
-		if pdf.Error() != nil {
-			service.WriteErrorLog("idcard", "AddUTF8Font normal failed: "+pdf.Error().Error()+" — falling back to Helvetica")
-			fontName = "Helvetica"
-			pdf = gofpdf.New("P", "mm", "A4", "")
-			pdf.SetMargins(0, 0, 0)
-			pdf.SetAutoPageBreak(false, 0)
-		} else if boldPath != "" {
-			pdf.AddUTF8Font(fontName, "B", boldPath)
-			if pdf.Error() != nil {
-				service.WriteErrorLog("idcard", "AddUTF8Font bold failed: "+pdf.Error().Error())
-			}
-		}
-	}
+	font := loadBanglaFont(pdf)
 
 	// --- Layout constants (Portrait A4: 210 x 297) ---
-	// 2 columns × 3 rows per half → 6 cards per page (front top, back bottom)
+	// 3 columns x 1 row per half -> 3 front cards on top half, 3 back cards on bottom half.
 	const (
-		pageW        = 210.0
-		pageH        = 297.0
-		margin       = 8.0
-		gapX         = 3.0
-		gapY         = 4.0
-		halfGap      = 10.0
-		cols         = 2
-		rowsPerHalf  = 3
-		cardsPerPage = 6
+		pageW = 210.0
+		pageH = 297.0
+		margin = 8.0
+		gapX   = 3.0
+		cols   = 3
+		cardH  = 95.0
 	)
 
-	cardW := (pageW - 2*margin - float64(cols-1)*gapX) / float64(cols)                           // ~62mm
-	cardH := (pageH/2 - margin - halfGap/2 - float64(rowsPerHalf-1)*gapY) / float64(rowsPerHalf) // ~64mm
+	cardW := (pageW - 2*margin - float64(cols-1)*gapX) / float64(cols)
+	halfH := pageH / 2
+	offsetY := (halfH - cardH) / 2
+	cardTopY := margin + offsetY
+	cardBottomY := pageH/2 + offsetY
 
-	// Build positions for top half (front) and bottom half (back)
-	var frontPositions, backPositions [][2]float64
-	for row := 0; row < rowsPerHalf; row++ {
-		for col := 0; col < cols; col++ {
-			x := margin + float64(col)*(cardW+gapX)
-			yFront := margin + float64(row)*(cardH+gapY)
-			yBack := pageH/2 + halfGap/2 + float64(row)*(cardH+gapY)
-			frontPositions = append(frontPositions, [2]float64{x, yFront})
-			backPositions = append(backPositions, [2]float64{x, yBack})
-		}
-	}
-
-	// Generate pages
-	for i := 0; i < len(employees); i += cardsPerPage {
+	// Generate pages (cols employees per page: fronts top, backs bottom)
+	for i := 0; i < len(employees); i += cols {
 		pdf.AddPage()
 		if pdf.Error() != nil {
 			service.WriteErrorLog("idcard", "AddPage error: "+pdf.Error().Error())
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "PDF page error: " + pdf.Error().Error()})
 			return
 		}
-		end := i + cardsPerPage
+		end := i + cols
 		if end > len(employees) {
 			end = len(employees)
 		}
 		for j, emp := range employees[i:end] {
-			fPos := frontPositions[j]
-			bPos := backPositions[j]
-			drawCardFront(pdf, fPos[0], fPos[1], cardW, cardH, emp, fontName)
+			x := margin + float64(j)*(cardW+gapX)
+			drawCardFront(pdf, x, cardTopY, cardW, cardH, emp, font)
 			if pdf.Error() != nil {
 				service.WriteErrorLog("idcard", "drawCardFront error at emp="+emp.EmployeeID+": "+pdf.Error().Error())
 			}
-			drawCardBack(pdf, bPos[0], bPos[1], cardW, cardH, emp, fontName)
+			drawCardBack(pdf, x, cardBottomY, cardW, cardH, emp, font)
 			if pdf.Error() != nil {
 				service.WriteErrorLog("idcard", "drawCardBack error at emp="+emp.EmployeeID+": "+pdf.Error().Error())
 			}
@@ -180,250 +124,238 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"data": encoded, "filename": filename})
 }
 
+func companyDisplayName(company models.Company) string {
+	if company.CompanyNameEn != "" {
+		return company.CompanyNameEn
+	}
+	if company.CompanyNameBn != "" {
+		return company.CompanyNameBn
+	}
+	return "Company"
+}
+
 func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, font string) {
 	// Card border
-	pdf.SetDrawColor(180, 180, 180)
-	pdf.SetLineWidth(0.3)
+	pdf.SetDrawColor(29, 78, 137)
+	pdf.SetLineWidth(0.6)
 	pdf.Rect(x, y, w, h, "D")
 
-	// Header bar
-	headerH := 7.0
+	companyName := companyDisplayName(emp.Company)
+
+	// Header: logo placeholder + company name + subtitle
+	logoSize := 9.0
 	pdf.SetFillColor(29, 78, 137)
-	pdf.Rect(x+0.5, y+0.5, w-1, headerH, "F")
-
-	companyName := ""
-	if emp.Company.CompanyNameBn != "" {
-		companyName = emp.Company.CompanyNameBn
-	} else if emp.Company.CompanyNameEn != "" {
-		companyName = emp.Company.CompanyNameEn
-	} else {
-		companyName = "Company"
-	}
-	pdf.SetFont(font, "B", 6.5)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetXY(x, y+0.8)
-	pdf.CellFormat(w, 3, companyName, "", 0, "C", false, 0, "")
-
-	pdf.SetFont(font, "", 4.5)
-	pdf.SetXY(x, y+4)
-	pdf.CellFormat(w, 3, "কর্মচারী পরিচয় পত্র", "", 0, "C", false, 0, "")
-
-	// Photo area
-	photoX := x + 2.5
-	photoY := y + headerH + 2
-	photoW := 18.0
-	photoH := 24.0
-
-	pdf.SetDrawColor(200, 200, 200)
+	pdf.SetDrawColor(29, 78, 137)
 	pdf.SetLineWidth(0.3)
+	pdf.Rect(x+2, y+2, logoSize, logoSize, "FD")
+	pdf.SetFont(font, "B", 4)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetXY(x+2, y+2+logoSize/2-1.5)
+	pdf.CellFormat(logoSize, 3, "LOGO", "", 0, "C", false, 0, "")
+
+	pdf.SetFont(font, "B", 7)
+	pdf.SetTextColor(29, 78, 137)
+	pdf.SetXY(x+12.5, y+1.8)
+	pdf.MultiCell(w-14.5, 3.6, companyName, "", "L", false)
+
+	pdf.SetFont(font, "B", 5.5)
+	pdf.SetTextColor(120, 120, 120)
+	pdf.SetXY(x, y+9)
+	pdf.CellFormat(w, 3.5, "EMPLOYEE ID CARD", "", 0, "C", false, 0, "")
+
+	pdf.SetDrawColor(29, 78, 137)
+	pdf.SetLineWidth(0.5)
+	pdf.Line(x+2, y+12.2, x+w-2, y+12.2)
+
+	// Photo area 35 x 45 mm
+	photoW, photoH := 35.0, 45.0
+	photoX := x + (w-photoW)/2
+	photoY := y + 13.5
+	pdf.SetDrawColor(180, 180, 180)
+	pdf.SetLineWidth(0.4)
 	pdf.Rect(photoX, photoY, photoW, photoH, "D")
 
+	hasImage := false
 	if emp.ImageURL != "" {
 		imgPath := resolveImagePath(emp.ImageURL)
 		if _, err := os.Stat(imgPath); err == nil {
 			pdf.ImageOptions(imgPath, photoX+1, photoY+1, photoW-2, 0, false, gofpdf.ImageOptions{ImageType: filepath.Ext(imgPath)}, 0, "")
+			hasImage = true
 		}
 	}
-
-	// Employee info right of photo
-	textX := photoX + photoW + 2.5
-	textY := photoY
-
-	pdf.SetTextColor(0, 0, 0)
-
-	name := emp.NameBn
-	if name == "" {
-		name = emp.NameEn
-	}
-	pdf.SetFont(font, "B", 7)
-	pdf.SetXY(textX, textY)
-	pdf.CellFormat(w-textX+x-1, 4, name, "", 0, "L", false, 0, "")
-
-	designation := ""
-	if emp.DesignationRef != nil {
-		designation = emp.DesignationRef.NameBn
-		if designation == "" {
-			designation = emp.DesignationRef.Name
-		}
-	}
-	pdf.SetFont(font, "", 5)
-	pdf.SetTextColor(80, 80, 80)
-	pdf.SetXY(textX, textY+4.2)
-	pdf.CellFormat(w-textX+x-1, 3.5, designation, "", 0, "L", false, 0, "")
-
-	dept := ""
-	if emp.Department != nil {
-		dept = emp.Department.NameBn
-		if dept == "" {
-			dept = emp.Department.Name
-		}
-	}
-	pdf.SetXY(textX, textY+7.8)
-	pdf.CellFormat(w-textX+x-1, 3.5, dept, "", 0, "L", false, 0, "")
-	pdf.SetTextColor(0, 0, 0)
-
-	// Info grid below photo
-	infoY := photoY + photoH + 2
-	labelW := 18.0
-	valW := 22.0
-
-	drawInfo := func(label, value string, rowY float64, colX float64) {
-		pdf.SetFont(font, "B", 4.5)
-		pdf.SetTextColor(100, 100, 100)
-		pdf.SetXY(colX, rowY)
-		pdf.CellFormat(labelW, 3, label, "", 0, "L", false, 0, "")
-		pdf.SetFont(font, "", 5)
-		pdf.SetTextColor(0, 0, 0)
-		pdf.SetXY(colX+labelW, rowY)
-		pdf.CellFormat(valW, 3, value, "", 0, "L", false, 0, "")
-	}
-
-	drawInfo("কর্মচারী আইডি", emp.EmployeeID, infoY, x+2.5)
-	drawInfo("রক্তের গ্রুপ", emp.BloodGroup, infoY+3.3, x+2.5)
-	drawInfo("ফোন", emp.Phone, infoY+6.6, x+2.5)
-	joinDate := ""
-	if !emp.JoiningDate.IsZero() {
-		joinDate = emp.JoiningDate.Format("02-01-2006")
-	}
-	drawInfo("যোগদান", joinDate, infoY+9.9, x+2.5)
-
-	section := ""
-	if emp.SectionRef != nil {
-		section = emp.SectionRef.NameBn
-		if section == "" {
-			section = emp.SectionRef.Name
-		}
-	}
-	rightColX := x + w/2 + 1
-	drawInfo("সেকশন", section, infoY, rightColX)
-	drawInfo("গ্রেড", emp.Grade, infoY+3.3, rightColX)
-	drawInfo("লিঙ্গ", emp.Gender, infoY+6.6, rightColX)
-	drawInfo("জাতীয় পরিচয়", emp.NID, infoY+9.9, rightColX)
-
-	// Footer
-	footerY := y + h - 3.5
-	pdf.SetDrawColor(29, 78, 137)
-	pdf.SetLineWidth(0.4)
-	pdf.Line(x+2, footerY, x+w-2, footerY)
-	pdf.SetFont(font, "", 4)
-	pdf.SetTextColor(150, 150, 150)
-	pdf.SetXY(x, footerY+0.8)
-	pdf.CellFormat(w, 2.5, "এই কার্ডটি কোম্পানির সম্পত্তি। পাওয়া গেলে ফেরত দিন।", "", 0, "C", false, 0, "")
-}
-
-func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, font string) {
-	pdf.SetDrawColor(180, 180, 180)
-	pdf.SetLineWidth(0.3)
-	pdf.Rect(x, y, w, h, "D")
-
-	// Header bar
-	headerH := 7.0
-	pdf.SetFillColor(29, 78, 137)
-	pdf.Rect(x+0.5, y+0.5, w-1, headerH, "F")
-
-	companyName := ""
-	if emp.Company.CompanyNameBn != "" {
-		companyName = emp.Company.CompanyNameBn
-	} else if emp.Company.CompanyNameEn != "" {
-		companyName = emp.Company.CompanyNameEn
-	} else {
-		companyName = "Company"
-	}
-	pdf.SetFont(font, "B", 6.5)
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetXY(x, y+0.8)
-	pdf.CellFormat(w, 3, companyName, "", 0, "C", false, 0, "")
-
-	pdf.SetFont(font, "", 4.5)
-	pdf.SetXY(x, y+4)
-	pdf.CellFormat(w, 3, "কর্মচারী পরিচয় পত্র — পেছনের অংশ", "", 0, "C", false, 0, "")
-
-	contentY := y + headerH + 2.5
-	m := 3.0
-
-	pdf.SetTextColor(0, 0, 0)
-
-	// Company address
-	pdf.SetFont(font, "B", 5)
-	pdf.SetXY(x+m, contentY)
-	pdf.CellFormat(w-2*m, 3.5, "কোম্পানির ঠিকানা:", "", 0, "L", false, 0, "")
-	pdf.SetFont(font, "", 4.5)
-	address := emp.Company.AddressBn
-	if address == "" {
-		address = emp.Company.AddressEn
-	}
-	pdf.SetXY(x+m, contentY+3.5)
-	pdf.MultiCell(w-2*m, 3, address, "", "L", false)
-
-	// Contact
-	pdf.SetFont(font, "B", 5)
-	pdf.SetXY(x+m, contentY+10)
-	pdf.CellFormat(w-2*m, 3.5, "ফোন / ইমেইল:", "", 0, "L", false, 0, "")
-	pdf.SetFont(font, "", 4.5)
-	contact := emp.Company.Phone
-	if emp.Company.Email != "" {
-		contact += " | " + emp.Company.Email
-	}
-	pdf.SetXY(x+m, contentY+13.5)
-	pdf.CellFormat(w-2*m, 3, contact, "", 0, "L", false, 0, "")
-
-	// Employee details section
-	detailsY := contentY + 19
-	pdf.SetFont(font, "B", 5)
-	pdf.SetXY(x+m, detailsY)
-	pdf.CellFormat(w-2*m, 3.5, "কর্মচারীর তথ্য:", "", 0, "L", false, 0, "")
-
-	backInfo := func(label, value string, rowY float64, colX float64) {
-		pdf.SetFont(font, "B", 4.5)
-		pdf.SetTextColor(100, 100, 100)
-		pdf.SetXY(colX, rowY)
-		pdf.CellFormat(16, 3, label, "", 0, "L", false, 0, "")
+	if !hasImage {
 		pdf.SetFont(font, "", 4.5)
-		pdf.SetTextColor(0, 0, 0)
-		pdf.SetXY(colX+16, rowY)
-		pdf.CellFormat(w/2-18, 3, value, "", 0, "L", false, 0, "")
+		pdf.SetTextColor(150, 150, 150)
+		pdf.SetXY(photoX, photoY+14)
+		pdf.CellFormat(photoW, 3.5, "EMPLOYEE PHOTO", "", 0, "C", false, 0, "")
+		pdf.SetFont(font, "", 4)
+		pdf.SetXY(photoX, photoY+18.5)
+		pdf.CellFormat(photoW, 3, "35 x 45 mm", "", 0, "C", false, 0, "")
 	}
 
-	name := emp.NameBn
+	// Employee info below photo
+	labelW := 18.0
+	infoX := x + 3
+	infoY := photoY + photoH + 1.5
+	lineH := 4.6
+
+	name := emp.NameEn
 	if name == "" {
-		name = emp.NameEn
+		name = emp.NameBn
 	}
-	backInfo("নাম", name, detailsY+3.5, x+m)
+	name = strings.ToUpper(name)
 
 	desig := ""
 	if emp.DesignationRef != nil {
-		desig = emp.DesignationRef.NameBn
+		desig = emp.DesignationRef.Name
 		if desig == "" {
-			desig = emp.DesignationRef.Name
+			desig = emp.DesignationRef.NameBn
 		}
 	}
-	backInfo("পদবি", desig, detailsY+7, x+m)
-
-	addr := emp.PresentAddress
-	if addr == "" {
-		addr = emp.PermanentAddress
+	dept := ""
+	if emp.Department != nil {
+		dept = emp.Department.Name
+		if dept == "" {
+			dept = emp.Department.NameBn
+		}
 	}
-	backInfo("ঠিকানা", truncateString(addr, 32), detailsY+10.5, x+m)
+	lineName := ""
+	if emp.LineRef != nil {
+		lineName = emp.LineRef.Name
+		if lineName == "" {
+			lineName = emp.LineRef.NameBn
+		}
+	}
+	joinDate := ""
+	if !emp.JoiningDate.IsZero() {
+		joinDate = emp.JoiningDate.Format("02 January 2006")
+	}
 
-	rightX := x + w/2 + 1
-	backInfo("রক্তের গ্রুপ", emp.BloodGroup, detailsY+3.5, rightX)
-	backInfo("জরুরী যোগাযোগ", emp.EmergencyContact, detailsY+7, rightX)
-	backInfo("জরুরী ফোন", emp.EmergencyPhone, detailsY+10.5, rightX)
+	rows := [][2]string{
+		{"Employee ID", emp.EmployeeID},
+		{"Employee Name", name},
+		{"Joining Date", joinDate},
+		{"Designation", desig},
+		{"Department", dept},
+		{"Line", lineName},
+	}
 
-	// Signature
-	sigY := y + h - 8
+	for i, r := range rows {
+		ry := infoY + float64(i)*lineH
+		pdf.SetFont(font, "B", 4.8)
+		pdf.SetTextColor(110, 110, 110)
+		pdf.SetXY(infoX, ry)
+		pdf.CellFormat(labelW, 3.2, r[0], "", 0, "L", false, 0, "")
+		pdf.SetFont(font, "B", 5.5)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(infoX+labelW, ry)
+		pdf.CellFormat(w-labelW-6, 3.4, truncateString(r[1], 24), "", 0, "L", false, 0, "")
+	}
+
+	// Signatures
+	sigY := y + h - 7
 	pdf.SetDrawColor(0, 0, 0)
-	pdf.SetLineWidth(0.2)
-	pdf.Line(x+20, sigY, x+w-4, sigY)
-	pdf.SetFont(font, "", 4.5)
-	pdf.SetTextColor(130, 130, 130)
-	pdf.SetXY(x+20, sigY+1)
-	pdf.CellFormat(w-24, 2.5, "অনুমোদিত স্বাক্ষর", "", 0, "C", false, 0, "")
-
-	// Footer
+	pdf.SetLineWidth(0.3)
+	pdf.Line(x+3, sigY, x+26, sigY)
+	pdf.Line(x+36.5, sigY, x+w-3, sigY)
 	pdf.SetFont(font, "", 4)
-	pdf.SetXY(x, y+h-3.5)
-	pdf.CellFormat(w, 2.5, "এই কার্ডটি পাওয়া গেলে উপরের ঠিকানায় ফেরত দিন।", "", 0, "C", false, 0, "")
+	pdf.SetTextColor(130, 130, 130)
+	pdf.SetXY(x+3, sigY+1)
+	pdf.CellFormat(23, 2.5, "Employee Signature", "", 0, "C", false, 0, "")
+	pdf.SetXY(x+36.5, sigY+1)
+	pdf.CellFormat(w-39.5, 2.5, "Authorized Signature", "", 0, "C", false, 0, "")
+}
+
+func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, font string) {
+	pdf.SetDrawColor(29, 78, 137)
+	pdf.SetLineWidth(0.6)
+	pdf.Rect(x, y, w, h, "D")
+
+	companyName := companyDisplayName(emp.Company)
+
+	// Header
+	pdf.SetFont(font, "B", 7)
+	pdf.SetTextColor(29, 78, 137)
+	pdf.SetXY(x, y+1.8)
+	pdf.CellFormat(w, 3.6, companyName, "", 0, "C", false, 0, "")
+	pdf.SetFont(font, "B", 5.5)
+	pdf.SetTextColor(120, 120, 120)
+	pdf.SetXY(x, y+6)
+	pdf.CellFormat(w, 3.4, "PEOPLEHUB HR & PAYROLL", "", 0, "C", false, 0, "")
+
+	pdf.SetDrawColor(29, 78, 137)
+	pdf.SetLineWidth(0.5)
+	pdf.Line(x+2, y+9.5, x+w-2, y+9.5)
+
+	m := 3.0
+	cy := y + 11.5
+
+	// Company address
+	pdf.SetFont(font, "B", 5)
+	pdf.SetTextColor(110, 110, 110)
+	pdf.SetXY(x+m, cy)
+	pdf.CellFormat(w-2*m, 3.2, "Company Address", "", 0, "L", false, 0, "")
+	address := emp.Company.AddressEn
+	if address == "" {
+		address = emp.Company.AddressBn
+	}
+	if address == "" {
+		address = "-"
+	}
+	pdf.SetFont(font, "", 5)
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetXY(x+m, cy+3.4)
+	pdf.MultiCell(w-2*m, 3.4, address, "", "L", false)
+	cy = pdf.GetY() + 1.5
+
+	// Contact lines
+	if emp.Company.Phone != "" {
+		pdf.SetFont(font, "", 4.8)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(w-2*m, 3.2, "Phone : "+emp.Company.Phone, "", 0, "L", false, 0, "")
+		cy += 3.6
+	}
+	if emp.Company.Email != "" {
+		pdf.SetFont(font, "", 4.8)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(w-2*m, 3.2, "Email : "+emp.Company.Email, "", 0, "L", false, 0, "")
+		cy += 3.6
+	}
+
+	// Emergency contact
+	cy += 1.0
+	pdf.SetFont(font, "B", 5)
+	pdf.SetTextColor(110, 110, 110)
+	pdf.SetXY(x+m, cy)
+	pdf.CellFormat(w-2*m, 3.2, "Emergency Contact", "", 0, "L", false, 0, "")
+	emergency := emp.EmergencyPhone
+	if emergency == "" {
+		emergency = emp.EmergencyContact
+	}
+	if emergency == "" {
+		emergency = "-"
+	}
+	cy += 3.4
+	pdf.SetFont(font, "B", 5)
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetXY(x+m, cy)
+	pdf.CellFormat(w-2*m, 3.4, emergency, "", 0, "L", false, 0, "")
+	cy += 4.4
+
+	// Return note
+	pdf.SetFont(font, "", 4.5)
+	pdf.SetTextColor(90, 90, 90)
+	pdf.SetXY(x+m, cy)
+	pdf.MultiCell(w-2*m, 3.2, "If found, please return this card to the Human Resource Department.", "", "C", false)
+	cy = pdf.GetY() + 1.0
+
+	// Property note
+	pdf.SetFont(font, "", 4.5)
+	pdf.SetTextColor(90, 90, 90)
+	pdf.SetXY(x+m, cy)
+	pdf.MultiCell(w-2*m, 3.2, "This card remains the property of "+companyName+".", "", "C", false)
 }
 
 func resolveImagePath(url string) string {

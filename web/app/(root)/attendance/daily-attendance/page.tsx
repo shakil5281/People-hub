@@ -1,13 +1,19 @@
 "use client"
 
 import * as React from "react"
-import { ClipboardCheckIcon, FileSpreadsheetIcon, UserXIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
+import { ClipboardCheckIcon, FileSpreadsheetIcon, UserXIcon, Loader2, FilterIcon, XIcon, MoreHorizontalIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { format } from "date-fns"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from "@/components/ui/sheet"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { formatCheck } from "@/lib/utils"
@@ -333,15 +339,15 @@ export default function DailyAttendancePage() {
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div className="flex items-center gap-2">
             <ClipboardCheckIcon className="h-6 w-6 text-muted-foreground" />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Daily Attendance</h1>
+              <h1 className="text-lg md:text-3xl font-bold tracking-tight">Daily Attendance</h1>
               <p className="text-muted-foreground mt-1">View and manage daily attendance records</p>
             </div>
           </div>
-          <div className="hidden md:flex gap-2">
+          <ButtonGroup className="hidden md:flex">
             <Button onClick={handleExport} disabled={exporting} className="bg-primary text-primary-foreground hover:bg-primary/90">
               {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-2 h-4 w-4" />}
               {exporting ? "Exporting..." : "Export Excel"}
@@ -354,53 +360,61 @@ export default function DailyAttendancePage() {
               {exportingMissing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheckIcon className="mr-2 h-4 w-4" />}
               {exportingMissing ? "Exporting..." : "Export Missing"}
             </Button>
-          </div>
-        </div>
-        <div className="md:hidden mt-3">
-          <ButtonGroup className="w-full">
-            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="flex-1">
-                  <FilterIcon className="mr-2 h-4 w-4" />
-                  Filters
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
-                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
-                  <SheetTitle className="text-base">Filters</SheetTitle>
-                  <SheetClose asChild>
-                    <Button variant="ghost" size="icon-sm">
-                      <XIcon className="h-4 w-4" />
-                    </Button>
-                  </SheetClose>
-                </SheetHeader>
-                <div className="flex-1 overflow-y-auto px-4 py-4">
-                  <FilterBar
-                    filters={filterDefs}
-                    values={filters}
-                    onChange={handleChange}
-                    onApply={handleApply}
-                    onReset={handleReset}
-                    submitting={loading}
-                    singleColumn
-                    noBorder
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
-            <Button onClick={handleExport} disabled={exporting} className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90">
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-2 h-4 w-4" />}
-              {exporting ? "Exporting..." : "Export"}
-            </Button>
-            <Button onClick={handleExportAbsent} disabled={exportingAbsent} variant="destructive" className="flex-1">
-              {exportingAbsent ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserXIcon className="mr-2 h-4 w-4" />}
-              {exportingAbsent ? "Exporting..." : "Absent"}
-            </Button>
-            <Button onClick={handleExportMissing} disabled={exportingMissing} variant="secondary" className="flex-1">
-              {exportingMissing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ClipboardCheckIcon className="mr-2 h-4 w-4" />}
-              {exportingMissing ? "Exporting..." : "Missing"}
-            </Button>
           </ButtonGroup>
+        </div>
+        <div className="md:hidden flex items-center justify-end gap-2 mt-3">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline" size="sm">
+                <FilterIcon className="h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar
+                  filters={filterDefs}
+                  values={filters}
+                  onChange={handleChange}
+                  onApply={handleApply}
+                  onReset={handleReset}
+                  submitting={loading}
+                  singleColumn
+                  noBorder
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm">
+                <MoreHorizontalIcon className="h-4 w-4" />
+                More
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={handleExport} disabled={exporting}>
+                <FileSpreadsheetIcon className="mr-2 h-4 w-4" />
+                {exporting ? "Exporting..." : "Export Excel"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportAbsent} disabled={exportingAbsent}>
+                <UserXIcon className="mr-2 h-4 w-4" />
+                {exportingAbsent ? "Exporting..." : "Export Absent"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportMissing} disabled={exportingMissing}>
+                <ClipboardCheckIcon className="mr-2 h-4 w-4" />
+                {exportingMissing ? "Exporting..." : "Export Missing"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

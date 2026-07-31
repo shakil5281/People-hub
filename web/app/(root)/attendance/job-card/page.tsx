@@ -1,8 +1,9 @@
 "use client"
 
 import * as React from "react"
-import { ClipboardListIcon, Loader2, ChevronLeftIcon, ChevronRightIcon, FilterIcon, XIcon } from "lucide-react"
+import { ClipboardListIcon, Loader2, ChevronLeftIcon, ChevronRightIcon, FilterIcon, XIcon, FileText, FileSpreadsheet, Download } from "lucide-react"
 import { format } from "date-fns"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
@@ -10,6 +11,14 @@ import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { formatCheck } from "@/lib/utils"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 
 interface JobCardRecord {
   id: string
@@ -194,6 +203,43 @@ export default function JobCardPage() {
     }
   }
 
+  const downloadExport = (res: { data: Blob }, filename: string) => {
+    const blob = new Blob([res.data], { type: res.data.type || "application/octet-stream" })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleExport = async (format: "pdf" | "excel", lang?: string, all?: boolean) => {
+    if (!all && !currentEmpId) {
+      toast.error("No employee selected to export")
+      return
+    }
+    setSubmitting(true)
+    try {
+      const params = buildParams()
+      if (!all) params.employee_id = currentEmpId
+      if (lang) params.lang = lang
+      const res = format === "pdf"
+        ? await attendanceApi.exportJobCardPdf(params)
+        : await attendanceApi.exportJobCardExcel(params)
+      const range = `${(filters.start_date || today).replace(/-/g, "")}_${(filters.end_date || today).replace(/-/g, "")}`
+      const empPart = all ? "all" : currentEmpId
+      const name = format === "pdf"
+        ? `job_card_${empPart}_${range}${lang ? `_${lang}` : ""}.pdf`
+        : `job_card_${empPart}_${range}.xlsx`
+      downloadExport(res, name)
+      toast.success(format === "pdf" ? "PDF exported" : "Excel exported")
+    } catch {
+      toast.error("Failed to export")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   const handleFilterChange = (key: string, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
@@ -209,48 +255,90 @@ export default function JobCardPage() {
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div className="flex items-center gap-2">
             <ClipboardListIcon className="h-6 w-6 text-muted-foreground" />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Job Card</h1>
+              <h1 className="text-lg md:text-3xl font-bold tracking-tight">Job Card</h1>
               <p className="text-muted-foreground mt-1">Employee attendance job card report</p>
             </div>
           </div>
-        </div>
-        <div className="md:hidden mt-3">
-          <ButtonGroup className="w-full">
-            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="w-full">
-                  <FilterIcon className="mr-2 h-4 w-4" />
-                  Filters
+          <div className="hidden md:flex items-center gap-2">
+            <ButtonGroup>
+              <Button variant="outline" onClick={() => handleExport("pdf", "en", false)} disabled={submitting || !currentEmpId}>
+                <FileText className="h-4 w-4 mr-1.5 text-destructive" />
+                PDF
+              </Button>
+              <Button variant="outline" onClick={() => handleExport("pdf", "bn", false)} disabled={submitting || !currentEmpId}>
+                <FileText className="h-4 w-4 mr-1.5 text-blue-600" />
+                বাংলা
+              </Button>
+              <Button variant="outline" onClick={() => handleExport("excel", undefined, false)} disabled={submitting || !currentEmpId}>
+                <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" />
+                Excel
+              </Button>
+            </ButtonGroup>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="default" disabled={submitting}>
+                  {submitting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
+                  Export
                 </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
-                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
-                  <SheetTitle className="text-base">Filters</SheetTitle>
-                  <SheetClose asChild>
-                    <Button variant="ghost" size="icon-sm">
-                      <XIcon className="h-4 w-4" />
-                    </Button>
-                  </SheetClose>
-                </SheetHeader>
-                <div className="flex-1 overflow-y-auto px-4 py-4">
-                  <FilterBar
-                    filters={filterDefs}
-                    values={filters}
-                    onChange={handleFilterChange}
-                    onApply={handleApply}
-                    onReset={handleReset}
-                    submitting={submitting}
-                    singleColumn
-                    noBorder
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
-          </ButtonGroup>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>Export Job Card</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleExport("pdf", "en", false)}>
+                  <FileText className="mr-2 h-4 w-4 text-destructive" /> PDF (English)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("pdf", "bn", false)}>
+                  <FileText className="mr-2 h-4 w-4 text-blue-600" /> PDF (বাংলা)
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("excel", undefined, false)}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" /> Excel
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => handleExport("pdf", "en", true)}>
+                  <FileText className="mr-2 h-4 w-4 text-destructive" /> PDF — All Filtered
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExport("excel", undefined, true)}>
+                  <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" /> Excel — All Filtered
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
+        <div className="md:hidden flex items-center justify-end gap-2 mt-3">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline">
+                <FilterIcon className="h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar
+                  filters={filterDefs}
+                  values={filters}
+                  onChange={handleFilterChange}
+                  onApply={handleApply}
+                  onReset={handleReset}
+                  submitting={submitting}
+                  singleColumn
+                  noBorder
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </div>
 

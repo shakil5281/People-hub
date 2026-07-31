@@ -548,3 +548,520 @@ func truncate(s string, maxLen int) string {
 	}
 	return s
 }
+
+// ExportProfileExcel godoc
+//
+//	@Summary      Export employee profile to Excel
+//	@Description  Export full employee profile with salary and attendance to Excel
+//	@Tags         Employees
+//	@Security     BearerAuth
+//	@Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+//	@Param        id     path  string  true  "Employee ID"
+//	@Param        month  query int     false "Month"
+//	@Param        year   query int     false "Year"
+//	@Success      200    {file}  binary
+//	@Router       /employees/{id}/profile/export/excel [get]
+func (h *EmployeeHandler) ExportProfileExcel(c *gin.Context) {
+	id := c.Param("id")
+
+	var emp models.Employee
+	if err := database.DB.Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").First(&emp, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
+		return
+	}
+
+	now := time.Now()
+	month, _ := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(now.Month()))))
+	year, _ := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(now.Year())))
+
+	startDate := fmt.Sprintf("%d-%02d-01", year, month)
+	endDate := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+
+	var attendanceCounts []struct {
+		Status string
+		Count  int64
+	}
+	database.DB.Model(&models.Attendance{}).
+		Select("status, count(*) as count").
+		Where("employee_id = ? AND date BETWEEN ? AND ? AND deleted_at IS NULL", emp.EmployeeID, startDate, endDate).
+		Group("status").
+		Find(&attendanceCounts)
+
+	var salary models.Salary
+	salaryErr := database.DB.Where("employee_id = ? AND month = ? AND year = ?", emp.EmployeeID, month, year).First(&salary).Error
+
+	f := excelize.NewFile()
+	sheet := "Profile"
+	f.SetSheetName("Sheet1", sheet)
+
+	sectionFont := &excelize.Font{Bold: true, Size: 12, Color: "1F4E79", Family: "Calibri"}
+	sectionFill := excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"D6E4F0"}}
+	labelFont := &excelize.Font{Bold: true, Size: 10, Family: "Calibri"}
+	labelFill := excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"F2F2F2"}}
+	dataFont := &excelize.Font{Size: 10, Family: "Calibri"}
+	titleFont := &excelize.Font{Bold: true, Size: 16, Color: "1F4E79", Family: "Calibri"}
+
+	styleSection, _ := f.NewStyle(&excelize.Style{
+		Font: sectionFont, Fill: sectionFill,
+		Alignment: &excelize.Alignment{Vertical: "center"},
+	})
+	styleLabel, _ := f.NewStyle(&excelize.Style{
+		Font: labelFont, Fill: labelFill,
+		Alignment: &excelize.Alignment{Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "left", Color: "D9D9D9", Style: 1},
+			{Type: "right", Color: "D9D9D9", Style: 1},
+		},
+	})
+	styleData, _ := f.NewStyle(&excelize.Style{
+		Font: dataFont,
+		Alignment: &excelize.Alignment{Vertical: "center"},
+		Border: []excelize.Border{
+			{Type: "left", Color: "D9D9D9", Style: 1},
+			{Type: "right", Color: "D9D9D9", Style: 1},
+		},
+	})
+	styleTitle, _ := f.NewStyle(&excelize.Style{
+		Font: titleFont,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+
+	f.SetColWidth(sheet, "A", "A", 30)
+	f.SetColWidth(sheet, "B", "B", 50)
+
+	row := 1
+
+	// Title row
+	if emp.Company.ID != "" {
+		f.MergeCell(sheet, "A1", "B1")
+		f.SetCellStyle(sheet, "A1", "B1", styleTitle)
+		f.SetCellValue(sheet, "A1", emp.Company.CompanyNameEn)
+		f.SetRowHeight(sheet, 1, 30)
+		row = 2
+	}
+
+	f.MergeCell(sheet, colName(1)+strconv.Itoa(row), colName(2)+strconv.Itoa(row))
+	f.SetCellStyle(sheet, colName(1)+strconv.Itoa(row), colName(2)+strconv.Itoa(row), styleTitle)
+	f.SetCellValue(sheet, colName(1)+strconv.Itoa(row), emp.NameEn+" ("+emp.EmployeeID+")")
+	f.SetRowHeight(sheet, row, 35)
+	row++
+
+	// Blank row
+	row++
+
+	sv := func(r int, v string) {
+		f.SetCellValue(sheet, colName(2)+strconv.Itoa(r), v)
+		f.SetCellStyle(sheet, colName(2)+strconv.Itoa(r), colName(2)+strconv.Itoa(r), styleData)
+	}
+	setLabel := func(r int, label string) {
+		f.SetCellValue(sheet, colName(1)+strconv.Itoa(r), label)
+		f.SetCellStyle(sheet, colName(1)+strconv.Itoa(r), colName(1)+strconv.Itoa(r), styleLabel)
+	}
+	setSection := func(r int, title string) {
+		f.MergeCell(sheet, colName(1)+strconv.Itoa(r), colName(2)+strconv.Itoa(r))
+		f.SetCellValue(sheet, colName(1)+strconv.Itoa(r), title)
+		f.SetCellStyle(sheet, colName(1)+strconv.Itoa(r), colName(2)+strconv.Itoa(r), styleSection)
+		f.SetRowHeight(sheet, r, 25)
+	}
+
+	// Personal Information
+	setSection(row, "Personal Information")
+	row++
+	setLabel(row, "Full Name (English)")
+	sv(row, emp.NameEn)
+	row++
+	setLabel(row, "Full Name (Bangla)")
+	sv(row, emp.NameBn)
+	row++
+	setLabel(row, "Father's Name")
+	sv(row, emp.FatherName)
+	row++
+	setLabel(row, "Mother's Name")
+	sv(row, emp.MotherName)
+	row++
+	setLabel(row, "Date of Birth")
+	sv(row, emp.DateOfBirth)
+	row++
+	setLabel(row, "Gender")
+	sv(row, emp.Gender)
+	row++
+	setLabel(row, "Blood Group")
+	sv(row, emp.BloodGroup)
+	row++
+	setLabel(row, "Marital Status")
+	sv(row, emp.MaritalStatus)
+	row++
+	setLabel(row, "Religion")
+	sv(row, emp.Religion)
+	row++
+	setLabel(row, "Nationality")
+	sv(row, emp.Nationality)
+	row++
+	setLabel(row, "NID Number")
+	sv(row, emp.NID)
+	row++
+
+	// Contact & Address
+	setSection(row, "Contact & Address")
+	row++
+	setLabel(row, "Phone")
+	sv(row, emp.Phone)
+	row++
+	setLabel(row, "Email")
+	sv(row, emp.Email)
+	row++
+	setLabel(row, "Present Address")
+	sv(row, emp.PresentAddress)
+	row++
+	setLabel(row, "Permanent Address")
+	sv(row, emp.PermanentAddress)
+	row++
+
+	// Office Information
+	setSection(row, "Office Information")
+	row++
+	setLabel(row, "Employee ID")
+	sv(row, emp.EmployeeID)
+	row++
+	setLabel(row, "Punch Number")
+	sv(row, emp.PunchNumber)
+	row++
+	setLabel(row, "Employee Type")
+	sv(row, emp.EmployeeType)
+	row++
+	setLabel(row, "Grade")
+	sv(row, emp.Grade)
+	row++
+	setLabel(row, "Joining Date")
+	sv(row, emp.JoiningDate.Format("2006-01-02"))
+	row++
+	if emp.Department != nil {
+		setLabel(row, "Department")
+		sv(row, emp.Department.Name)
+		row++
+	}
+	if emp.SectionRef != nil {
+		setLabel(row, "Section")
+		sv(row, emp.SectionRef.Name)
+		row++
+	}
+	if emp.DesignationRef != nil {
+		setLabel(row, "Designation")
+		sv(row, emp.DesignationRef.Name)
+		row++
+	}
+	if emp.LineRef != nil {
+		setLabel(row, "Line")
+		sv(row, emp.LineRef.Name)
+		row++
+	}
+	if emp.GroupRef != nil {
+		setLabel(row, "Group")
+		sv(row, emp.GroupRef.Name)
+		row++
+	}
+	if emp.FloorRef != nil {
+		setLabel(row, "Floor")
+		sv(row, emp.FloorRef.Name)
+		row++
+	}
+	if emp.Shift != nil {
+		setLabel(row, "Shift")
+		sv(row, emp.Shift.Name)
+		row++
+	}
+	otStatus := "No"
+	if emp.OverTimeStatus {
+		otStatus = "Yes"
+	}
+	setLabel(row, "Over Time")
+	sv(row, otStatus)
+	row++
+	if emp.Company.ID != "" {
+		setLabel(row, "Company")
+		sv(row, emp.Company.CompanyNameEn)
+		row++
+	}
+
+	// Family & Emergency
+	setSection(row, "Family & Emergency")
+	row++
+	setLabel(row, "Spouse Name")
+	sv(row, emp.SpouseName)
+	row++
+	setLabel(row, "Emergency Contact")
+	sv(row, emp.EmergencyContact)
+	row++
+	setLabel(row, "Emergency Phone")
+	sv(row, emp.EmergencyPhone)
+	row++
+	setLabel(row, "Dependents")
+	sv(row, strconv.Itoa(emp.NumberOfDependents))
+	row++
+
+	// Bank Account
+	setSection(row, "Bank Account")
+	row++
+	setLabel(row, "Account Type")
+	sv(row, emp.AccountType)
+	row++
+	setLabel(row, "Account Number")
+	sv(row, emp.AccountNumber)
+	row++
+
+	// Salary
+	if salaryErr == nil {
+		setSection(row, fmt.Sprintf("Salary — %d/%d", salary.Month, salary.Year))
+		row++
+		setLabel(row, "Gross Salary")
+		sv(row, fmt.Sprintf("৳%.2f", salary.GrossSalary))
+		row++
+		setLabel(row, "Basic Salary")
+		sv(row, fmt.Sprintf("৳%.2f", salary.BasicSalary))
+		row++
+		setLabel(row, "House Rent")
+		sv(row, fmt.Sprintf("৳%.2f", salary.HouseRent))
+		row++
+		setLabel(row, "Medical Allowance")
+		sv(row, fmt.Sprintf("৳%.2f", salary.MedicalAllowance))
+		row++
+		setLabel(row, "Transport Allowance")
+		sv(row, fmt.Sprintf("৳%.2f", salary.TransportAllowance))
+		row++
+		setLabel(row, "Food Allowance")
+		sv(row, fmt.Sprintf("৳%.2f", salary.FoodAllowance))
+		row++
+		setLabel(row, "Other Allowance")
+		sv(row, fmt.Sprintf("৳%.2f", salary.OtherAllowance))
+		row++
+		setLabel(row, "Overtime Amount")
+		sv(row, fmt.Sprintf("৳%.2f", salary.OvertimeAmount))
+		row++
+		setLabel(row, "Attendance Bonus")
+		sv(row, fmt.Sprintf("৳%.2f", salary.AttendanceBonus))
+		row++
+		setLabel(row, "Absent Deduction")
+		sv(row, fmt.Sprintf("৳%.2f", salary.AbsentDeduction))
+		row++
+		setLabel(row, "Other Deduction")
+		sv(row, fmt.Sprintf("৳%.2f", salary.OtherDeduction))
+		row++
+		setLabel(row, "Total Deductions")
+		sv(row, fmt.Sprintf("৳%.2f", salary.TotalDeductions))
+		row++
+		setLabel(row, "Net Salary")
+		sv(row, fmt.Sprintf("৳%.2f", salary.NetSalary))
+		row++
+	}
+
+	// Attendance Summary
+	if len(attendanceCounts) > 0 {
+		setSection(row, fmt.Sprintf("Attendance Summary — %d/%d", month, year))
+		row++
+		for _, a := range attendanceCounts {
+			setLabel(row, a.Status)
+			sv(row, strconv.FormatInt(a.Count, 10))
+			row++
+		}
+	}
+
+	f.SetSheetView(sheet, -1, &excelize.ViewOptions{
+		ShowGridLines: func(b bool) *bool { return &b }(false),
+	})
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=profile_%s.xlsx", emp.EmployeeID))
+	f.Write(c.Writer)
+}
+
+// ExportProfilePDF godoc
+//
+//	@Summary      Export employee profile to PDF
+//	@Description  Export full employee profile with salary and attendance to PDF
+//	@Tags         Employees
+//	@Security     BearerAuth
+//	@Produce      application/pdf
+//	@Param        id     path  string  true  "Employee ID"
+//	@Param        month  query int     false "Month"
+//	@Param        year   query int     false "Year"
+//	@Success      200    {file}  binary
+//	@Router       /employees/{id}/profile/export/pdf [get]
+func (h *EmployeeHandler) ExportProfilePDF(c *gin.Context) {
+	id := c.Param("id")
+
+	var emp models.Employee
+	if err := database.DB.Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").First(&emp, "id = ?", id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
+		return
+	}
+
+	now := time.Now()
+	month, _ := strconv.Atoi(c.DefaultQuery("month", strconv.Itoa(int(now.Month()))))
+	year, _ := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(now.Year())))
+
+	startDate := fmt.Sprintf("%d-%02d-01", year, month)
+	endDate := time.Date(year, time.Month(month)+1, 0, 0, 0, 0, 0, time.UTC).Format("2006-01-02")
+
+	var attendanceCounts []struct {
+		Status string
+		Count  int64
+	}
+	database.DB.Model(&models.Attendance{}).
+		Select("status, count(*) as count").
+		Where("employee_id = ? AND date BETWEEN ? AND ? AND deleted_at IS NULL", emp.EmployeeID, startDate, endDate).
+		Group("status").
+		Find(&attendanceCounts)
+
+	var salary models.Salary
+	salaryErr := database.DB.Where("employee_id = ? AND month = ? AND year = ?", emp.EmployeeID, month, year).First(&salary).Error
+
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.SetMargins(15, 15, 15)
+	pdf.AddPage()
+
+	// Header bar
+	pdf.SetFillColor(68, 114, 196)
+	pdf.Rect(0, 0, 210, 40, "F")
+
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetFont("Arial", "B", 20)
+	pdf.SetY(8)
+	companyName := ""
+	if emp.Company.ID != "" {
+		companyName = emp.Company.CompanyNameEn + " — "
+	}
+	pdf.CellFormat(0, 10, companyName+"Employee Profile", "", 1, "C", false, 0, "")
+	pdf.SetFont("Arial", "", 10)
+	pdf.CellFormat(0, 8, emp.NameEn+" ("+emp.EmployeeID+")", "", 1, "C", false, 0, "")
+
+	// Status badge area
+	pdf.SetY(44)
+	pdf.SetTextColor(0, 0, 0)
+
+	// Helper function
+	fieldRow := func(label, value string) {
+		pdf.SetX(15)
+		pdf.SetFont("Arial", "B", 9)
+		pdf.SetFillColor(240, 245, 250)
+		pdf.CellFormat(55, 7, label, "1", 0, "L", true, 0, "")
+		pdf.SetFont("Arial", "", 9)
+		pdf.CellFormat(0, 7, " "+value, "1", 1, "L", false, 0, "")
+	}
+
+	sectionHeader := func(title string) {
+		if pdf.GetY() > 250 {
+			pdf.AddPage()
+		}
+		pdf.SetX(15)
+		pdf.SetFont("Arial", "B", 11)
+		pdf.SetFillColor(68, 114, 196)
+		pdf.SetTextColor(255, 255, 255)
+		pdf.CellFormat(0, 8, "  "+title, "1", 1, "L", true, 0, "")
+		pdf.SetTextColor(0, 0, 0)
+	}
+
+	sectionHeader("Personal Information")
+	fieldRow("Full Name (English)", emp.NameEn)
+	fieldRow("Full Name (Bangla)", emp.NameBn)
+	fieldRow("Father's Name", emp.FatherName)
+	fieldRow("Mother's Name", emp.MotherName)
+	fieldRow("Date of Birth", emp.DateOfBirth)
+	fieldRow("Gender", emp.Gender)
+	fieldRow("Blood Group", emp.BloodGroup)
+	fieldRow("Marital Status", emp.MaritalStatus)
+	fieldRow("Religion", emp.Religion)
+	fieldRow("Nationality", emp.Nationality)
+	fieldRow("NID Number", emp.NID)
+
+	sectionHeader("Contact & Address")
+	fieldRow("Phone", emp.Phone)
+	fieldRow("Email", emp.Email)
+	fieldRow("Present Address", emp.PresentAddress)
+	fieldRow("Permanent Address", emp.PermanentAddress)
+
+	sectionHeader("Office Information")
+	fieldRow("Employee ID", emp.EmployeeID)
+	fieldRow("Punch Number", emp.PunchNumber)
+	fieldRow("Employee Type", emp.EmployeeType)
+	fieldRow("Grade", emp.Grade)
+	fieldRow("Joining Date", emp.JoiningDate.Format("2006-01-02"))
+	if emp.Department != nil {
+		fieldRow("Department", emp.Department.Name)
+	}
+	if emp.SectionRef != nil {
+		fieldRow("Section", emp.SectionRef.Name)
+	}
+	if emp.DesignationRef != nil {
+		fieldRow("Designation", emp.DesignationRef.Name)
+	}
+	if emp.LineRef != nil {
+		fieldRow("Line", emp.LineRef.Name)
+	}
+	if emp.GroupRef != nil {
+		fieldRow("Group", emp.GroupRef.Name)
+	}
+	if emp.FloorRef != nil {
+		fieldRow("Floor", emp.FloorRef.Name)
+	}
+	if emp.Shift != nil {
+		fieldRow("Shift", emp.Shift.Name)
+	}
+	otStatus := "No"
+	if emp.OverTimeStatus {
+		otStatus = "Yes"
+	}
+	fieldRow("Over Time", otStatus)
+	if emp.Company.ID != "" {
+		fieldRow("Company", emp.Company.CompanyNameEn)
+	}
+
+	sectionHeader("Family & Emergency")
+	fieldRow("Spouse Name", emp.SpouseName)
+	fieldRow("Emergency Contact", emp.EmergencyContact)
+	fieldRow("Emergency Phone", emp.EmergencyPhone)
+	fieldRow("Dependents", strconv.Itoa(emp.NumberOfDependents))
+
+	sectionHeader("Bank Account")
+	fieldRow("Account Type", emp.AccountType)
+	fieldRow("Account Number", emp.AccountNumber)
+
+	// Salary
+	if salaryErr == nil {
+		sectionHeader(fmt.Sprintf("Salary — %d/%d", salary.Month, salary.Year))
+		fieldRow("Gross Salary", fmt.Sprintf("৳%.2f", salary.GrossSalary))
+		fieldRow("Basic Salary", fmt.Sprintf("৳%.2f", salary.BasicSalary))
+		fieldRow("House Rent", fmt.Sprintf("৳%.2f", salary.HouseRent))
+		fieldRow("Medical Allowance", fmt.Sprintf("৳%.2f", salary.MedicalAllowance))
+		fieldRow("Transport Allowance", fmt.Sprintf("৳%.2f", salary.TransportAllowance))
+		fieldRow("Food Allowance", fmt.Sprintf("৳%.2f", salary.FoodAllowance))
+		fieldRow("Other Allowance", fmt.Sprintf("৳%.2f", salary.OtherAllowance))
+		fieldRow("Overtime Amount", fmt.Sprintf("৳%.2f", salary.OvertimeAmount))
+		fieldRow("Attendance Bonus", fmt.Sprintf("৳%.2f", salary.AttendanceBonus))
+		fieldRow("Absent Deduction", fmt.Sprintf("৳%.2f", salary.AbsentDeduction))
+		fieldRow("Other Deduction", fmt.Sprintf("৳%.2f", salary.OtherDeduction))
+		fieldRow("Total Deductions", fmt.Sprintf("৳%.2f", salary.TotalDeductions))
+
+		// Net salary highlight
+		pdf.SetX(15)
+		pdf.SetFont("Arial", "B", 10)
+		pdf.SetFillColor(68, 114, 196)
+		pdf.SetTextColor(255, 255, 255)
+		pdf.CellFormat(55, 8, "  Net Salary", "1", 0, "L", true, 0, "")
+		pdf.CellFormat(0, 8, "  ৳"+fmt.Sprintf("%.2f", salary.NetSalary), "1", 1, "L", true, 0, "")
+		pdf.SetTextColor(0, 0, 0)
+	}
+
+	// Attendance
+	if len(attendanceCounts) > 0 {
+		sectionHeader(fmt.Sprintf("Attendance Summary — %d/%d", month, year))
+		for _, a := range attendanceCounts {
+			fieldRow(a.Status, strconv.FormatInt(a.Count, 10))
+		}
+	}
+
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=profile_%s.pdf", emp.EmployeeID))
+	if err := pdf.Output(c.Writer); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
+	}
+}

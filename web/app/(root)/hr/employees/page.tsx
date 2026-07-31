@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { UsersIcon, PlusIcon, UploadIcon, DownloadIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
+import { UsersIcon, PlusIcon, UploadIcon, DownloadIcon, Loader2, FilterIcon, XIcon, MoreHorizontalIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
@@ -9,6 +9,12 @@ import { Badge } from "@/components/ui/badge"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from "@/components/ui/sheet"
 import { statusOptionsEmployee, genderOptions, bloodGroupOptions } from "@/components/data/employee-data"
 import {
@@ -533,15 +539,15 @@ export default function EmployeesPage() {
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div className="flex items-center gap-2">
             <UsersIcon className="h-6 w-6 text-muted-foreground" />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Employees</h1>
+              <h1 className="text-lg md:text-3xl font-bold tracking-tight">Employees</h1>
               <p className="text-muted-foreground mt-1">Manage employee records</p>
             </div>
           </div>
-          <div className="hidden md:flex gap-2">
+          <ButtonGroup className="hidden md:flex">
             <Button variant="outline" onClick={handleExport} disabled={exporting}>
               {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
               Export
@@ -554,57 +560,65 @@ export default function EmployeesPage() {
               <PlusIcon className="mr-2 h-4 w-4" />
               Add Employee
             </Button>
-          </div>
+          </ButtonGroup>
         </div>
-        <div className="md:hidden mt-3">
-          <ButtonGroup className="w-full">
-            <Sheet>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="flex-1">
-                  <FilterIcon className="mr-2 h-4 w-4" />
-                  Filters
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
-                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
-                  <SheetTitle className="text-base">Filters</SheetTitle>
+        <div className="md:hidden flex items-center justify-end gap-2 mt-3">
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline">
+                <FilterIcon className="h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <div className="flex flex-col gap-4">{renderFilterFields()}</div>
+              </div>
+              <SheetFooter className="px-4 py-3 border-t">
+                <div className="flex items-center gap-2 w-full">
                   <SheetClose asChild>
-                    <Button variant="ghost" size="icon-sm">
-                      <XIcon className="h-4 w-4" />
+                    <Button onClick={handleApply} disabled={submitting} className="flex-1">
+                      {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Apply
                     </Button>
                   </SheetClose>
-                </SheetHeader>
-                <div className="flex-1 overflow-y-auto px-4 py-4">
-                  <div className="flex flex-col gap-4">{renderFilterFields()}</div>
+                  <Button variant="outline" onClick={handleReset} disabled={submitting} className="flex-1">
+                    Reset
+                  </Button>
                 </div>
-                <SheetFooter className="px-4 py-3 border-t">
-                  <div className="flex items-center gap-2 w-full">
-                    <SheetClose asChild>
-                      <Button onClick={handleApply} disabled={submitting} className="flex-1">
-                        {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Apply
-                      </Button>
-                    </SheetClose>
-                    <Button variant="outline" onClick={handleReset} disabled={submitting} className="flex-1">
-                      Reset
-                    </Button>
-                  </div>
-                </SheetFooter>
-              </SheetContent>
-            </Sheet>
-            <Button variant="outline" onClick={handleExport} disabled={exporting} className="flex-1">
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
-              Export
-            </Button>
-            <Button variant="outline" onClick={() => router.push("/hr/employees/import")} className="flex-1">
-              <UploadIcon className="mr-2 h-4 w-4" />
-              Import
-            </Button>
-            <Button onClick={() => router.push("/hr/employees/create")} className="flex-1">
-              <PlusIcon className="mr-2 h-4 w-4" />
-              Add
-            </Button>
-          </ButtonGroup>
+              </SheetFooter>
+            </SheetContent>
+          </Sheet>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <MoreHorizontalIcon className="h-4 w-4" />
+                More
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={handleExport} disabled={exporting}>
+                <DownloadIcon className="mr-2 h-4 w-4" />
+                {exporting ? "Exporting..." : "Export"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/hr/employees/import")}>
+                <UploadIcon className="mr-2 h-4 w-4" />
+                Import
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/hr/employees/create")}>
+                <PlusIcon className="mr-2 h-4 w-4" />
+                Add Employee
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

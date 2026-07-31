@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"log"
 	"time"
 
@@ -158,6 +159,7 @@ func (nc *NotificationChecker) createNotification(userID, title, message, notifT
 		Message:  message,
 		Type:     notifType,
 		Metadata: &metadata,
+		CreatedBy: &userID,
 	}
 	if err := nc.notificationRepo.Create(notif); err != nil {
 		log.Printf("Notification checker: failed to create notification: %v", err)
@@ -166,14 +168,7 @@ func (nc *NotificationChecker) createNotification(userID, title, message, notifT
 
 func formatLateMinutes(m int) string {
 	if m < 60 {
-		return formatInt(m) + " min"
+		return fmt.Sprintf("%dm", m)
 	}
-	return formatInt(m/60) + "h " + formatInt(m%60) + "min"
-}
-
-func formatInt(n int) string {
-	if n < 10 {
-		return string(rune('0'+n))
-	}
-	return string(rune('0'+n/10)) + string(rune('0'+n%10))
+	return fmt.Sprintf("%dh %dm", m/60, m%60)
 }

@@ -44,7 +44,7 @@ func (r *SalaryRepository) Upsert(salary *models.Salary) error {
 
 func (r *SalaryRepository) FindByEmployeeMonth(employeeID string, month, year int) (*models.Salary, error) {
 	var s models.Salary
-	err := r.db.Preload("Employee.Department").Preload("Employee.DesignationRef").Where("employee_id = ? AND month = ? AND year = ? AND deleted_at IS NULL",
+	err := r.db.Preload("Company").Preload("Employee.Department").Preload("Employee.DesignationRef").Preload("Employee.SectionRef").Preload("Employee.Shift").Where("employee_id = ? AND month = ? AND year = ? AND deleted_at IS NULL",
 		employeeID, month, year).First(&s).Error
 	return &s, err
 }
@@ -86,11 +86,13 @@ func (r *SalaryRepository) ListAllByMonth(companyID string, month, year int, dep
 }
 
 func (r *SalaryRepository) ListAllByMonthFiltered(f SalaryFilter) ([]models.Salary, error) {
-	query := r.db.Preload("Employee.Department").
+	query := r.db.Preload("Company").
+		Preload("Employee.Department").
 		Preload("Employee.SectionRef").
 		Preload("Employee.DesignationRef").
 		Preload("Employee.LineRef").
 		Preload("Employee.GroupRef").
+		Preload("Employee.Shift").
 		Where("company_id = ? AND month = ? AND year = ? AND deleted_at IS NULL", f.CompanyID, f.Month, f.Year)
 	if f.DepartmentID != "" {
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", f.DepartmentID)
@@ -122,11 +124,13 @@ func (r *SalaryRepository) ListAllByMonthFiltered(f SalaryFilter) ([]models.Sala
 }
 
 func (r *SalaryRepository) ListPayslips(f SalaryFilter, page, limit int) ([]models.Salary, int64, error) {
-	query := r.db.Preload("Employee.Department").
+	query := r.db.Preload("Company").
+		Preload("Employee.Department").
 		Preload("Employee.DesignationRef").
 		Preload("Employee.SectionRef").
 		Preload("Employee.LineRef").
 		Preload("Employee.GroupRef").
+		Preload("Employee.Shift").
 		Where("company_id = ? AND month = ? AND year = ? AND deleted_at IS NULL", f.CompanyID, f.Month, f.Year)
 	if f.DepartmentID != "" {
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", f.DepartmentID)

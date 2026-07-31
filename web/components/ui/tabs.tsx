@@ -55,7 +55,7 @@ function Tabs({
 }
 
 const tabsListVariants = cva(
-  "group/tabs-list relative inline-flex w-fit items-center justify-center rounded-none px-2 py-1 text-muted-foreground group-data-horizontal/tabs:h-fit group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
+  "group/tabs-list relative inline-flex w-full lg:w-fit items-center justify-start rounded-none px-2 py-1 text-muted-foreground overflow-x-auto [&::-webkit-scrollbar]:hidden scroll-smooth group-data-horizontal/tabs:h-fit group-data-vertical/tabs:h-fit group-data-vertical/tabs:flex-col data-[variant=line]:rounded-none",
   {
     variants: {
       variant: {
@@ -69,6 +69,20 @@ const tabsListVariants = cva(
   }
 )
 
+function getContentLeft(list: HTMLElement, trigger: HTMLElement): number {
+  const listRect = list.getBoundingClientRect()
+  const triggerRect = trigger.getBoundingClientRect()
+  return triggerRect.left - listRect.left + list.scrollLeft
+}
+
+function measureTrigger(list: HTMLElement, trigger: HTMLElement): React.CSSProperties {
+  return {
+    width: trigger.offsetWidth,
+    height: trigger.offsetHeight,
+    transform: `translateX(${getContentLeft(list, trigger)}px)`,
+  }
+}
+
 function TabsList({
   className,
   variant = "default",
@@ -78,7 +92,18 @@ function TabsList({
   const listRef = React.useRef<HTMLDivElement>(null)
   const indicatorRef = React.useRef<HTMLDivElement>(null)
   const { value } = useTabsContext()
-  const [indicatorStyle, setIndicatorStyle] = React.useState<React.CSSProperties>({})
+  const [indicatorStyle, setIndicatorStyle] = React.useState<React.CSSProperties>({ opacity: 0 })
+
+  const updateIndicator = React.useCallback(() => {
+    const list = listRef.current
+    if (!list) return
+    const activeTrigger = list.querySelector<HTMLElement>('[data-state="active"]')
+    if (!activeTrigger) {
+      setIndicatorStyle({ opacity: 0 })
+      return
+    }
+    setIndicatorStyle(measureTrigger(list, activeTrigger))
+  }, [])
 
   React.useEffect(() => {
     const list = listRef.current
@@ -87,15 +112,33 @@ function TabsList({
     const activeTrigger = list.querySelector<HTMLElement>('[data-state="active"]')
     if (!activeTrigger) return
 
-    const listRect = list.getBoundingClientRect()
-    const triggerRect = activeTrigger.getBoundingClientRect()
+    const contentLeft = getContentLeft(list, activeTrigger)
+    const targetScroll = Math.max(
+      0,
+      contentLeft - list.clientWidth / 2 + activeTrigger.offsetWidth / 2
+    )
+    list.scrollTo({ left: targetScroll, behavior: "smooth" })
 
-    setIndicatorStyle({
-      width: triggerRect.width,
-      height: triggerRect.height,
-      transform: `translateX(${triggerRect.left - listRect.left}px)`,
-    })
-  }, [value])
+    updateIndicator()
+  }, [value, updateIndicator])
+
+  React.useEffect(() => {
+    const list = listRef.current
+    if (!list) return
+
+    updateIndicator()
+
+    const ro = new ResizeObserver(updateIndicator)
+    ro.observe(list)
+
+    const mo = new MutationObserver(updateIndicator)
+    mo.observe(list, { childList: true, subtree: true, characterData: true })
+
+    return () => {
+      ro.disconnect()
+      mo.disconnect()
+    }
+  }, [updateIndicator])
 
   const handleMouseEnter = React.useCallback((e: React.MouseEvent) => {
     const target = (e.target as HTMLElement).closest<HTMLElement>("[data-slot='tabs-trigger']")
@@ -104,14 +147,8 @@ function TabsList({
     const list = listRef.current
     if (!list) return
 
-    const listRect = list.getBoundingClientRect()
-    const triggerRect = target.getBoundingClientRect()
     indicatorRef.current?.style.setProperty("transition-duration", "200ms")
-    setIndicatorStyle({
-      width: triggerRect.width,
-      height: triggerRect.height,
-      transform: `translateX(${triggerRect.left - listRect.left}px)`,
-    })
+    setIndicatorStyle(measureTrigger(list, target))
   }, [])
 
   const handleMouseLeave = React.useCallback(() => {
@@ -121,14 +158,8 @@ function TabsList({
     const activeTrigger = list.querySelector<HTMLElement>('[data-state="active"]')
     if (!activeTrigger) return
 
-    const listRect = list.getBoundingClientRect()
-    const triggerRect = activeTrigger.getBoundingClientRect()
     indicatorRef.current?.style.setProperty("transition-duration", "300ms")
-    setIndicatorStyle({
-      width: triggerRect.width,
-      height: triggerRect.height,
-      transform: `translateX(${triggerRect.left - listRect.left}px)`,
-    })
+    setIndicatorStyle(measureTrigger(list, activeTrigger))
   }, [])
 
   return (
@@ -143,7 +174,7 @@ function TabsList({
     >
       <div
         ref={indicatorRef}
-        className="pointer-events-none absolute top-[3px] left-[3px] z-0 rounded-none bg-background shadow-sm transition-all duration-300 ease-out will-change-transform"
+        className="pointer-events-none absolute top-1 left-0 z-0 rounded-md bg-background shadow-sm transition-all duration-300 ease-out will-change-transform"
         style={indicatorStyle}
       />
       {props.children}
@@ -159,7 +190,7 @@ function TabsTrigger({
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "relative z-10 inline-flex h-9 flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-4 text-sm font-medium whitespace-nowrap text-foreground/60 transition-colors group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-none group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "relative z-10 inline-flex h-9 flex-none items-center justify-center gap-1.5 rounded-md border border-transparent px-4 text-sm font-medium whitespace-nowrap text-foreground/60 transition-colors group-data-vertical/tabs:w-full group-data-vertical/tabs:justify-start hover:text-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-1 focus-visible:outline-ring disabled:pointer-events-none disabled:opacity-50 has-data-[icon=inline-end]:pr-1 has-data-[icon=inline-start]:pl-1 dark:text-muted-foreground dark:hover:text-foreground group-data-[variant=default]/tabs-list:data-active:shadow-none group-data-[variant=line]/tabs-list:data-active:shadow-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         "group-data-[variant=line]/tabs-list:bg-transparent group-data-[variant=line]/tabs-list:data-active:bg-transparent dark:group-data-[variant=line]/tabs-list:data-active:border-transparent dark:group-data-[variant=line]/tabs-list:data-active:bg-transparent",
         "data-active:text-foreground dark:data-active:text-foreground",
         "after:absolute after:bg-foreground after:opacity-0 after:transition-opacity group-data-horizontal/tabs:after:inset-x-0 group-data-horizontal/tabs:after:bottom-[-5px] group-data-horizontal/tabs:after:h-0.5 group-data-vertical/tabs:after:inset-y-0 group-data-vertical/tabs:after:-right-1 group-data-vertical/tabs:after:w-0.5 group-data-[variant=line]/tabs-list:data-active:after:opacity-100",

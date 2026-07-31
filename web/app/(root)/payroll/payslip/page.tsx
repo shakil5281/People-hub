@@ -1,9 +1,10 @@
 "use client"
 
 import * as React from "react"
-import { ReceiptIcon, Loader2, SearchIcon, FileDownIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
+import { Loader2, SearchIcon, FileDownIcon, FileTextIcon, ChevronLeftIcon, ChevronRightIcon, ReceiptIcon } from "lucide-react"
+import { toast } from "sonner"
 import { salaryApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
 interface Company { id: string; company_name_en: string }
@@ -17,15 +18,29 @@ interface Shift { id: string; name: string }
 interface Emp {
   employee_id: string
   name_en: string
-  designation_ref?: { name: string }
-  department?: { name: string }
-  section_ref?: { name: string }
-  line_ref?: { name: string }
-  group_ref?: { name: string }
+  name_bn?: string
+  grade?: string
+  employee_type?: string
+  account_number?: string
+  account_type?: string
+  nid?: string
+  joining_date?: string
+  designation_ref?: { name: string; name_bn?: string }
+  department?: { name: string; name_bn?: string }
+  section_ref?: { name: string; name_bn?: string }
+  shift?: { name: string }
 }
 
 interface PayslipRecord {
   id: string
+  company?: {
+    company_name_en?: string
+    company_name_bn?: string
+    address_en?: string
+    address_bn?: string
+    phone?: string
+    email?: string
+  }
   employee: Emp
   basic_salary: number
   house_rent: number
@@ -36,7 +51,10 @@ interface PayslipRecord {
   gross_salary: number
   provident_fund: number
   tax: number
+  loan_deduction: number
+  advance_deduction: number
   absent_deduction: number
+  other_deduction: number
   total_deductions: number
   overtime_hours: number
   overtime_rate: number
@@ -63,6 +81,9 @@ interface PaginatedResponse {
   year: number
 }
 
+type ExportKind = "excel" | "pdf"
+type ExportLang = "en" | "bn"
+
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth()
@@ -71,71 +92,218 @@ const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
 const labelCls = "text-xs font-medium text-muted-foreground"
 
-const fmt = (n: number) => n.toLocaleString()
-const fmt2 = (n: number) => n.toFixed(2)
+const fmt = (n: number) => (n || 0).toLocaleString()
+const fmt2 = (n: number) => (n || 0).toFixed(2)
 
-function PayslipCard({ s, month }: { s: PayslipRecord; month: number }) {
+const orDash = (v?: string | null) => (v && v.trim() ? v : "-")
+
+const shortPayrollNo = (id: string) => (id || "").toUpperCase().slice(0, 10) || "-"
+
+const paymentMethodName = (acctType?: string) => {
+  switch ((acctType || "").toLowerCase()) {
+    case "cash": return "Cash"
+    case "mobile": case "mobile_banking": case "bkash": case "nagad": case "rocket": return "Mobile Banking"
+    case "cheque": case "check": return "Cheque"
+    default: return "Bank Transfer"
+  }
+}
+
+function formatDate(v?: string) {
+  if (!v) return "-"
+  const d = new Date(v)
+  if (isNaN(d.getTime())) return "-"
+  return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+}
+
+function SectionTitle({ title }: { title: string }) {
   return (
-    <Card className="border-primary/10 shadow-sm">
-      <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 pb-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="text-lg">{s.employee?.name_en || "-"}</CardTitle>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {s.employee?.employee_id} | {s.employee?.designation_ref?.name || "-"}
-            </p>
-          </div>
-          <span className="text-xs font-semibold text-primary bg-primary/10 px-2 py-1 rounded">
-            {MONTHS[month]}
-          </span>
+    <div className="flex items-center justify-between border border-slate-300 bg-slate-50 px-2 py-1">
+      <span className="text-[11px] font-bold uppercase tracking-wide text-blue-900">{title}</span>
+    </div>
+  )
+}
+
+function FieldGrid({ fields, cols = 2 }: { fields: [string, string][]; cols?: number }) {
+  return (
+    <div className="grid border-x border-b border-slate-300" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0,1fr))` }}>
+      {fields.map(([label, value], i) => (
+        <div key={i} className="flex items-start gap-1 border-b border-slate-200 px-1.5 py-1 text-[11px]">
+          <span className="w-[46%] shrink-0 font-semibold text-slate-500">{label}</span>
+          <span className="min-w-0 flex-1 break-words font-medium text-slate-800">{value}</span>
         </div>
-      </CardHeader>
-      <CardContent className="pt-4 space-y-3">
+      ))}
+    </div>
+  )
+}
+
+function MoneyTable({ title, rows, total, totalLabel }: { title: string; rows: [string, string][]; total: string; totalLabel: string }) {
+  return (
+    <div className="min-w-0 flex-1">
+      <SectionTitle title={title} />
+      <div className="border-x border-b border-slate-300">
+        {rows.map(([label, amount], i) => (
+          <div key={i} className="flex items-center justify-between gap-2 border-b border-slate-200 px-1.5 py-[3px] text-[11px] last:border-b-0">
+            <span className="min-w-0 truncate text-slate-700">{label}</span>
+            <span className="shrink-0 font-medium text-slate-800">{amount}</span>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-2 border border-slate-300 bg-slate-100 px-1.5 py-1 text-[11px]">
+        <span className="font-bold text-slate-800">{totalLabel}</span>
+        <span className="font-bold text-slate-900">{total}</span>
+      </div>
+    </div>
+  )
+}
+
+function PayslipCard({ s, month, year }: { s: PayslipRecord; month: number; year: number }) {
+  const emp = s.employee || {} as Emp
+  const company = s.company
+  const payrollNo = shortPayrollNo(s.id)
+  const printDate = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+
+  const employeeInfo: [string, string][] = [
+    ["Employee ID", orDash(emp.employee_id)],
+    ["Name", orDash(emp.name_en)],
+    ["Department", orDash(emp.department?.name)],
+    ["Section", orDash(emp.section_ref?.name)],
+    ["Designation", orDash(emp.designation_ref?.name)],
+    ["Grade", orDash(emp.grade)],
+    ["Shift", orDash(emp.shift?.name)],
+    ["Joining Date", formatDate(emp.joining_date)],
+    ["Employment Type", orDash(emp.employee_type)],
+    ["Account No.", orDash(emp.account_number)],
+    ["NID", orDash(emp.nid)],
+  ]
+
+  const attendance: [string, string][] = [
+    ["Working Days", String(s.total_days ?? 0)],
+    ["Weekend", String(s.weekend_days ?? 0)],
+    ["Holiday", String(s.holiday_days ?? 0)],
+    ["Present", String(s.present_days ?? 0)],
+    ["Absent", String(s.absent_days ?? 0)],
+    ["Leave", String(s.leave_days ?? 0)],
+    ["Late", String(s.late_days ?? 0)],
+    ["OT Hours", fmt2(s.overtime_hours)],
+  ]
+
+  const earnings: [string, string][] = [
+    ["Basic Salary", fmt(s.basic_salary)],
+    ["House Rent", fmt(s.house_rent)],
+    ["Medical", fmt(s.medical_allowance)],
+    ["Transport", fmt(s.transport_allowance)],
+    ["Food", fmt(s.food_allowance)],
+    ["Other Allowance", fmt(s.other_allowance)],
+    ["Attendance Bonus", fmt(s.attendance_bonus)],
+    ["Overtime", fmt(s.overtime_amount)],
+  ]
+
+  const deductions: [string, string][] = [
+    ["Tax", fmt(s.tax)],
+    ["PF", fmt(s.provident_fund)],
+    ["Loan", fmt(s.loan_deduction)],
+    ["Advance", fmt(s.advance_deduction)],
+    ["Absent Deduction", fmt(s.absent_deduction)],
+    ["Other Deduction", fmt(s.other_deduction)],
+  ]
+
+  const summary: [string, string][] = [
+    ["Gross Salary", fmt(s.gross_salary)],
+    ["Total Earnings", fmt(s.gross_salary)],
+    ["Total Deduction", fmt(s.total_deductions)],
+  ]
+
+  return (
+    <Card className="overflow-hidden border-slate-300 shadow-sm">
+      {/* Header band */}
+      <div className="bg-slate-900 px-3 py-2 text-white">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-sm font-bold leading-tight">PeopleHub</div>
+            <div className="mt-0.5 truncate text-xs font-semibold text-white">{orDash(company?.company_name_en)}</div>
+            <div className="mt-0.5 line-clamp-2 text-[10px] text-slate-400">{orDash(company?.address_en)}</div>
+            {(company?.phone || company?.email) && (
+              <div className="mt-0.5 truncate text-[10px] text-slate-400">
+                {[company?.phone, company?.email].filter(Boolean).join("  ")}
+              </div>
+            )}
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="text-base font-bold leading-tight tracking-wide">PAYSLIP</div>
+            <div className="mt-0.5 text-[9px] font-bold tracking-widest text-slate-400">OFFICE COPY</div>
+            <div className="mt-1 text-[10px] text-slate-300">
+              <span className="text-slate-400">Payroll Month: </span>{MONTHS[month]} {year}
+            </div>
+            <div className="text-[10px] text-slate-300">
+              <span className="text-slate-400">Payroll No: </span>{payrollNo}
+            </div>
+            <div className="text-[10px] text-slate-300">
+              <span className="text-slate-400">Print Date: </span>{printDate}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <CardContent className="space-y-2 p-3">
+        {/* Employee Information */}
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Earnings</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <span className="text-muted-foreground">Basic Salary</span><span className="text-right font-medium">{fmt(s.basic_salary)}</span>
-            <span className="text-muted-foreground">House Rent</span><span className="text-right font-medium">{fmt(s.house_rent)}</span>
-            <span className="text-muted-foreground">Medical</span><span className="text-right font-medium">{fmt(s.medical_allowance)}</span>
-            <span className="text-muted-foreground">Transport</span><span className="text-right font-medium">{fmt(s.transport_allowance)}</span>
-            <span className="text-muted-foreground">Food</span><span className="text-right font-medium">{fmt(s.food_allowance)}</span>
-            <span className="text-muted-foreground">Other</span><span className="text-right font-medium">{fmt(s.other_allowance)}</span>
-            <span className="font-semibold text-primary border-t pt-0.5">Gross</span>
-            <span className="text-right font-semibold text-primary border-t pt-0.5">{fmt(s.gross_salary)}</span>
-          </div>
+          <SectionTitle title="Employee Information" />
+          <FieldGrid fields={employeeInfo} cols={2} />
         </div>
+
+        {/* Attendance */}
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Overtime & Bonus</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <span className="text-muted-foreground">OT Hours</span><span className="text-right">{fmt2(s.overtime_hours)}</span>
-            <span className="text-muted-foreground">OT Rate</span><span className="text-right">{fmt2(s.overtime_rate)}</span>
-            <span className="text-muted-foreground">OT Amount</span><span className="text-right font-medium">{fmt(s.overtime_amount)}</span>
-            <span className="text-muted-foreground">Att. Bonus</span><span className="text-right font-medium">{fmt(s.attendance_bonus)}</span>
-          </div>
+          <SectionTitle title="Attendance" />
+          <FieldGrid fields={attendance} cols={4} />
         </div>
+
+        {/* Earnings + Deductions side by side */}
+        <div className="flex gap-2">
+          <MoneyTable title="Earnings" rows={earnings} total={fmt(s.gross_salary)} totalLabel="Total Earnings" />
+          <MoneyTable title="Deductions" rows={deductions} total={fmt(s.total_deductions)} totalLabel="Total Deduction" />
+        </div>
+
+        {/* Summary */}
         <div>
-          <p className="text-xs font-medium text-muted-foreground mb-1 uppercase tracking-wide">Deductions</p>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-            <span className="text-muted-foreground">PF</span><span className="text-right">{fmt(s.provident_fund)}</span>
-            <span className="text-muted-foreground">Tax</span><span className="text-right">{fmt(s.tax)}</span>
-            <span className="text-muted-foreground">Absent Deduction</span><span className="text-right">{fmt(s.absent_deduction)}</span>
-            <span className="font-semibold text-destructive border-t pt-0.5">Total Deductions</span>
-            <span className="text-right font-semibold text-destructive border-t pt-0.5">{fmt(s.total_deductions)}</span>
-          </div>
+          {summary.map(([label, value], i) => (
+            <div key={i} className="flex items-center justify-between border border-slate-300 bg-slate-50 px-2 py-1 text-[11px]">
+              <span className="font-semibold text-blue-900">{label}</span>
+              <span className="font-semibold text-slate-900">{value}</span>
+            </div>
+          ))}
         </div>
-        <div className="flex justify-between items-center p-3 rounded-lg bg-primary/5 border border-primary/10">
-          <span className="font-bold text-lg">Net Salary</span>
-          <span className="font-bold text-lg text-primary">{fmt(s.net_salary)}</span>
+
+        {/* Net salary green box */}
+        <div className="flex items-center justify-between bg-green-700 px-3 py-1.5 text-white">
+          <span className="text-sm font-bold">Net Salary</span>
+          <span className="text-sm font-bold">BDT {fmt(s.net_salary)}</span>
         </div>
-        <div className="grid grid-cols-4 gap-1 text-xs text-muted-foreground border-t pt-2">
-          <span>P: <strong>{s.present_days}</strong></span>
-          <span>A: <strong>{s.absent_days}</strong></span>
-          <span>L: <strong>{s.late_days}</strong></span>
-          <span>LV: <strong>{s.leave_days}</strong></span>
-          <span>H: <strong>{s.holiday_days}</strong></span>
-          <span>W: <strong>{s.weekend_days}</strong></span>
-          <span>T: <strong>{s.total_days}</strong></span>
-          <span className="text-right"><span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${s.status === "processed" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>{s.status}</span></span>
+
+        {/* Payment information */}
+        <div>
+          <SectionTitle title="Payment Information" />
+          <FieldGrid
+            fields={[
+              ["Payment Method", paymentMethodName(emp.account_type)],
+              ["Transaction ID", orDash(s.id)],
+            ]}
+            cols={2}
+          />
+        </div>
+
+        {/* Signatures */}
+        <div className="grid grid-cols-4 border border-slate-300">
+          {["Prepared By", "Checked By", "Approved By", "Employee Signature"].map((label, i) => (
+            <div key={i} className="flex h-14 items-end justify-center border-r border-slate-300 pb-1 text-[9px] text-slate-500 last:border-r-0">
+              {label}
+            </div>
+          ))}
+        </div>
+
+        {/* Generated / confidential */}
+        <div className="flex items-center justify-between text-[9px] text-slate-500">
+          <span>Generated By PeopleHub</span>
+          <span className="font-medium uppercase">Confidential Document</span>
         </div>
       </CardContent>
     </Card>
@@ -165,6 +333,7 @@ export default function PaySlipPage() {
   const [singlePayslip, setSinglePayslip] = React.useState<PayslipRecord | null>(null)
   const [paginated, setPaginated] = React.useState<PaginatedResponse | null>(null)
   const [loading, setLoading] = React.useState(false)
+  const [exporting, setExporting] = React.useState<{ kind: ExportKind; lang: ExportLang } | null>(null)
   const [searched, setSearched] = React.useState(false)
   const [page, setPage] = React.useState(1)
 
@@ -304,40 +473,56 @@ export default function PaySlipPage() {
     setSearched(false)
   }
 
-  const handleExport = async () => {
-    setLoading(true)
+  const handleExport = async (kind: ExportKind, lang: ExportLang) => {
+    if (exporting) return
+    setExporting({ kind, lang })
     try {
-      const params = buildParams()
-      const res = await salaryApi.payslipExport(params)
+      const params = { ...buildParams(), lang }
+      const res = kind === "pdf" ? await salaryApi.payslipExportPdf(params) : await salaryApi.payslipExport(params)
       const url = window.URL.createObjectURL(new Blob([res.data]))
       const a = document.createElement("a")
       a.href = url
       const suffix = employeeId ? `_${employeeId}` : ""
-      a.download = `payslip${suffix}_${MONTHS[month]}_${year}.xlsx`
+      const ext = kind === "pdf" ? "pdf" : "xlsx"
+      a.download = `payslip${suffix}_${MONTHS[month]}_${year}_${lang}.${ext}`
       a.click()
       window.URL.revokeObjectURL(url)
+    } catch {
+      toast.error(`Failed to export ${kind.toUpperCase()}`)
     } finally {
-      setLoading(false)
+      setExporting(null)
     }
   }
 
   const hasResults = singlePayslip || (paginated?.salaries && paginated.salaries.length > 0)
+  const exportDisabled = loading || !searched || !hasResults || !!exporting
+
+  const ExportButton = ({ kind, lang, label }: { kind: ExportKind; lang: ExportLang; label: string }) => {
+    const isExcel = kind === "excel"
+    const isSpinning = exporting?.kind === kind && exporting?.lang === lang
+    return (
+      <Button variant="outline" size="sm" disabled={exportDisabled} onClick={() => handleExport(kind, lang)}>
+        {isSpinning ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : isExcel ? <FileDownIcon className="mr-1.5 h-4 w-4" /> : <FileTextIcon className="mr-1.5 h-4 w-4" />}
+        {label}
+      </Button>
+    )
+  }
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6 flex items-center justify-between">
+      <div className="px-4 lg:px-6 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <ReceiptIcon className="h-6 w-6 text-muted-foreground" />
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Payslip</h1>
-            <p className="text-muted-foreground mt-1">Employee salary payslip</p>
+            <p className="text-muted-foreground mt-1">Employee salary payslip with Office & Employee copy</p>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" disabled={loading || !searched || !hasResults} onClick={handleExport}>
-            <FileDownIcon className="mr-2 h-4 w-4" />
-            {loading ? "Exporting..." : "Export Excel"}
-          </Button>
+        <div className="flex flex-wrap gap-2">
+          <ExportButton kind="excel" lang="en" label="Excel (En)" />
+          <ExportButton kind="excel" lang="bn" label="Excel (Bn)" />
+          <ExportButton kind="pdf" lang="en" label="PDF (En)" />
+          <ExportButton kind="pdf" lang="bn" label="PDF (Bn)" />
         </div>
       </div>
 
@@ -446,8 +631,8 @@ export default function PaySlipPage() {
       )}
 
       {singlePayslip && !loading && (
-        <div className="px-4 lg:px-6 max-w-2xl mx-auto">
-          <PayslipCard s={singlePayslip} month={month} />
+        <div className="px-4 lg:px-6 max-w-xl mx-auto w-full">
+          <PayslipCard s={singlePayslip} month={month} year={year} />
         </div>
       )}
 
@@ -461,7 +646,7 @@ export default function PaySlipPage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {paginated.salaries.map((s) => (
-              <PayslipCard key={s.id} s={s} month={month} />
+              <PayslipCard key={s.id} s={s} month={month} year={year} />
             ))}
           </div>
           {paginated.total_pages > 1 && (

@@ -45,9 +45,16 @@ func (r *NotificationRepository) List(userID string, isRead *bool, page, limit i
 
 func (r *NotificationRepository) MarkAsRead(id, userID string) error {
 	now := time.Now()
-	return r.db.Model(&models.Notification{}).
+	res := r.db.Model(&models.Notification{}).
 		Where("id = ? AND user_id = ? AND deleted_at IS NULL", id, userID).
-		Updates(map[string]interface{}{"is_read": true, "read_at": &now}).Error
+		Updates(map[string]interface{}{"is_read": true, "read_at": &now})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }
 
 func (r *NotificationRepository) MarkAllAsRead(userID string) error {
@@ -66,5 +73,12 @@ func (r *NotificationRepository) GetUnreadCount(userID string) (int64, error) {
 }
 
 func (r *NotificationRepository) Delete(id, userID string) error {
-	return r.db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Notification{}).Error
+	res := r.db.Where("id = ? AND user_id = ?", id, userID).Delete(&models.Notification{})
+	if res.Error != nil {
+		return res.Error
+	}
+	if res.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
 }

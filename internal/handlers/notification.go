@@ -86,7 +86,7 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	userID := c.GetString("user_id")
 	id := c.Param("id")
 	if err := h.notifRepo.MarkAsRead(id, userID); err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Notification not found"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Notification marked as read"})

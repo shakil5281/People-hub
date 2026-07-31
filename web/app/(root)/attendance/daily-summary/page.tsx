@@ -1,12 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { FileTextIcon, DownloadIcon, Loader2, ClipboardCheckIcon, FilterIcon, XIcon } from "lucide-react"
+import { FileTextIcon, DownloadIcon, Loader2, ClipboardCheckIcon, FilterIcon, XIcon, MoreHorizontalIcon } from "lucide-react"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from "@/components/ui/sheet"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 
@@ -284,58 +290,66 @@ export default function DailySummaryPage() {
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
           <div className="flex items-center gap-2">
             <FileTextIcon className="h-6 w-6 text-muted-foreground" />
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Daily Summary</h1>
+              <h1 className="text-lg md:text-3xl font-bold tracking-tight">Daily Summary</h1>
               <p className="text-muted-foreground mt-1">Daily attendance summary reports</p>
             </div>
           </div>
-          <div className="hidden md:flex">
+          <ButtonGroup className="hidden md:flex">
             <Button onClick={handleExport} disabled={exporting} variant="outline">
               {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
               {exporting ? "Exporting..." : "Export Excel"}
             </Button>
-          </div>
-        </div>
-        <div className="md:hidden mt-3">
-          <ButtonGroup className="w-full">
-            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="flex-1">
-                  <FilterIcon className="mr-2 h-4 w-4" />
-                  Filters
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
-                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
-                  <SheetTitle className="text-base">Filters</SheetTitle>
-                  <SheetClose asChild>
-                    <Button variant="ghost" size="icon-sm">
-                      <XIcon className="h-4 w-4" />
-                    </Button>
-                  </SheetClose>
-                </SheetHeader>
-                <div className="flex-1 overflow-y-auto px-4 py-4">
-                  <FilterBar
-                    filters={filterDefs}
-                    values={filters}
-                    onChange={handleChange}
-                    onApply={handleApply}
-                    onReset={handleReset}
-                    submitting={loading}
-                    singleColumn
-                    noBorder
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
-            <Button onClick={handleExport} disabled={exporting} variant="outline" className="flex-1">
-              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
-              {exporting ? "Exporting..." : "Export"}
-            </Button>
           </ButtonGroup>
+        </div>
+        <div className="md:hidden flex items-center justify-end gap-2 mt-3">
+          <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+            <SheetTrigger asChild>
+              <Button variant="outline">
+                <FilterIcon className="h-4 w-4" />
+                Filters
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+              <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                <SheetTitle className="text-base">Filters</SheetTitle>
+                <SheetClose asChild>
+                  <Button variant="ghost" size="icon-sm">
+                    <XIcon className="h-4 w-4" />
+                  </Button>
+                </SheetClose>
+              </SheetHeader>
+              <div className="flex-1 overflow-y-auto px-4 py-4">
+                <FilterBar
+                  filters={filterDefs}
+                  values={filters}
+                  onChange={handleChange}
+                  onApply={handleApply}
+                  onReset={handleReset}
+                  submitting={loading}
+                  singleColumn
+                  noBorder
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline">
+                <MoreHorizontalIcon className="h-4 w-4" />
+                More
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              <DropdownMenuItem onClick={handleExport} disabled={exporting}>
+                <DownloadIcon className="mr-2 h-4 w-4" />
+                {exporting ? "Exporting..." : "Export Excel"}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
@@ -360,7 +374,7 @@ export default function DailySummaryPage() {
         <div className="rounded-lg border bg-card overflow-hidden">
           <Tabs value={groupBy} onValueChange={handleTabChange}>
             <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/20">
-              <h2 className="text-base font-semibold">{tabLabel} Summary</h2>
+              <h2 className="hidden md:block text-base font-semibold">{tabLabel} Summary</h2>
               <TabsList className="h-8">
                 {groupTabs.map((tab) => (
                   <TabsTrigger key={tab.value} value={tab.value} className="h-7 px-3 text-xs">{tab.label}</TabsTrigger>
