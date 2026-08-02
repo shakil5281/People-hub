@@ -16,7 +16,7 @@
   <env name="DB_PORT" value="5432"/>
   <env name="DB_USER" value="shakil"/>
   <env name="DB_PASS" value="123456"/>
-  <env name="DB_NAME" value="hrhub"/>
+  <env name="DB_NAME" value="peoplehub"/>
   <env name="DB_SSLMODE" value="disable"/>
   <env name="JWT_SECRET" value="peoplehub-secret-key-change-in-production-2025"/>
   <env name="GO_ENV" value="production"/>

@@ -293,7 +293,7 @@ Set-Location G:\softwer\People-hub
 The script will:
 
 1. Check prerequisites (Go, Node.js, IIS running)
-2. Clean old binaries (`hrhub.exe`, `hub.exe`, `server.exe`, `employee.exe`, `reset.exe`)
+2. Clean old binaries (`peoplehub.exe`, `hub.exe`, `server.exe`, `employee.exe`, `reset.exe`)
 3. **NOT touch existing IIS sites or app pools**
 4. Build `peoplehub.exe` (Go backend)
 5. Build `peoplehub-gateway.exe` (Go reverse proxy)
@@ -969,7 +969,7 @@ $pinfo.EnvironmentVariables["DB_HOST"] = "localhost"
 $pinfo.EnvironmentVariables["DB_PORT"] = "5432"
 $pinfo.EnvironmentVariables["DB_USER"] = "shakil"
 $pinfo.EnvironmentVariables["DB_PASS"] = "123456"
-$pinfo.EnvironmentVariables["DB_NAME"] = "hrhub"
+$pinfo.EnvironmentVariables["DB_NAME"] = "peoplehub"
 $pinfo.EnvironmentVariables["DB_SSLMODE"] = "disable"
 $pinfo.EnvironmentVariables["JWT_SECRET"] = "peoplehub-secret-key-change-in-production-2025"
 [System.Diagnostics.Process]::Start($pinfo)

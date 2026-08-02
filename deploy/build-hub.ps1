@@ -79,7 +79,7 @@ if ($rewriteModule) {
 # --- 1.5 Clean Old Binaries --------------------------------------------------
 Write-Host "`n=== Cleaning Old Binaries ===" -ForegroundColor Cyan
 $oldBinaries = @(
-    "$ROOT\hrhub.exe",
+    "$ROOT\peoplehub.exe",
     "$ROOT\hub.exe",
     "$ROOT\hub-gateway.exe",
     "$ROOT\server.exe",
