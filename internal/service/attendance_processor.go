@@ -478,7 +478,7 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 	for _, punch := range punches {
 		pMins := mins(punch.PunchTime)
 
-		if !isOvernight && hasShiftEnd && pMins > shiftEndMins {
+		if !isOvernight && hasShiftEnd && pMins >= shiftEndMins {
 			continue
 		}
 		// Overnight: morning punches belong to check-out side
@@ -504,9 +504,44 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 			} else {
 				checkIn = &punches[0].PunchTime
 			}
+		} else if hasShiftEnd && mins(punches[0].PunchTime) >= shiftEndMins {
+			// All punches after shift end → leave check-in nil (will be handled as outTime only)
 		} else {
 			checkIn = &punches[0].PunchTime
 		}
+	}
+
+	// All punches at/after shift end → only last punch counts as outTime, inTime missing
+	if checkIn == nil && len(punches) > 0 && hasShiftEnd {
+		lastPunchMins := mins(punches[len(punches)-1].PunchTime)
+		if isOvernight {
+			if lastPunchMins >= shiftEndMins {
+				checkOut = &punches[len(punches)-1].PunchTime
+			}
+		} else {
+			if lastPunchMins >= shiftEndMins {
+				checkOut = &punches[len(punches)-1].PunchTime
+			}
+		}
+	}
+
+	// Single punch within 1 hour before shift out (or at shift out) → count as outTime only
+	if len(punches) == 1 && checkIn != nil && hasShiftEnd && !isOvernight {
+		punchMins := mins(punches[0].PunchTime)
+		oneHourBeforeEnd := shiftEndMins - 60
+		if punchMins >= oneHourBeforeEnd && punchMins <= shiftEndMins {
+			checkOut = checkIn
+			checkIn = nil
+		}
+	}
+
+	// 25-minute check-in window: punches within 25 min of check-in are ignored for outTime
+	const checkInWindowMins = 25
+	var checkInCutoffMins int
+	hasCheckInCutoff := false
+	if checkIn != nil {
+		checkInCutoffMins = mins(*checkIn) + checkInWindowMins
+		hasCheckInCutoff = true
 	}
 
 	isValidOutMins := func(pMins int) bool {
@@ -522,9 +557,12 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 		return !hasShiftStart || pMins > shiftStartMins
 	}
 
-	// Check-out: last 'O' punch
+	// Check-out: last 'O' punch (skip punches within 25 min of check-in)
 	for i := len(punches) - 1; i >= 0; i-- {
 		pMins := mins(punches[i].PunchTime)
+		if hasCheckInCutoff && pMins <= checkInCutoffMins {
+			continue
+		}
 		if (punches[i].PunchType == "O" || punches[i].PunchType == "o") && isValidOutMins(pMins) {
 			if isOvernight && hasShiftEnd && pMins > shiftEndMins && (hasShiftStart && pMins > shiftStartMins) {
 				continue
@@ -538,12 +576,15 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 	if checkOut == nil && hasShiftEnd {
 		for i := len(punches) - 1; i >= 0; i-- {
 			pMins := mins(punches[i].PunchTime)
+			if hasCheckInCutoff && pMins <= checkInCutoffMins {
+				continue
+			}
 			if isOvernight {
 				if pMins <= shiftEndMins && isValidOutMins(pMins) {
 					checkOut = &punches[i].PunchTime
 					break
 				}
-			} else if pMins > shiftEndMins && isValidOutMins(pMins) {
+			} else if pMins >= shiftEndMins && isValidOutMins(pMins) {
 				checkOut = &punches[i].PunchTime
 				break
 			}
@@ -553,7 +594,10 @@ func (p *AttendanceProcessor) resolveAttendanceFromPunches(
 	// Final fallback: last punch after shift start (day) or last punch overall if >1
 	if checkOut == nil && len(punches) > 1 {
 		lastPunch := punches[len(punches)-1]
-		if isValidOutMins(mins(lastPunch.PunchTime)) {
+		lastPunchMins := mins(lastPunch.PunchTime)
+		if hasCheckInCutoff && lastPunchMins <= checkInCutoffMins {
+			// Skip — within 25 min of check-in
+		} else if isValidOutMins(lastPunchMins) {
 			if checkIn == nil || !checkIn.Equal(lastPunch.PunchTime) {
 				checkOut = &lastPunch.PunchTime
 			}

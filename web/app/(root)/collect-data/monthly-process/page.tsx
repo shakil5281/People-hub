@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog"
 import { dataLogApi, attendanceApi, companyApi } from "@/lib/api"
 import type { Company } from "@/components/data/company-data"
+import { isSuperAdmin } from "@/lib/auth"
 
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
@@ -27,6 +28,7 @@ export default function MonthlyProcessPage() {
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [totalCount, setTotalCount] = React.useState(0)
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false)
 
   const monthDate = React.useMemo(() => new Date(selectedYear, selectedMonth, 1), [selectedYear, selectedMonth])
 
@@ -49,6 +51,7 @@ export default function MonthlyProcessPage() {
   }
 
   React.useEffect(() => {
+    setMounted(true)
     fetchStats()
     fetchCompanies()
   }, [])
@@ -115,29 +118,31 @@ export default function MonthlyProcessPage() {
           <CardContent>
             <div className="flex items-center justify-between">
               <p className="text-4xl font-bold">{totalCount}</p>
-              <>
-                <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
-                  <Trash2Icon className="mr-2 h-4 w-4" />
-                  Delete All
-                </Button>
-                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action cannot be undone. This will permanently delete all attendance records from the database.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDeleteAll} disabled={deleting}>
-                        {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </>
+              {mounted && isSuperAdmin() && (
+                <>
+                  <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
+                    <Trash2Icon className="mr-2 h-4 w-4" />
+                    Delete All
+                  </Button>
+                  <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action cannot be undone. This will permanently delete all attendance records from the database.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteAll} disabled={deleting}>
+                          {deleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>

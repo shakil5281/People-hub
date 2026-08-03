@@ -85,6 +85,7 @@ export default function SalarySheetPage() {
   const [totals, setTotals] = React.useState<Record<string,number> | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
+  const [lang, setLang] = React.useState<"en" | "bn">("en")
   const [applied, setApplied] = React.useState(false)
 
   const fetchSections = React.useCallback(async (deptId: string) => {
@@ -227,6 +228,20 @@ export default function SalarySheetPage() {
           </div>
         </div>
         <div className="flex gap-2">
+          <div className="flex border rounded-md overflow-hidden">
+            <button
+              className={`px-2 py-1 text-xs font-medium ${lang === "en" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+              onClick={() => setLang("en")}
+            >
+              EN
+            </button>
+            <button
+              className={`px-2 py-1 text-xs font-medium ${lang === "bn" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+              onClick={() => setLang("bn")}
+            >
+              BN
+            </button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -238,6 +253,7 @@ export default function SalarySheetPage() {
                   company_id: companyId,
                   month: String(month + 1),
                   year: String(year),
+                  lang,
                 }
                 if (departmentId) params.department_id = departmentId
                 if (sectionId) params.section_id = sectionId
@@ -250,14 +266,47 @@ export default function SalarySheetPage() {
                 const url = window.URL.createObjectURL(new Blob([res.data]))
                 const a = document.createElement("a")
                 a.href = url
-                a.download = `salary_sheet_${MONTHS[month]}_${year}.xlsx`
+                a.download = `salary_sheet_${MONTHS[month]}_${year}_${lang}.xlsx`
                 a.click()
                 window.URL.revokeObjectURL(url)
               } finally { setExporting(false) }
             }}
           >
             <FileDownIcon className="mr-2 h-4 w-4" />
-            {exporting ? "Exporting..." : "Export Excel"}
+            {exporting ? "Exporting..." : "Excel"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exporting || !applied}
+            onClick={async () => {
+              setExporting(true)
+              try {
+                const params: Record<string, string> = {
+                  company_id: companyId,
+                  month: String(month + 1),
+                  year: String(year),
+                  lang,
+                }
+                if (departmentId) params.department_id = departmentId
+                if (sectionId) params.section_id = sectionId
+                if (designationId) params.designation_id = designationId
+                if (lineId) params.line_id = lineId
+                if (groupId) params.group_id = groupId
+                if (shiftId) params.shift_id = shiftId
+                if (employeeId) params.employee_id = employeeId
+                const res = await salaryApi.sheetExportPdf(params)
+                const url = window.URL.createObjectURL(new Blob([res.data]))
+                const a = document.createElement("a")
+                a.href = url
+                a.download = `salary_sheet_${MONTHS[month]}_${year}_${lang}.pdf`
+                a.click()
+                window.URL.revokeObjectURL(url)
+              } finally { setExporting(false) }
+            }}
+          >
+            <FileDownIcon className="mr-2 h-4 w-4" />
+            {exporting ? "Exporting..." : "PDF"}
           </Button>
           <Link href="/payroll/bank-sheet">
             <Button variant="outline" size="sm">

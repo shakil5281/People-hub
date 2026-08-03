@@ -421,6 +421,16 @@ func designationName(d *models.Designation, lang string) string {
 	return d.Name
 }
 
+func lineName(l *models.Line, lang string) string {
+	if l == nil {
+		return ""
+	}
+	if lang == "bn" && l.NameBn != "" {
+		return l.NameBn
+	}
+	return l.Name
+}
+
 func departmentName(d *models.Department, lang string) string {
 	if d == nil {
 		return ""

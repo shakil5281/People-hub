@@ -202,6 +202,13 @@ export default function MissingAttendancePage() {
     return v.replace("T", " ")
   }
 
+  function formatDateDDMMYYYY(v: string | null | undefined): string {
+    if (!v) return "-"
+    const d = v.slice(0, 10)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return v
+    return d.split("-").reverse().join("-")
+  }
+
   const openSheet = (row: MissingRecord) => {
     setSelected(row)
     const punches = row.punches || []
@@ -209,7 +216,7 @@ export default function MissingAttendancePage() {
     const punchOut = punches.find((x) => x.type === "O" || x.type === "o" || x.type === "1")
     const bestIn = punchIn?.time || row.check_in
     const bestOut = punchOut?.time || row.check_out
-    setInTime(bestIn ? toDT(bestIn) : row.date)
+    setInTime(bestIn ? toDT(bestIn) : bestOut ? row.date + "T07:55" : row.date)
     setOutTime(bestOut ? toDT(bestOut) : row.date)
     setSheetOpen(true)
   }
@@ -349,7 +356,7 @@ export default function MissingAttendancePage() {
                       <td className="px-3 py-2 font-medium">{row.employee_name}</td>
                       <td className="px-3 py-2 text-muted-foreground">{row.designation || "-"}</td>
                       <td className="px-3 py-2">{row.shift_name || "-"}</td>
-                      <td className="px-3 py-2">{row.date?.split("-").reverse().join("-")}</td>
+                      <td className="px-3 py-2">{formatDateDDMMYYYY(row.date)}</td>
                       <td className="px-3 py-2">
                         {row.check_in ? (
                           <span className="text-green-600 font-medium">{formatCheck(row.check_in)}</span>
@@ -428,7 +435,7 @@ export default function MissingAttendancePage() {
                 <div><span className="text-muted-foreground">Code: </span><span className="font-medium">{selected.employee_id}</span></div>
                 <div><span className="text-muted-foreground">Designation: </span><span className="font-medium">{selected.designation || "-"}</span></div>
                 <div><span className="text-muted-foreground">Shift: </span><span className="font-medium">{selected.shift_name || "-"}</span></div>
-                <div><span className="text-muted-foreground">Date: </span><span className="font-medium">{selected.date}</span></div>
+                <div><span className="text-muted-foreground">Date: </span><span className="font-medium">{formatDateDDMMYYYY(selected.date)}</span></div>
                 {selected.punches && selected.punches.length > 0 && (
                   <div className="pt-1.5 border-t border-border mt-1.5">
                     <span className="text-muted-foreground text-xs">Punch Logs: </span>

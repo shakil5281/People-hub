@@ -60,7 +60,7 @@ func (nc *NotificationChecker) getAdminUserIDs() []string {
 	nc.db.Model(&models.User{}).
 		Joins("INNER JOIN user_roles ON user_roles.user_id = users.id").
 		Joins("INNER JOIN roles ON roles.id = user_roles.role_id").
-		Where("roles.name = ? AND users.deleted_at IS NULL", "admin").
+		Where("roles.name IN ? AND users.deleted_at IS NULL", []string{"admin", "superadmin", "super_admin"}).
 		Pluck("users.id", &userIDs)
 	return userIDs
 }

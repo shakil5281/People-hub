@@ -3,7 +3,9 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"time"
@@ -61,8 +63,10 @@ func (r *MDBReader) ReadPunches(filePath string, startDate, endDate string) ([]Z
 	}
 
 	psScript := fmt.Sprintf(`
-$conn = New-Object -ComObject ADODB.Connection
+$ErrorActionPreference = 'Stop'
+$conn = $null
 try {
+  $conn = New-Object -ComObject ADODB.Connection
   $conn.Open("Provider=Microsoft.ACE.OLEDB.12.0;Data Source='%s'")
   $empRs = $conn.Execute("SELECT USERID, Badgenumber, Name FROM USERINFO")
   $empMap = @{}
@@ -93,33 +97,53 @@ try {
     $rs.MoveNext()
   }
   $conn.Close()
-  return $result | ConvertTo-Json -Compress -Depth 5
+  $result | ConvertTo-Json -Compress -Depth 5
 } catch {
-  return "{""error"": """ + $_.Exception.Message.Replace("""","'") + """}"
+  "{""error"": """ + $_.Exception.Message.Replace('"',"'") + """}"
 } finally {
-  if ($conn.State -eq 1) { $conn.Close() }
+  if ($conn -ne $null -and $conn.State -eq 1) { $conn.Close() }
 }
 `, filePath, dateFilter)
 
-	cmd := exec.Command("powershell", "-NoProfile", "-Command", psScript)
-	output, err := cmd.Output()
-	if err != nil {
-		return nil, fmt.Errorf("failed to run PowerShell: %w", err)
+	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("peoplehub_mdb_%d.ps1", time.Now().UnixNano()))
+	if err := os.WriteFile(tmpFile, []byte(psScript), 0644); err != nil {
+		return nil, fmt.Errorf("failed to create temp script: %w", err)
 	}
+	defer os.Remove(tmpFile)
 
-	outStr := strings.TrimSpace(string(output))
-
-	var errResult map[string]string
-	if err := json.Unmarshal([]byte(outStr), &errResult); err == nil {
-		if msg, ok := errResult["error"]; ok {
-			return nil, fmt.Errorf("MDB read error: %s", msg)
+	var lastErr error
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(2 * time.Second)
 		}
+		cmd := exec.Command("powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", tmpFile)
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			lastErr = fmt.Errorf("failed to run PowerShell: %w", err)
+			continue
+		}
+
+		outStr := strings.TrimSpace(string(output))
+
+		var errResult map[string]string
+		if err := json.Unmarshal([]byte(outStr), &errResult); err == nil {
+			if msg, ok := errResult["error"]; ok {
+				lastErr = fmt.Errorf("MDB read error: %s", msg)
+				continue
+			}
+		}
+
+		var records []ZKPunchRecord
+		if err := json.Unmarshal([]byte(outStr), &records); err != nil {
+			return nil, fmt.Errorf("failed to parse MDB data: %w", err)
+		}
+
+		return records, nil
 	}
 
-	var records []ZKPunchRecord
-	if err := json.Unmarshal([]byte(outStr), &records); err != nil {
-		return nil, fmt.Errorf("failed to parse MDB data: %w", err)
+	errMsg := lastErr.Error()
+	if strings.Contains(errMsg, "already in use") {
+		return nil, fmt.Errorf("MDB file is locked by another process (ZKTeco software). Please close ZKTeco and try again: %w", lastErr)
 	}
-
-	return records, nil
+	return nil, lastErr
 }

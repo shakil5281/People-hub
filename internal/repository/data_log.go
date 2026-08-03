@@ -99,8 +99,10 @@ func (r *DataLogRepository) ListByBadgeAndDateRange(badgeNumbers []string, start
 
 func (r *DataLogRepository) ExistsByBadgeAndPunchTime(badgeNumber string, punchTime time.Time) bool {
 	var count int64
-	r.db.Model(&models.DataLog{}).
+	if err := r.db.Model(&models.DataLog{}).
 		Where("badge_number = ? AND punch_time = ? AND deleted_at IS NULL", badgeNumber, punchTime).
-		Count(&count)
+		Count(&count).Error; err != nil {
+		return false
+	}
 	return count > 0
 }

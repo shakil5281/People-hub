@@ -72,6 +72,7 @@ export default function SalarySummaryPage() {
   const [data, setData] = React.useState<SummaryResponse | null>(null)
   const [loading, setLoading] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
+  const [lang, setLang] = React.useState<"en" | "bn">("en")
 
   React.useEffect(() => {
     Promise.all([
@@ -98,6 +99,7 @@ export default function SalarySummaryPage() {
       month: String(month + 1),
       year: String(year),
       group_by: tab,
+      lang,
     }
     if (departmentId) p.department_id = departmentId
     if (sectionId) p.section_id = sectionId
@@ -105,7 +107,7 @@ export default function SalarySummaryPage() {
     if (lineId) p.line_id = lineId
     if (groupId) p.group_id = groupId
     return p
-  }, [companyId, month, year, tab, departmentId, sectionId, designationId, lineId, groupId])
+  }, [companyId, month, year, tab, lang, departmentId, sectionId, designationId, lineId, groupId])
 
   const handleLoad = React.useCallback(async () => {
     if (!companyId) { toast.error("Select a company"); return }
@@ -223,26 +225,62 @@ export default function SalarySummaryPage() {
             <h2 className="text-lg font-semibold">{MONTHS[month]} {year} - Salary Summary</h2>
             <div className="flex gap-2 items-center">
               <span className="text-sm text-muted-foreground">Total Employees: <b>{data.total_employees}</b></span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={exporting}
-                onClick={async () => {
-                  setExporting(true)
-                  try {
-                    const res = await salaryApi.summaryExport(buildParams())
-                    const url = window.URL.createObjectURL(new Blob([res.data]))
-                    const a = document.createElement("a")
-                    a.href = url
-                    a.download = `salary_summary_${MONTHS[month]}_${year}.xlsx`
-                    a.click()
-                    window.URL.revokeObjectURL(url)
-                  } finally { setExporting(false) }
-                }}
-              >
-                <FileDownIcon className="mr-2 h-4 w-4" />
-                {exporting ? "Exporting..." : "Export Excel"}
-              </Button>
+              <div className="flex gap-2">
+                <div className="flex border rounded-md overflow-hidden">
+                  <button
+                    className={`px-2 py-1 text-xs font-medium ${lang === "en" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+                    onClick={() => setLang("en")}
+                  >
+                    EN
+                  </button>
+                  <button
+                    className={`px-2 py-1 text-xs font-medium ${lang === "bn" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+                    onClick={() => setLang("bn")}
+                  >
+                    BN
+                  </button>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exporting}
+                  onClick={async () => {
+                    setExporting(true)
+                    try {
+                      const res = await salaryApi.summaryExport(buildParams())
+                      const url = window.URL.createObjectURL(new Blob([res.data]))
+                      const a = document.createElement("a")
+                      a.href = url
+                      a.download = `salary_summary_${MONTHS[month]}_${year}_${lang}.xlsx`
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                    } finally { setExporting(false) }
+                  }}
+                >
+                  <FileDownIcon className="mr-2 h-4 w-4" />
+                  {exporting ? "Exporting..." : "Excel"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={exporting}
+                  onClick={async () => {
+                    setExporting(true)
+                    try {
+                      const res = await salaryApi.summaryExportPdf(buildParams())
+                      const url = window.URL.createObjectURL(new Blob([res.data]))
+                      const a = document.createElement("a")
+                      a.href = url
+                      a.download = `salary_summary_${MONTHS[month]}_${year}_${lang}.pdf`
+                      a.click()
+                      window.URL.revokeObjectURL(url)
+                    } finally { setExporting(false) }
+                  }}
+                >
+                  <FileDownIcon className="mr-2 h-4 w-4" />
+                  {exporting ? "Exporting..." : "PDF"}
+                </Button>
+              </div>
             </div>
           </div>
 

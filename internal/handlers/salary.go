@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"sort"
 	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shakil5281/peoplehub-api/internal/models"
@@ -190,6 +189,7 @@ func (h *SalaryHandler) SheetExport(c *gin.Context) {
 	companyID := c.Query("company_id")
 	monthStr := c.Query("month")
 	yearStr := c.Query("year")
+	lang := c.DefaultQuery("lang", "en")
 
 	month, _ := strconv.Atoi(monthStr)
 	year, _ := strconv.Atoi(yearStr)
@@ -219,33 +219,46 @@ func (h *SalaryHandler) SheetExport(c *gin.Context) {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	monthName := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC).Format("January")
+	paperSize := 5 // Legal
+	f.SetPageLayout("Sheet1", &excelize.PageLayoutOptions{
+		Size: &paperSize,
+	})
+
+	labels := getSalarySheetLabels(lang)
+	monthLabel := monthName(month, lang)
+
+	fontFamily := ""
+	if lang == "bn" {
+		fontFamily = "SutonnyMJ"
+		labels = bijoyLabels(labels)
+		monthLabel = toBijoy(monthLabel)
+	}
 
 	headerStyle, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 11, Color: "#FFFFFF"},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
+		Font:      &excelize.Font{Bold: true, Size: 11, Color: "#FFFFFF", Family: fontFamily},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 	})
 	moneyStyle, _ := f.NewStyle(&excelize.Style{
-		Font:  &excelize.Font{Size: 10},
-		NumFmt: 4,
+		Font:      &excelize.Font{Size: 10, Family: fontFamily},
+		NumFmt:    4,
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	dataStyle, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Size: 10},
+		Font:      &excelize.Font{Size: 10, Family: fontFamily},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center", WrapText: true},
 	})
 	centerStyle, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Size: 10},
+		Font:      &excelize.Font{Size: 10, Family: fontFamily},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 	})
 
 	headers := []string{
-		"Sl", "Employee ID", "Name", "Designation", "Department", "Working Days",
-		"Present", "Absent", "Late", "Leave", "Holiday", "Weekend",
-		"Basic Salary", "House Rent", "Medical", "Transport", "Food", "Other", "Gross",
-		"Absent Deduction", "PF", "Tax", "Total Deductions",
-		"OT Hours", "OT Rate", "OT Amount", "Att. Bonus", "Net Salary", "Status",
+		labels.Sl, labels.EmployeeID, labels.Name, labels.Designation, labels.Department, labels.WorkingDays,
+		labels.Present, labels.Absent, labels.Late, labels.Leave, labels.Holiday, labels.Weekend,
+		labels.BasicSalary, labels.HouseRent, labels.Medical, labels.Transport, labels.Food, labels.OtherAllowance, labels.Gross,
+		labels.AbsentDed, labels.PF, labels.Tax, labels.TotalDeduction,
+		labels.OTHours, labels.OTRate, labels.OTAmount, labels.AttBonus, labels.NetSalary, labels.Status,
 	}
 	widths := []float64{4, 14, 20, 18, 18, 10, 8, 8, 6, 6, 8, 8, 12, 12, 10, 10, 10, 10, 12, 12, 10, 8, 12, 8, 8, 10, 10, 12, 10}
 
@@ -263,15 +276,9 @@ func (h *SalaryHandler) SheetExport(c *gin.Context) {
 	for i, s := range salaries {
 		row := i + 2
 		empID := s.Employee.EmployeeID
-		name := s.Employee.NameEn
-		desig := ""
-		dept := ""
-		if s.Employee.DesignationRef != nil {
-			desig = s.Employee.DesignationRef.Name
-		}
-		if s.Employee.Department != nil {
-			dept = s.Employee.Department.Name
-		}
+		name := bijoyText(employeeNameFor(lang, &s.Employee), lang)
+		desig := bijoyText(designationName(s.Employee.DesignationRef, lang), lang)
+		dept := bijoyText(departmentName(s.Employee.Department, lang), lang)
 
 		vals := []interface{}{
 			i + 1, empID, name, desig, dept,
@@ -299,7 +306,7 @@ func (h *SalaryHandler) SheetExport(c *gin.Context) {
 	totalRow := len(salaries) + 2
 	if len(salaries) > 0 {
 		totalStyle, _ := f.NewStyle(&excelize.Style{
-			Font:      &excelize.Font{Bold: true, Size: 10, Color: "#006100"},
+			Font:      &excelize.Font{Bold: true, Size: 10, Color: "#006100", Family: fontFamily},
 			Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
 			Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		})
@@ -310,7 +317,7 @@ func (h *SalaryHandler) SheetExport(c *gin.Context) {
 				if j == 0 {
 					f.SetCellValue("Sheet1", cell, "")
 				} else {
-					f.SetCellValue("Sheet1", cell, "Total")
+					f.SetCellValue("Sheet1", cell, labels.TotalLabel)
 				}
 				if j == 2 || j == 3 || j == 4 {
 					f.SetCellStyle("Sheet1", cell, cell, dataStyle)
@@ -337,7 +344,11 @@ func (h *SalaryHandler) SheetExport(c *gin.Context) {
 		f.SetRowHeight("Sheet1", totalRow, 30)
 	}
 
-	filename := fmt.Sprintf("salary_sheet_%s_%d.xlsx", monthName, year)
+	langSuffix := ""
+	if lang == "bn" {
+		langSuffix = "_bn"
+	}
+	filename := fmt.Sprintf("salary_sheet_%s_%d%s.xlsx", monthLabel, year, langSuffix)
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	f.Write(c.Writer)
@@ -463,6 +474,7 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 	companyID := c.Query("company_id")
 	monthStr := c.Query("month")
 	yearStr := c.Query("year")
+	lang := c.DefaultQuery("lang", "en")
 
 	month, _ := strconv.Atoi(monthStr)
 	year, _ := strconv.Atoi(yearStr)
@@ -473,6 +485,8 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 	}
 
 	groupBy := c.DefaultQuery("group_by", "department")
+	labels := getSalarySheetLabels(lang)
+	monthLabel := monthName(month, lang)
 
 	salaries, err := h.salaryRepo.ListAllByMonthFiltered(repository.SalaryFilter{
 		CompanyID:     companyID,
@@ -507,25 +521,25 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 		switch groupBy {
 		case "section":
 			if s.Employee.SectionRef != nil {
-				key = groupKey{Name: s.Employee.SectionRef.Name, ID: s.Employee.SectionRef.ID}
+				key = groupKey{Name: sectionName(s.Employee.SectionRef, lang), ID: s.Employee.SectionRef.ID}
 			} else {
 				key = groupKey{Name: "Unknown", ID: ""}
 			}
 		case "designation":
 			if s.Employee.DesignationRef != nil {
-				key = groupKey{Name: s.Employee.DesignationRef.Name, ID: s.Employee.DesignationRef.ID}
+				key = groupKey{Name: designationName(s.Employee.DesignationRef, lang), ID: s.Employee.DesignationRef.ID}
 			} else {
 				key = groupKey{Name: "Unknown", ID: ""}
 			}
 		case "line":
 			if s.Employee.LineRef != nil {
-				key = groupKey{Name: s.Employee.LineRef.Name, ID: s.Employee.LineRef.ID}
+				key = groupKey{Name: lineName(s.Employee.LineRef, lang), ID: s.Employee.LineRef.ID}
 			} else {
 				key = groupKey{Name: "Unknown", ID: ""}
 			}
 		default:
 			if s.Employee.Department != nil {
-				key = groupKey{Name: s.Employee.Department.Name, ID: s.Employee.Department.ID}
+				key = groupKey{Name: departmentName(s.Employee.Department, lang), ID: s.Employee.Department.ID}
 			} else {
 				key = groupKey{Name: "Unknown", ID: ""}
 			}
@@ -547,34 +561,45 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 	f := excelize.NewFile()
 	defer f.Close()
 
-	monthName := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC).Format("January")
+	paperSize := 5 // Legal
+	f.SetPageLayout("Sheet1", &excelize.PageLayoutOptions{
+		Size: &paperSize,
+	})
+
+	fontFamily := ""
+	if lang == "bn" {
+		fontFamily = "SutonnyMJ"
+		labels = bijoyLabels(labels)
+		monthLabel = toBijoy(monthLabel)
+	}
 
 	headerStyle, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 11, Color: "#FFFFFF"},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
+		Font:      &excelize.Font{Bold: true, Size: 11, Color: "#FFFFFF", Family: fontFamily},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#4472C4"}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 	})
 	moneyStyle, _ := f.NewStyle(&excelize.Style{
-		Font:  &excelize.Font{Size: 10},
-		NumFmt: 4,
+		Font:      &excelize.Font{Size: 10, Family: fontFamily},
+		NumFmt:    4,
+		Alignment: &excelize.Alignment{Vertical: "center"},
 	})
 	dataStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Size: 10},
+		Font:      &excelize.Font{Size: 10, Family: fontFamily},
 		Alignment: &excelize.Alignment{Vertical: "center"},
 	})
 
-	labelMap := map[string]string{
-		"department": "Department",
-		"section":    "Section",
-		"designation": "Designation",
-		"line":       "Line",
+	groupLabelMap := map[string]string{
+		"department":  labels.Department,
+		"section":     labels.Section,
+		"designation": labels.Designation,
+		"line":        labels.GroupLabel,
 	}
-	groupLabel := labelMap[groupBy]
+	groupLabel := groupLabelMap[groupBy]
 	if groupLabel == "" {
-		groupLabel = "Group"
+		groupLabel = labels.GroupLabel
 	}
 
-	headers := []string{groupLabel, "Employees", "Gross Total", "Basic Total", "House Rent", "Medical", "Transport", "Deductions", "Net Total"}
+	headers := []string{groupLabel, labels.Employees, labels.GrossTotal, labels.BasicTotal, labels.HouseRentH, labels.MedicalH, labels.TransportH, labels.Deductions, labels.NetTotal}
 	widths := []float64{28, 10, 14, 14, 14, 14, 14, 14, 14}
 
 	for i, h := range headers {
@@ -589,7 +614,7 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 	var grandTotal groupData
 	for key, d := range groupMap {
 		vals := []interface{}{
-			key.Name, d.Employees,
+			bijoyText(key.Name, lang), d.Employees,
 			d.GrossSalary, d.BasicSalary, d.HouseRent, d.Medical, d.Transport,
 			d.Deductions, d.NetSalary,
 		}
@@ -615,11 +640,11 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 	}
 
 	totalStyle, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10, Color: "#006100"},
-		Fill: excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
+		Font:   &excelize.Font{Bold: true, Size: 10, Color: "#006100", Family: fontFamily},
+		Fill:   excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#E2EFDA"}},
 	})
 	grandVals := []interface{}{
-		"Grand Total", grandTotal.Employees,
+		labels.GrandTotal, grandTotal.Employees,
 		grandTotal.GrossSalary, grandTotal.BasicSalary, grandTotal.HouseRent, grandTotal.Medical, grandTotal.Transport,
 		grandTotal.Deductions, grandTotal.NetSalary,
 	}
@@ -633,7 +658,11 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 		}
 	}
 
-	filename := fmt.Sprintf("salary_summary_%s_%d.xlsx", monthName, year)
+	langSuffix := ""
+	if lang == "bn" {
+		langSuffix = "_bn"
+	}
+	filename := fmt.Sprintf("salary_summary_%s_%d%s.xlsx", monthLabel, year, langSuffix)
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	f.Write(c.Writer)

@@ -14,10 +14,11 @@ import { isSuperAdmin } from "@/lib/auth"
 export default function LogCollectPage() {
   const [importing, setImporting] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
-  const [startDate, setStartDate] = React.useState<Date | undefined>(new Date())
-  const [endDate, setEndDate] = React.useState<Date | undefined>(new Date())
+  const [startDate, setStartDate] = React.useState<Date | undefined>(undefined)
+  const [endDate, setEndDate] = React.useState<Date | undefined>(undefined)
   const [todayCount, setTodayCount] = React.useState(0)
   const [deleteDialogOpen, setDeleteDialogOpen] = React.useState(false)
+  const [mounted, setMounted] = React.useState(false)
 
   const fetchStats = async () => {
     try {
@@ -29,6 +30,9 @@ export default function LogCollectPage() {
   }
 
   React.useEffect(() => {
+    setMounted(true)
+    setStartDate(new Date())
+    setEndDate(new Date())
     fetchStats()
   }, [])
 
@@ -85,7 +89,7 @@ export default function LogCollectPage() {
           <CardContent>
             <div className="flex items-center justify-between">
               <p className="text-4xl font-bold">{todayCount}</p>
-              {isSuperAdmin() && (
+              {mounted && isSuperAdmin() && (
                 <>
                   <Button variant="destructive" size="sm" onClick={() => setDeleteDialogOpen(true)}>
                     <Trash2Icon className="mr-2 h-4 w-4" />

@@ -900,6 +900,8 @@ func (h *AttendanceHandler) MissingAttendance(c *gin.Context) {
 		inTime := ""
 		if a.CheckIn != nil {
 			inTime = a.CheckIn.Format("2006-01-02 15:04:05")
+		} else if a.CheckOut != nil {
+			inTime = a.Date + " 07:55:00"
 		}
 		outTime := ""
 		if a.CheckOut != nil {
@@ -2085,6 +2087,8 @@ func (h *AttendanceHandler) ExportMissingAttendanceExcel(c *gin.Context) {
 		checkIn := "-"
 		if a.CheckIn != nil {
 			checkIn = a.CheckIn.Format("15:04")
+		} else if a.CheckOut != nil {
+			checkIn = "07:55"
 		}
 		svc(4, checkIn)
 

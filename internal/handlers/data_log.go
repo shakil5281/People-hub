@@ -56,7 +56,10 @@ type ProcessRequest struct {
 // @Router       /data-logs/import [post]
 func (h *DataLogHandler) Import(c *gin.Context) {
 	var req ImportRequest
-	c.ShouldBindJSON(&req)
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	result, err := h.dataLogService.ImportFromMDB(req.FilePath, req.StartDate, req.EndDate)
 	if err != nil {
@@ -165,9 +168,17 @@ func (h *DataLogHandler) resolveDateRange(req ProcessRequest) (string, string) {
 // @Success      200  {object}  map[string]interface{}
 // @Router       /data-logs/stats [get]
 func (h *DataLogHandler) Stats(c *gin.Context) {
-	total, _ := h.dataLogRepo.Count()
+	total, err := h.dataLogRepo.Count()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	today := time.Now().Format("2006-01-02")
-	todayCount, _ := h.dataLogRepo.CountByDate(today)
+	todayCount, err := h.dataLogRepo.CountByDate(today)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"total_logs": total,
