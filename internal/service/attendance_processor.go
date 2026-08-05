@@ -12,13 +12,14 @@ import (
 )
 
 type AttendanceProcessor struct {
-	dataLogRepo    *repository.DataLogRepository
-	attendanceRepo *repository.AttendanceRepository
-	employeeRepo   *repository.EmployeeRepository
-	shiftRepo      *repository.ShiftRepository
-	leaveRepo      *repository.LeaveRepository
-	tempShiftRepo  *repository.TemporaryShiftRepository
-	holidayRepo    *repository.HolidayRepository
+	dataLogRepo         *repository.DataLogRepository
+	attendanceRepo      *repository.AttendanceRepository
+	employeeRepo        *repository.EmployeeRepository
+	shiftRepo           *repository.ShiftRepository
+	leaveRepo           *repository.LeaveRepository
+	tempShiftRepo       *repository.TemporaryShiftRepository
+	holidayRepo         *repository.HolidayRepository
+	missingAttendanceRepo *repository.MissingAttendanceRepository
 }
 
 func NewAttendanceProcessor(
@@ -29,15 +30,17 @@ func NewAttendanceProcessor(
 	leaveRepo *repository.LeaveRepository,
 	tempShiftRepo *repository.TemporaryShiftRepository,
 	holidayRepo *repository.HolidayRepository,
+	missingAttendanceRepo *repository.MissingAttendanceRepository,
 ) *AttendanceProcessor {
 	return &AttendanceProcessor{
-		dataLogRepo:    dataLogRepo,
-		attendanceRepo: attendanceRepo,
-		employeeRepo:   employeeRepo,
-		shiftRepo:      shiftRepo,
-		leaveRepo:      leaveRepo,
-		tempShiftRepo:  tempShiftRepo,
-		holidayRepo:    holidayRepo,
+		dataLogRepo:         dataLogRepo,
+		attendanceRepo:      attendanceRepo,
+		employeeRepo:        employeeRepo,
+		shiftRepo:           shiftRepo,
+		leaveRepo:           leaveRepo,
+		tempShiftRepo:       tempShiftRepo,
+		holidayRepo:         holidayRepo,
+		missingAttendanceRepo: missingAttendanceRepo,
 	}
 }
 
@@ -157,6 +160,62 @@ func (p *AttendanceProcessor) processDay(
 		onLeaveSet[l.EmployeeID] = true
 	}
 
+	// --- HIGHEST PRIORITY: Apply missing attendance overrides ---
+	// Records in missing_attendances take absolute precedence over ZKTeco logs.
+	// If a missing_attendance record exists for an employee+date, we create/update
+	// the attendance record with the user-specified status/check_in/check_out and
+	// mark that employee as "handled by missing attendance" so log processing is skipped.
+	missingHandledByEmp := make(map[string]bool)
+	if p.missingAttendanceRepo != nil {
+		missingRecords, maErr := p.missingAttendanceRepo.ListByDateRange(date, date, companyID)
+		if maErr == nil {
+			for _, ma := range missingRecords {
+				missingHandledByEmp[ma.EmployeeID] = true
+
+				// Determine shift for this employee
+				var shiftID *string
+				for i := range eligible {
+					if eligible[i].EmployeeID == ma.EmployeeID {
+						if eligible[i].ShiftID != nil {
+							shiftID = eligible[i].ShiftID
+						}
+						tempKey := ma.EmployeeID + "|" + date
+						if ts, ok := tempShiftByKey[tempKey]; ok && ts.ShiftID != "" {
+							shiftID = &ts.ShiftID
+						}
+						break
+					}
+				}
+
+				if existing, exists := existingAttByEmp[ma.EmployeeID]; exists {
+					existing.CheckIn = ma.CheckIn
+					existing.CheckOut = ma.CheckOut
+					existing.Status = ma.Status
+					if shiftID != nil {
+						existing.ShiftID = shiftID
+					}
+					if err := p.attendanceRepo.Update(existing); err == nil {
+						processedCount++
+					}
+				} else {
+					att := &models.Attendance{
+						EmployeeID: ma.EmployeeID,
+						CompanyID:  ma.CompanyID,
+						Date:       date,
+						CheckIn:    ma.CheckIn,
+						CheckOut:   ma.CheckOut,
+						Status:     ma.Status,
+						ShiftID:    shiftID,
+					}
+					if err := p.attendanceRepo.Create(att); err == nil {
+						processedCount++
+						existingAttByEmp[ma.EmployeeID] = att
+					}
+				}
+			}
+		}
+	}
+
 	// Holiday sets
 	isGovHoliday := false
 	isCompWeekend := false
@@ -217,6 +276,10 @@ func (p *AttendanceProcessor) processDay(
 
 			employee, ok := employeeByBadge[gp.BadgeNumber]
 			if !ok {
+				continue
+			}
+			// Skip employees already handled by missing attendance (highest priority)
+			if missingHandledByEmp[employee.EmployeeID] {
 				continue
 			}
 			if companyID != "" && employee.CompanyID != companyID {
@@ -280,10 +343,15 @@ func (p *AttendanceProcessor) processDay(
 	// --- Absent / weekend / on_leave for eligible Regular employees with no punch record ---
 	// Employees who already have check_in/check_out (created by punch processing) are skipped,
 	// since the punch section above already set their correct status from logs.
+	// Employees handled by missing attendance are also skipped.
 	// Employees with existing absent/weekend/on_leave status ARE re-checked in case shift or leave changed.
 	for i := range eligible {
 		emp := &eligible[i]
 		if strings.TrimSpace(emp.PunchNumber) == "" {
+			continue
+		}
+		// Skip employees handled by missing attendance overrides
+		if missingHandledByEmp[emp.EmployeeID] {
 			continue
 		}
 

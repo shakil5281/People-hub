@@ -13,12 +13,14 @@ import (
 
 type HolidayHandler struct {
 	holidayRepo         *repository.HolidayRepository
+	shiftRepo           *repository.ShiftRepository
 	attendanceProcessor *service.AttendanceProcessor
 }
 
-func NewHolidayHandler(holidayRepo *repository.HolidayRepository, attendanceProcessor *service.AttendanceProcessor) *HolidayHandler {
+func NewHolidayHandler(holidayRepo *repository.HolidayRepository, shiftRepo *repository.ShiftRepository, attendanceProcessor *service.AttendanceProcessor) *HolidayHandler {
 	return &HolidayHandler{
 		holidayRepo:         holidayRepo,
+		shiftRepo:           shiftRepo,
 		attendanceProcessor: attendanceProcessor,
 	}
 }
@@ -31,6 +33,74 @@ func (h *HolidayHandler) reprocessHolidayAttendance(date string, fromDate, toDat
 		endDate = *toDate
 	}
 	_, _ = h.attendanceProcessor.ProcessDateRange(startDate, endDate, companyID)
+}
+
+// reprocessWeekendChange re-runs the attendance engine over both dates involved
+// in a weekend change: the date that becomes General Duty and the date that
+// becomes the Weekend. This guarantees the exchange applies immediately without
+// a server restart.
+func (h *HolidayHandler) reprocessWeekendChange(date, weekendDate, companyID string) {
+	startDate := date
+	endDate := date
+	if weekendDate != "" {
+		if weekendDate < date {
+			startDate = weekendDate
+			endDate = date
+		} else {
+			startDate = date
+			endDate = weekendDate
+		}
+	}
+	_, _ = h.attendanceProcessor.ProcessDateRange(startDate, endDate, companyID)
+}
+
+// validateWeekendChange enforces the weekend-change business rules. Returns an
+// error message when the exchange is invalid, otherwise an empty string.
+func (h *HolidayHandler) validateWeekendChange(date, weekendDate, companyID, excludeID string) string {
+	if weekendDate != "" && weekendDate == date {
+		return "Weekend date and general duty date must be different"
+	}
+
+	// The general duty date is the day that was originally a weekend and is being
+	// turned into a working day, so it must be an official weekend for the company
+	// (its weekday must appear in at least one active shift's WeekendDays).
+	shifts, err := h.shiftRepo.ListActiveByCompany(companyID)
+	if err != nil {
+		return "Unable to validate weekend date against company shifts"
+	}
+	officialWeekend := false
+	for _, s := range shifts {
+		if s.WeekendDays != "" && utils.IsWeekend(date, s.WeekendDays) {
+			officialWeekend = true
+			break
+		}
+	}
+	if !officialWeekend {
+		return "General duty date is not an official weekend"
+	}
+
+	// The general duty date must not already be a government holiday.
+	if count, err := h.holidayRepo.CountActiveHolidayOnDate(date, companyID); err != nil {
+		return "Failed to validate general duty date against holidays"
+	} else if count > 0 {
+		return "General duty date is already a holiday"
+	}
+
+	// Prevent duplicate active exchanges for either date.
+	if count, err := h.holidayRepo.CountActiveWeekendChangeCollision(date, companyID, excludeID); err != nil {
+		return "Failed to validate duplicate weekend changes"
+	} else if count > 0 {
+		return "An active weekend change already exists for general duty date"
+	}
+	if weekendDate != "" {
+		if count, err := h.holidayRepo.CountActiveWeekendChangeCollision(weekendDate, companyID, excludeID); err != nil {
+			return "Failed to validate duplicate weekend changes"
+		} else if count > 0 {
+			return "An active weekend change already exists for weekend date"
+		}
+	}
+
+	return ""
 }
 
 type CreateHolidayRequest struct {
@@ -144,6 +214,17 @@ func (h *HolidayHandler) Create(c *gin.Context) {
 		return
 	}
 
+	if req.Type == "weekend_change" || req.WeekendDate != nil {
+		weekendDate := ""
+		if req.WeekendDate != nil {
+			weekendDate = *req.WeekendDate
+		}
+		if msg := h.validateWeekendChange(req.Date, weekendDate, req.CompanyID, ""); msg != "" {
+			c.JSON(http.StatusConflict, gin.H{"error": msg})
+			return
+		}
+	}
+
 	userID := c.GetString("user_id")
 
 	holiday := models.Holiday{
@@ -164,7 +245,15 @@ func (h *HolidayHandler) Create(c *gin.Context) {
 		return
 	}
 
-	go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
+	if holiday.Type == "weekend_change" {
+		weekendDate := ""
+		if holiday.WeekendDate != nil {
+			weekendDate = *holiday.WeekendDate
+		}
+		go h.reprocessWeekendChange(holiday.Date, weekendDate, holiday.CompanyID)
+	} else {
+		go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
+	}
 
 	c.JSON(http.StatusCreated, holiday)
 }
@@ -236,6 +325,17 @@ func (h *HolidayHandler) Update(c *gin.Context) {
 		holiday.Status = req.Status
 	}
 
+	if holiday.Type == "weekend_change" || holiday.WeekendDate != nil {
+		weekendDate := ""
+		if holiday.WeekendDate != nil {
+			weekendDate = *holiday.WeekendDate
+		}
+		if msg := h.validateWeekendChange(holiday.Date, weekendDate, holiday.CompanyID, id); msg != "" {
+			c.JSON(http.StatusConflict, gin.H{"error": msg})
+			return
+		}
+	}
+
 	userID := c.GetString("user_id")
 	holiday.UpdatedBy = &userID
 
@@ -244,7 +344,15 @@ func (h *HolidayHandler) Update(c *gin.Context) {
 		return
 	}
 
-	go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
+	if holiday.Type == "weekend_change" {
+		weekendDate := ""
+		if holiday.WeekendDate != nil {
+			weekendDate = *holiday.WeekendDate
+		}
+		go h.reprocessWeekendChange(holiday.Date, weekendDate, holiday.CompanyID)
+	} else {
+		go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
+	}
 
 	c.JSON(http.StatusOK, holiday)
 }
@@ -273,7 +381,15 @@ func (h *HolidayHandler) Delete(c *gin.Context) {
 		return
 	}
 
-	go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
+	if holiday.Type == "weekend_change" {
+		weekendDate := ""
+		if holiday.WeekendDate != nil {
+			weekendDate = *holiday.WeekendDate
+		}
+		go h.reprocessWeekendChange(holiday.Date, weekendDate, holiday.CompanyID)
+	} else {
+		go h.reprocessHolidayAttendance(holiday.Date, holiday.FromDate, holiday.ToDate, holiday.CompanyID)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "holiday deleted"})
 }

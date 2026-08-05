@@ -219,8 +219,26 @@ export const attendanceApi = {
   overtimeSummary: (params?: Record<string, string>) => api.get("/attendance/overtime-summary", { params }),
   exportOvertimeSummaryExcel: (params?: Record<string, string>) => api.get("/attendance/overtime-summary/export/excel", { params, responseType: "blob" }),
   monthlyReport: (params?: Record<string, string>) => api.get("/attendance/monthly-report", { params }),
+  exportMonthlyReportExcel: (params?: Record<string, string>) => api.get("/attendance/monthly-report/export/excel", { params, responseType: "blob" }),
+  exportMonthlyReportPdf: (params?: Record<string, string>) => api.get("/attendance/monthly-report/export/pdf", { params, responseType: "blob" }),
   customSummary: (data: { company_id: string; date: string; sections: Record<string, unknown>[] }) => api.post("/attendance/custom-summary?company_id=" + data.company_id + "&date=" + data.date, data.sections),
   exportExcel: (params?: Record<string, string>) => api.get("/attendance/export/excel", { params, responseType: "blob" }),
+  bulkUpdateMissing: (data: { status?: string; inTime?: string; outTime?: string; attendanceIds: string[] }) => api.post("/attendance/bulk-update-missing", data),
+}
+
+export const otEarlyExitApi = {
+  process: (data: { company_id: string; month: number; year: number }) => api.post("/attendance/ot-early-exit/process", data),
+  list: (params: Record<string, string>) => api.get("/attendance/ot-early-exit", { params }),
+  exportExcel: (params?: Record<string, string>) => api.get("/attendance/ot-early-exit/export/excel", { params, responseType: "blob" }),
+}
+
+export const missingAttendanceApi = {
+  list: (params: Record<string, string>) => api.get("/missing-attendance", { params }),
+  create: (data: Record<string, unknown>) => api.post("/missing-attendance", data),
+  upsert: (data: Record<string, unknown>) => api.post("/missing-attendance/upsert", data),
+  bulk: (data: { records: Record<string, unknown>[] }) => api.post("/missing-attendance/bulk", data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/missing-attendance/${id}`, data),
+  delete: (id: string) => api.delete(`/missing-attendance/${id}`),
 }
 
 export const dataLogApi = {

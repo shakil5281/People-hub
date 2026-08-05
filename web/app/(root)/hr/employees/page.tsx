@@ -1,7 +1,9 @@
 "use client"
 
 import * as React from "react"
+import { format } from "date-fns"
 import { UsersIcon, PlusIcon, UploadIcon, DownloadIcon, Loader2, FilterIcon, XIcon, MoreHorizontalIcon } from "lucide-react"
+import { DatePicker } from "@/components/ui/date-picker"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
@@ -142,6 +144,8 @@ export default function EmployeesPage() {
   const [error, setError] = React.useState("")
 
   const [filters, setFilters] = React.useState<Record<string, string>>({ employee_type: "Regular", status: "active" })
+  const [joiningFromDate, setJoiningFromDate] = React.useState<Date | undefined>(undefined)
+  const [joiningToDate, setJoiningToDate] = React.useState<Date | undefined>(undefined)
 
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [departments, setDepartments] = React.useState<Department[]>([])
@@ -251,8 +255,13 @@ export default function EmployeesPage() {
     setPage(1)
     setSubmitting(true)
     setError("")
-    const active = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""))
-    await fetchEmployees(active, 1)
+    const active = { ...filters }
+    if (joiningFromDate) active.joining_from = format(joiningFromDate, "yyyy-MM-dd")
+    else delete active.joining_from
+    if (joiningToDate) active.joining_to = format(joiningToDate, "yyyy-MM-dd")
+    else delete active.joining_to
+    const cleaned = Object.fromEntries(Object.entries(active).filter(([, v]) => v !== ""))
+    await fetchEmployees(cleaned, 1)
     setSubmitting(false)
   }
 
@@ -260,6 +269,8 @@ export default function EmployeesPage() {
     setPage(1)
     setLimit(20)
     setFilters({ status: "active", employee_type: "Regular" })
+    setJoiningFromDate(undefined)
+    setJoiningToDate(undefined)
     setSections([])
     setDesignations([])
     setLines([])
@@ -532,6 +543,16 @@ export default function EmployeesPage() {
           min="0"
           className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Joining Date From</label>
+        <DatePicker value={joiningFromDate} onChange={setJoiningFromDate} placeholder="From" />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Joining Date To</label>
+        <DatePicker value={joiningToDate} onChange={setJoiningToDate} placeholder="To" />
       </div>
     </>
   )

@@ -195,7 +195,7 @@ func jobCardDateDisplay(dateStr string) string {
 	if err != nil {
 		return dateStr
 	}
-	return t.Format("02-01-2006")
+	return t.Format("02 Jan 2006")
 }
 
 func jobCardDay(dateStr string) string {

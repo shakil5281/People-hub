@@ -40,6 +40,8 @@ func Connect(cfg *config.Config) {
 		&models.SystemSetting{}, &models.SalaryIncrement{},
 		&models.Punishment{}, &models.DailySchedule{}, &models.TiffinBill{},
 		&models.Holiday{},
+		&models.MissingAttendance{},
+		&models.OtEarlyExitDeduction{},
 	)
 	// Ensure new tables were created; if not, create them explicitly.
 	db.Exec("CREATE TABLE IF NOT EXISTS punishments (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
@@ -77,6 +79,8 @@ func Connect(cfg *config.Config) {
 	alterCol("eid_bonuses", "employee_id")
 	alterCol("id_cards", "employee_id")
 	alterCol("separations", "employee_id")
+	alterCol("missing_attendances", "employee_id")
+	alterCol("ot_early_exit_deductions", "employee_id")
 	silentDB.Exec("ALTER TABLE separations ADD COLUMN IF NOT EXISTS company_id uuid")
 	silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS nid varchar(50)")
 	silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS present_post_office varchar(100)")
@@ -113,6 +117,7 @@ func Connect(cfg *config.Config) {
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_temporary_shifts_company_date ON temporary_shifts(company_id, date)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_data_logs_date_processed ON data_logs(date, processed) WHERE deleted_at IS NULL")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_attendances_date_status ON attendances(date, status)")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_ot_early_exit_company_month ON ot_early_exit_deductions(company_id, year, month) WHERE deleted_at IS NULL")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_leaves_status_dates ON leaves(status, from_date, to_date)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id) WHERE deleted_at IS NULL")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level)")

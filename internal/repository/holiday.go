@@ -100,6 +100,40 @@ func (r *HolidayRepository) ListActiveByDate(date, companyID string) ([]models.H
 	return list, nil
 }
 
+// CountActiveWeekendChangeCollision counts active weekend_change records where the
+// given date is already used as either the general duty date or the weekend date.
+// When excludeID is non-empty, that record is ignored (used on update to allow
+// editing the same row). Mirrors the dedup rule in the weekend-change validation.
+func (r *HolidayRepository) CountActiveWeekendChangeCollision(date, companyID, excludeID string) (int64, error) {
+	var count int64
+	query := r.db.Model(&models.Holiday{}).
+		Where(`(date = ? OR weekend_date = ?) AND type = 'weekend_change' AND status = 'active' AND deleted_at IS NULL`, date, date)
+	if excludeID != "" {
+		query = query.Where("id != ?", excludeID)
+	}
+	if companyID != "" {
+		query = query.Where("company_id = ?", companyID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
+// CountActiveHolidayOnDate counts active non-weekend-change holidays covering the given
+// date (single date, weekend_date, or a from/to range). Used to reject a weekend change
+// whose general duty date is already a government holiday.
+func (r *HolidayRepository) CountActiveHolidayOnDate(date, companyID string) (int64, error) {
+	var count int64
+	query := r.db.Model(&models.Holiday{}).
+		Where(`type != 'weekend_change' AND status = 'active' AND deleted_at IS NULL
+			AND (date = ? OR weekend_date = ? OR (from_date IS NOT NULL AND to_date IS NOT NULL AND from_date <= ? AND to_date >= ?))`,
+			date, date, date, date)
+	if companyID != "" {
+		query = query.Where("company_id = ?", companyID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
 func (r *HolidayRepository) ListActiveByDateRange(startDate, endDate, companyID string) ([]models.Holiday, error) {
 	var list []models.Holiday
 	query := r.db.Where(`(date BETWEEN ? AND ? OR weekend_date BETWEEN ? AND ? OR (from_date IS NOT NULL AND to_date IS NOT NULL AND from_date <= ? AND to_date >= ?)) AND status = 'active' AND deleted_at IS NULL`,

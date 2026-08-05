@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"fmt"
 	"strings"
 	"time"
 )
@@ -25,6 +26,24 @@ func GenerateDateRange(start, end string) ([]string, error) {
 // ParseDate parses a date string in YYYY-MM-DD format.
 func ParseDate(dateStr string) (time.Time, error) {
 	return time.Parse("2006-01-02", dateStr)
+}
+
+// ParseDateTime parses a check_in/check_out string into time.Time.
+// Accepts "HH:mm" (uses the given date), "yyyy-MM-ddTHH:mm" or "yyyy-MM-dd HH:mm:ss" (full datetime).
+func ParseDateTime(val, date string) (time.Time, error) {
+	if val == "" {
+		return time.Time{}, fmt.Errorf("empty time value")
+	}
+	if len(val) == 5 && val[2] == ':' {
+		return time.Parse("2006-01-02 15:04:05", date+" "+val+":00")
+	}
+	if len(val) >= 16 && val[10] == 'T' {
+		return time.Parse("2006-01-02T15:04", val)
+	}
+	if len(val) == 19 && val[10] == ' ' && val[4] == '-' {
+		return time.Parse("2006-01-02 15:04:05", val)
+	}
+	return time.Parse("2006-01-02 15:04:05", val)
 }
 
 // NormalizeDate converts driver date values like "2026-06-01T00:00:00Z" to "YYYY-MM-DD".

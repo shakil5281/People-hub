@@ -8,20 +8,29 @@ interface TimePickerProps {
   onChange?: (time: string) => void
   className?: string
   disabled?: boolean
+  autoFocus?: boolean
 }
 
-function fmt(n: number) {
-  return n.toString().padStart(2, "0")
+function parseTimeString(v: string): { hh: string; mm: string } {
+  if (!v) return { hh: "", mm: "" }
+  if (v.includes("T")) {
+    const t = v.slice(11, 16)
+    const p = t.split(":")
+    return { hh: p[0] || "", mm: p[1] || "" }
+  }
+  if (v.includes(":") && v.length <= 5) {
+    const p = v.split(":")
+    return { hh: p[0] || "", mm: p[1] || "" }
+  }
+  return { hh: "", mm: "" }
 }
 
-export function TimePicker({ value, onChange, disabled, className }: TimePickerProps) {
-  const initHh = value ? value.split(":")[0] || "" : ""
-  const initMm = value ? value.split(":")[1] || "" : ""
-
-  const [hh, setHhState] = React.useState(initHh)
-  const [mm, setMmState] = React.useState(initMm)
-  const hhRef = React.useRef(initHh)
-  const mmRef = React.useRef(initMm)
+export function TimePicker({ value, onChange, disabled, className, autoFocus }: TimePickerProps) {
+  const init = parseTimeString(value || "")
+  const [hh, setHhState] = React.useState(init.hh)
+  const [mm, setMmState] = React.useState(init.mm)
+  const hhRef = React.useRef(init.hh)
+  const mmRef = React.useRef(init.mm)
 
   const setHh = React.useCallback((v: string) => {
     hhRef.current = v
@@ -37,33 +46,31 @@ export function TimePicker({ value, onChange, disabled, className }: TimePickerP
   const mmInputRef = React.useRef<HTMLInputElement>(null)
 
   React.useEffect(() => {
-    if (value) {
-      const p = value.split(":")
-      const h = p[0] || ""
-      const m = p[1] || ""
-      hhRef.current = h
-      mmRef.current = m
-      setHhState(h)
-      setMmState(m)
-    } else {
-      hhRef.current = ""
-      mmRef.current = ""
-      setHhState("")
-      setMmState("")
+    const p = parseTimeString(value || "")
+    hhRef.current = p.hh
+    mmRef.current = p.mm
+    setHhState(p.hh)
+    setMmState(p.mm)
+    if (autoFocus) {
+      hhInputRef.current?.focus()
+      hhInputRef.current?.select()
     }
-  }, [value])
+  }, [value, autoFocus])
 
   const emit = React.useCallback((h: string, m: string) => {
     const hNum = parseInt(h, 10)
     const mNum = parseInt(m, 10)
-    if (hNum >= 0 && hNum <= 23 && mNum >= 0 && mNum <= 59) {
+    if (!isNaN(hNum) && !isNaN(mNum) && hNum >= 0 && hNum <= 23 && mNum >= 0 && mNum <= 59) {
       onChange?.(`${h.padStart(2, "0")}:${m.padStart(2, "0")}`)
     }
   }, [onChange])
 
   const onHhText = (v: string) => {
     const c = v.replace(/\D/g, "").slice(0, 2)
-    setHh(c)
+    const num = parseInt(c, 10)
+    if (c === "" || (!isNaN(num) && num <= 23)) {
+      setHh(c)
+    }
     if (c.length === 2) {
       mmInputRef.current?.focus()
       mmInputRef.current?.select()
@@ -72,7 +79,10 @@ export function TimePicker({ value, onChange, disabled, className }: TimePickerP
 
   const onMmText = (v: string) => {
     const c = v.replace(/\D/g, "").slice(0, 2)
-    setMm(c)
+    const num = parseInt(c, 10)
+    if (c === "" || (!isNaN(num) && num <= 59)) {
+      setMm(c)
+    }
     if (c.length === 2) {
       emit(hhRef.current, c)
     }

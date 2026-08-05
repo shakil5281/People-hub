@@ -41,3 +41,15 @@ func (r *ShiftRepository) Update(shift *models.Shift) error {
 func (r *ShiftRepository) Delete(id string) error {
 	return r.db.Where("id = ?", id).Delete(&models.Shift{}).Error
 }
+
+// ListActiveByCompany returns active shifts for a company. Used to determine the
+// official weekend days (union of shift WeekendDays) when validating a weekend change.
+func (r *ShiftRepository) ListActiveByCompany(companyID string) ([]models.Shift, error) {
+	var shifts []models.Shift
+	query := r.db.Where("status = 'active' AND deleted_at IS NULL")
+	if companyID != "" {
+		query = query.Where("company_id = ?", companyID)
+	}
+	err := query.Order("created_at DESC").Find(&shifts).Error
+	return shifts, err
+}

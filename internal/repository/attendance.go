@@ -1,11 +1,13 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/shakil5281/peoplehub-api/internal/database"
 	"github.com/shakil5281/peoplehub-api/internal/models"
+	"github.com/shakil5281/peoplehub-api/internal/utils"
 	"gorm.io/gorm"
 )
 
@@ -521,6 +523,107 @@ func (r *AttendanceRepository) Update(attendance *models.Attendance) error {
 	return r.db.Save(attendance).Error
 }
 
+// BulkUpdateMissing updates many missing attendance records inside one
+// PostgreSQL transaction. The original attendance date of each record is read
+// from the database and combined with the entered In/Out times. Only the
+// missing fields are updated; existing values are preserved. Alongside the
+// attendances table, each record is upserted into missing_attendances so the
+// daily process picks it up with highest priority. If any record fails
+// validation or update, the whole transaction rolls back.
+func (r *AttendanceRepository) BulkUpdateMissing(attendanceIDs []string, inTime, outTime, status, updatedBy string) (int, error) {
+	if len(attendanceIDs) == 0 {
+		return 0, nil
+	}
+
+	updated := 0
+	now := time.Now()
+
+	err := r.db.Transaction(func(tx *gorm.DB) error {
+		for _, id := range attendanceIDs {
+			var att models.Attendance
+			if err := tx.Where("id = ? AND deleted_at IS NULL", id).First(&att).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("attendance record %s not found", id)
+				}
+				return err
+			}
+
+			if inTime != "" {
+				if att.CheckIn != nil {
+					return fmt.Errorf("in time already exists for attendance %s", id)
+				}
+				t, err := utils.ParseDateTime(inTime, utils.NormalizeDate(att.Date))
+				if err != nil {
+					return fmt.Errorf("invalid in time %q for attendance %s: %v", inTime, id, err)
+				}
+				att.CheckIn = &t
+			}
+
+			if outTime != "" {
+				if att.CheckOut != nil {
+					return fmt.Errorf("out time already exists for attendance %s", id)
+				}
+				t, err := utils.ParseDateTime(outTime, utils.NormalizeDate(att.Date))
+				if err != nil {
+					return fmt.Errorf("invalid out time %q for attendance %s: %v", outTime, id, err)
+				}
+				att.CheckOut = &t
+			}
+
+			if status != "" {
+				att.Status = status
+			}
+			att.UpdatedAt = now
+			if updatedBy != "" {
+				att.UpdatedBy = &updatedBy
+			}
+
+			if err := tx.Save(&att).Error; err != nil {
+				return err
+			}
+
+			// Upsert the corresponding missing_attendance override so the daily
+			// process applies it with highest priority (employee_id + date).
+			if err := upsertMissingAttendance(tx, &att, updatedBy); err != nil {
+				return err
+			}
+
+			updated++
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return updated, nil
+}
+
+// upsertMissingAttendance creates or updates a missing_attendances record for the
+// given attendance, keyed by employee_id + date. Runs inside the caller's transaction.
+func upsertMissingAttendance(tx *gorm.DB, att *models.Attendance, by string) error {
+	var ma models.MissingAttendance
+	err := tx.Where("employee_id = ? AND date = ? AND deleted_at IS NULL", att.EmployeeID, att.Date).First(&ma).Error
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return err
+	}
+	isNew := errors.Is(err, gorm.ErrRecordNotFound)
+
+	ma.EmployeeID = att.EmployeeID
+	ma.CompanyID = att.CompanyID
+	ma.Date = att.Date
+	ma.CheckIn = att.CheckIn
+	ma.CheckOut = att.CheckOut
+	ma.Status = att.Status
+	if by != "" {
+		ma.CreatedBy = &by
+	}
+
+	if isNew {
+		return tx.Create(&ma).Error
+	}
+	return tx.Save(&ma).Error
+}
+
 func (r *AttendanceRepository) Delete(id string) error {
 	return r.db.Where("id = ?", id).Delete(&models.Attendance{}).Error
 }
@@ -627,6 +730,17 @@ func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyI
 }
 
 func (r *AttendanceRepository) MonthlyReport(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID string) ([]map[string]interface{}, error) {
+	// Compute calendar month days from the date range so total_days reflects the
+	// actual number of days in the period rather than COUNT(*), which is inflated
+	// when duplicate attendance rows exist for the same employee+date.
+	startParsed, _ := time.Parse("2006-01-02", startDate)
+	endParsed, _ := time.Parse("2006-01-02", endDate)
+	calendarDays := int(endParsed.Sub(startParsed).Hours()/24) + 1
+
+	// Inject the integer literal directly (derived from date math, not user input)
+	// to avoid binding an int through pgx text-format encoding.
+	totalDaysLiteral := fmt.Sprintf("%d", calendarDays)
+
 	query := r.db.Table("attendances").
 		Select(`
 			attendances.employee_id,
@@ -643,7 +757,7 @@ func (r *AttendanceRepository) MonthlyReport(startDate, endDate, companyID, depa
 			COALESCE(SUM(CASE WHEN attendances.status = 'half_day' THEN 1 ELSE 0 END), 0) as half_day,
 			COALESCE(SUM(CASE WHEN attendances.status = 'holiday' THEN 1 ELSE 0 END), 0) as holiday,
 			COALESCE(SUM(CAST(NULLIF(attendances.over_time, '') AS INTEGER)), 0) as over_time,
-			COUNT(*) as total_days
+			`+totalDaysLiteral+` as total_days
 		`).
 		Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
 		Joins("LEFT JOIN departments ON departments.id = employees.department_id").

@@ -67,7 +67,9 @@ func New(cfg *config.Config) *gin.Engine {
 	districtHandler := handlers.NewDistrictHandler(districtRepo)
 	upazilaHandler := handlers.NewUpazilaHandler(upazilaRepo)
 	unionHandler := handlers.NewUnionHandler(unionRepo)
+	missingAttRepo := repository.NewMissingAttendanceRepository(database.DB)
 	attendanceHandler := handlers.NewAttendanceHandler(attendanceRepo, employeeRepo, dataLogRepo, separationRepo)
+	missingAttendanceHandler := handlers.NewMissingAttendanceHandler(missingAttRepo, employeeRepo, attendanceRepo, companyRepo)
 
 	roleRepo := repository.NewRoleRepository(database.DB)
 	roleHandler := handlers.NewRoleHandler(roleRepo)
@@ -81,12 +83,15 @@ func New(cfg *config.Config) *gin.Engine {
 	tempShiftRepo := repository.NewTemporaryShiftRepository(database.DB)
 	holidayRepo := repository.NewHolidayRepository(database.DB)
 	dataLogService := service.NewDataLogService(dataLogRepo, mdbReader)
-	attendanceProcessor := service.NewAttendanceProcessor(dataLogRepo, attendanceRepo, employeeRepo, shiftRepo, leaveRepo, tempShiftRepo, holidayRepo)
+	attendanceProcessor := service.NewAttendanceProcessor(dataLogRepo, attendanceRepo, employeeRepo, shiftRepo, leaveRepo, tempShiftRepo, holidayRepo, missingAttRepo)
 	dataLogHandler := handlers.NewDataLogHandler(dataLogRepo, dataLogService, attendanceProcessor)
 	leaveHandler := handlers.NewLeaveHandler(leaveRepo, employeeRepo, attendanceRepo)
 	salaryRepo := repository.NewSalaryRepository(database.DB)
-	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo, groupRepo)
+	otEarlyExitRepo := repository.NewOtEarlyExitRepository(database.DB)
+	otEarlyExitService := service.NewOtEarlyExitService(otEarlyExitRepo, holidayRepo)
+	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo, groupRepo, otEarlyExitRepo)
 	salaryHandler := handlers.NewSalaryHandler(salaryService, salaryRepo)
+	otEarlyExitHandler := handlers.NewOtEarlyExitHandler(otEarlyExitRepo, otEarlyExitService)
 	salaryIncrementRepo := repository.NewSalaryIncrementRepository(database.DB)
 	salaryIncrementHandler := handlers.NewSalaryIncrementHandler(salaryIncrementRepo, employeeRepo)
 	employeeImportHandler := handlers.NewEmployeeImportHandler(employeeRepo)
@@ -101,7 +106,7 @@ func New(cfg *config.Config) *gin.Engine {
 	dailyScheduleHandler := handlers.NewDailyScheduleHandler(dailyScheduleRepo)
 	tiffinBillRepo := repository.NewTiffinBillRepository(database.DB)
 	tiffinBillHandler := handlers.NewTiffinBillHandler(tiffinBillRepo)
-	holidayHandler := handlers.NewHolidayHandler(holidayRepo, attendanceProcessor)
+	holidayHandler := handlers.NewHolidayHandler(holidayRepo, shiftRepo, attendanceProcessor)
 	systemLogRepo := repository.NewSystemLogRepository(database.DB)
 	systemLogHandler := handlers.NewSystemLogHandler(systemLogRepo)
 
@@ -128,7 +133,7 @@ func New(cfg *config.Config) *gin.Engine {
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, cfg.JWTSecret)
+	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, missingAttendanceHandler, otEarlyExitHandler, cfg.JWTSecret)
 
 	return r
 }

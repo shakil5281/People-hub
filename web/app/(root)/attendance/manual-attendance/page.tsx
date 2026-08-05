@@ -291,10 +291,28 @@ export default function ManualAttendancePage() {
                 <div className="flex flex-col gap-1.5 min-w-[200px] flex-1">
                   <label className="text-xs font-medium text-muted-foreground">In Time</label>
                   <DateTimePicker value={checkIn} onChange={setCheckIn} />
+                  {checkIn && (
+                    <button
+                      type="button"
+                      onClick={() => setCheckIn("")}
+                      className="text-xs text-muted-foreground hover:text-foreground underline w-fit"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5 min-w-[200px] flex-1">
                   <label className="text-xs font-medium text-muted-foreground">Out Time</label>
                   <DateTimePicker value={checkOut} onChange={setCheckOut} />
+                  {checkOut && (
+                    <button
+                      type="button"
+                      onClick={() => setCheckOut("")}
+                      className="text-xs text-muted-foreground hover:text-foreground underline w-fit"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="flex flex-row flex-wrap gap-4">

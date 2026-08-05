@@ -17,10 +17,11 @@ const (
 )
 
 type SalaryService struct {
-	employeeRepo   *repository.EmployeeRepository
-	attendanceRepo *repository.AttendanceRepository
-	salaryRepo     *repository.SalaryRepository
-	groupRepo      *repository.GroupRepository
+	employeeRepo    *repository.EmployeeRepository
+	attendanceRepo  *repository.AttendanceRepository
+	salaryRepo      *repository.SalaryRepository
+	groupRepo       *repository.GroupRepository
+	otEarlyExitRepo *repository.OtEarlyExitRepository
 }
 
 func NewSalaryService(
@@ -28,12 +29,14 @@ func NewSalaryService(
 	attendanceRepo *repository.AttendanceRepository,
 	salaryRepo *repository.SalaryRepository,
 	groupRepo *repository.GroupRepository,
+	otEarlyExitRepo *repository.OtEarlyExitRepository,
 ) *SalaryService {
 	return &SalaryService{
-		employeeRepo:   employeeRepo,
-		attendanceRepo: attendanceRepo,
-		salaryRepo:     salaryRepo,
-		groupRepo:      groupRepo,
+		employeeRepo:    employeeRepo,
+		attendanceRepo:  attendanceRepo,
+		salaryRepo:      salaryRepo,
+		groupRepo:       groupRepo,
+		otEarlyExitRepo: otEarlyExitRepo,
 	}
 }
 
@@ -97,6 +100,15 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		return nil, fmt.Errorf("fetch overtime: %w", err)
 	}
 
+	// Early-exit shortfall is deducted from the employee's monthly overtime.
+	// net OT = raw OT - shortfall (clamped at 0).
+	shortfallMap := make(map[string]float64)
+	if s.otEarlyExitRepo != nil {
+		if shortfalls, sfErr := s.otEarlyExitRepo.MonthlyShortfallTotals(companyID, month, year); sfErr == nil {
+			shortfallMap = shortfalls
+		}
+	}
+
 	processed := 0
 
 	for _, emp := range employees {
@@ -107,7 +119,11 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		if groupName == "" && emp.GroupRef != nil {
 			groupName = emp.GroupRef.Name
 		}
-		salary := s.calculateEmployeeSalary(emp, groupName, attMap[emp.EmployeeID], otHoursMap[emp.EmployeeID], month, year, daysInMonth, userID)
+		netOt := otHoursMap[emp.EmployeeID] - shortfallMap[emp.EmployeeID]
+		if netOt < 0 {
+			netOt = 0
+		}
+		salary := s.calculateEmployeeSalary(emp, groupName, attMap[emp.EmployeeID], netOt, month, year, daysInMonth, userID)
 
 		if err := s.salaryRepo.Upsert(salary); err != nil {
 			continue
@@ -154,6 +170,10 @@ func (s *SalaryService) calculateEmployeeSalary(
 	weekendDays := 0
 	totalDays := 0
 
+	// Use calendar month days for totalDays and per-day salary calculations
+	// instead of att["total_days"] which may be inflated by duplicate rows.
+	totalDays = daysInMonth
+
 	if att != nil {
 		presentDays = toInt(att["present"])
 		absentDays = toInt(att["absent"])
@@ -161,7 +181,6 @@ func (s *SalaryService) calculateEmployeeSalary(
 		leaveDays = toInt(att["leave"])
 		holidayDays = toInt(att["holiday"])
 		weekendDays = toInt(att["weekend"])
-		totalDays = toInt(att["total_days"])
 	}
 
 	// Absent deduction

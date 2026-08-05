@@ -146,24 +146,6 @@ func toJobCardRows(list []models.Attendance) []JobCardRow {
 	return res
 }
 
-// parseDateTime parses a check_in/check_out string into time.Time.
-// Accepts "HH:mm" (uses the given date), "yyyy-MM-ddTHH:mm" or "yyyy-MM-dd HH:mm:ss" (full datetime).
-func parseDateTime(val, date string) (time.Time, error) {
-	if val == "" {
-		return time.Time{}, fmt.Errorf("empty time value")
-	}
-	if len(val) == 5 && val[2] == ':' {
-		return time.Parse("2006-01-02 15:04:05", date+" "+val+":00")
-	}
-	if len(val) >= 16 && val[10] == 'T' {
-		return time.Parse("2006-01-02T15:04", val)
-	}
-	if len(val) == 19 && val[10] == ' ' && val[4] == '-' {
-		return time.Parse("2006-01-02 15:04:05", val)
-	}
-	return time.Parse("2006-01-02 15:04:05", val)
-}
-
 // ListAttendances godoc
 //
 // @Summary      List attendances
@@ -290,12 +272,12 @@ func (h *AttendanceHandler) Create(c *gin.Context) {
 	userID := c.GetString("user_id")
 	var checkIn, checkOut *time.Time
 	if req.CheckIn != "" {
-		if t, err := parseDateTime(req.CheckIn, req.Date); err == nil {
+		if t, err := utils.ParseDateTime(req.CheckIn, req.Date); err == nil {
 			checkIn = &t
 		}
 	}
 	if req.CheckOut != "" {
-		if t, err := parseDateTime(req.CheckOut, req.Date); err == nil {
+		if t, err := utils.ParseDateTime(req.CheckOut, req.Date); err == nil {
 			checkOut = &t
 		}
 	}
@@ -377,12 +359,12 @@ func (h *AttendanceHandler) Update(c *gin.Context) {
 	attendance.UpdatedBy = &userID
 
 	if req.CheckIn != "" {
-		if t, err := parseDateTime(req.CheckIn, req.Date); err == nil {
+		if t, err := utils.ParseDateTime(req.CheckIn, req.Date); err == nil {
 			attendance.CheckIn = &t
 		}
 	}
 	if req.CheckOut != "" {
-		if t, err := parseDateTime(req.CheckOut, req.Date); err == nil {
+		if t, err := utils.ParseDateTime(req.CheckOut, req.Date); err == nil {
 			attendance.CheckOut = &t
 		}
 	}
@@ -900,8 +882,6 @@ func (h *AttendanceHandler) MissingAttendance(c *gin.Context) {
 		inTime := ""
 		if a.CheckIn != nil {
 			inTime = a.CheckIn.Format("2006-01-02 15:04:05")
-		} else if a.CheckOut != nil {
-			inTime = a.Date + " 07:55:00"
 		}
 		outTime := ""
 		if a.CheckOut != nil {
@@ -3053,4 +3033,51 @@ func toInt64(v interface{}) int64 {
 	default:
 		return 0
 	}
+}
+
+type bulkUpdateMissingRequest struct {
+	Status        string   `json:"status"`
+	InTime        string   `json:"inTime"`
+	OutTime       string   `json:"outTime"`
+	AttendanceIDs []string `json:"attendanceIds" binding:"required,min=1"`
+}
+
+// BulkUpdateMissing godoc
+//
+//	@Summary      Bulk update missing attendance
+//	@Description  Update many missing attendance records in one transaction. Each record's original attendance date is taken from the database and combined with the entered In/Out times. Only missing fields are updated; existing times are preserved. All updates roll back if any record fails validation.
+//	@Tags         Attendance
+//	@Security     BearerAuth
+//	@Accept       json
+//	@Produce      json
+//	@Param        request body bulkUpdateMissingRequest true "Bulk missing attendance request"
+//	@Success      200  {object}  map[string]interface{}
+//	@Failure      400  {object}  map[string]string
+//	@Failure      500  {object}  map[string]string
+//	@Router       /attendance/bulk-update-missing [post]
+func (h *AttendanceHandler) BulkUpdateMissing(c *gin.Context) {
+	var req bulkUpdateMissingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.InTime == "" && req.OutTime == "" && req.Status == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of inTime, outTime or status must be provided"})
+		return
+	}
+
+	userID := c.GetString("user_id")
+
+	updated, err := h.attendanceRepo.BulkUpdateMissing(req.AttendanceIDs, req.InTime, req.OutTime, req.Status, userID)
+	if err != nil {
+		c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"updated": updated,
+		"failed":  0,
+		"message": fmt.Sprintf("%d attendance records updated successfully", updated),
+	})
 }

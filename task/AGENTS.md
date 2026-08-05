@@ -57,8 +57,8 @@ PeopleHub/
 │   ├── config/
 │   │   └── config.go             # Env-based config loader (port 5000 default)
 │   ├── database/
-│   │   └── postgres.go           # GORM connection + AutoMigrate(40 models) + ALTER fixes + 9 indexes
-│   ├── handlers/                 # 33 handler files
+│   │   └── postgres.go           # GORM connection + AutoMigrate(42 models) + ALTER fixes + indexes
+│   ├── handlers/                 # 35 handler files
 │   │   ├── auth.go, auth_register.go
 │   │   ├── attendance.go
 │   │   ├── company.go
@@ -69,6 +69,8 @@ PeopleHub/
 │   │   ├── health.go
 │   │   ├── id_card.go, id_card_generate.go
 │   │   ├── leave.go
+│   │   ├── monthly_report_export.go
+│   │   ├── missing_attendance.go, ot_early_exit.go
 │   │   ├── night_bill.go, tiffin_bill.go
 │   │   ├── organization.go, organization_import.go
 │   │   ├── punishment.go
@@ -89,17 +91,18 @@ PeopleHub/
 │   ├── utils/
 │   │   ├── pagination.go         # Pagination DTOs (page/limit/total/total_pages)
 │   │   └── date.go               # Date range generator + weekend checker
-│   ├── models/                   # 40 GORM model files
-│   ├── repository/               # 26 repository files (data access)
+│   ├── models/                   # 42 GORM model files
+│   ├── repository/               # 28 repository files (data access)
 │   ├── routes/
-│   │   └── routes.go             # ALL route registrations (single 490-line file)
+│   │   └── routes.go             # ALL route registrations (single ~565-line file)
 │   ├── server/
-│   │   └── server.go             # Dependency injection wiring (25+ repos, 7 services, 32+ handlers)
+│   │   └── server.go             # Dependency injection wiring (28+ repos, 8 services, 35+ handlers)
 │   └── service/
 │       ├── auth.go               # Auth business logic (login, register, refresh, lockout)
 │       ├── attendance_processor.go # ZKTeco→attendance processing pipeline
 │       ├── data_log.go           # MDB import + dedup logic
 │       ├── mdb_reader.go         # ZKTeco MDB PowerShell reader
+│       ├── ot_early_exit.go      # Early-exit OT deduction computation + ledger
 │       ├── salary.go             # Monthly salary calculation engine
 │       ├── separation.go         # Separation process/cancel/reactivate
 │       └── user.go               # User CRUD, forgot/reset password, role assignment
@@ -130,7 +133,7 @@ PeopleHub/
     │   ├── layout/               # AppSidebar, SiteHeader, SearchDialog, NavMain, NavGroup, NavSecondary
     │   └── data/                 # Navigation configs + domain type definitions (Employee, Company, Shift, etc.)
     ├── lib/
-    │   ├── api.ts                # 40 API client objects (auth, employee, attendance, leave, salary, etc.)
+    │   ├── api.ts                # 41 API client objects (auth, employee, attendance, leave, salary, otEarlyExit, etc.)
     │   ├── axios-instance.ts     # Axios + Bearer token + 401 refresh interceptor
     │   ├── crud-factory.ts       # createCrudApi(basePath) → { list, get, create, update, delete }
     │   ├── auth.ts               # hasRole(), isSuperAdmin() — JWT payload decode
@@ -172,7 +175,7 @@ All dependencies are manually wired in `internal/server/server.go`:
 5. Handlers (each receives its required repositories/services)
 6. Routes (`routes.Setup(...)` receives all handlers)
 
-There is no DI framework (Wire/Dig). At current scale (33 handlers, 26 repos, 7 services) manual wiring is manageable.
+There is no DI framework (Wire/Dig). At current scale (35 handlers, 28 repos, 8 services) manual wiring is manageable.
 
 ### 4.3 Middleware Pipeline (per request)
 
@@ -212,7 +215,7 @@ Handler
 
 ### 6.1 Summary
 
-**Total Tables:** 40  
+**Total Tables:** 42  
 **Primary Key Type:** `uuid` (gen_random_uuid()) on all tables  
 **Soft Deletes:** `deleted_at` (GORM `gorm.DeletedAt`) on nearly all tables  
 **Audit Columns:** `created_by`, `updated_by`, `deleted_by` (UUID, nullable) on most tables  
@@ -283,7 +286,7 @@ Handler
 | Table | Purpose | Key Fields |
 |-------|---------|------------|
 | `data_logs` | Raw ZKTeco punches | `id` UUID PK, `user_id` int (ZK internal), `badge_number` varchar(50), `employee_name`, `punch_time` timestamp, `punch_type` varchar(1) ('I'/'O'), `device_id`, `device_sn`, `date` date, `processed` boolean (default false) |
-| `attendances` | Processed attendance | `id` UUID PK, `employee_id` **varchar(50)**, `company_id` UUID, `shift_id` UUID, `date` date, `check_in` varchar(5) (HH:MM), `check_out` varchar(5), `total_hours` varchar(5), `over_time` varchar(5), `status` varchar(20) (present/absent/late/on_leave/weekend/half_day), `late_minutes` int, `punch_number` varchar(50) |
+| `attendances` | Processed attendance | `id` UUID PK, `employee_id` **varchar(50)**, `company_id` UUID, `shift_id` UUID, `date` date, `check_in` **timestamp**, `check_out` **timestamp** (migrated from varchar via ALTER), `total_hours` varchar(5), `over_time` varchar(5), `status` varchar(20) (present/absent/late/on_leave/weekend/half_day), `late_minutes` int, `punch_number` varchar(50) |
 
 **Indexes:**
 - `data_logs`: `date` + `processed`, `user_id`, `punch_time`, `badge_number`
@@ -311,17 +314,19 @@ Handler
 | `separations` | Employee separation records | `id` UUID PK, `employee_ref_id` (uuid), `employee`, `employee_id`, `company_id`, `department_id`, `type` (Resign/Lefty/Close), `date`, `status` (Pending/Approved/Cancelled), `reason` |
 | `id_cards` | ID card issuance | `id` UUID PK, `employee_ref_id` (uuid), `employee`, `employee_id`, `designation_id`, `department_id`, `card_no`, `issued`, `expiry`, `status` (Active/Expired/Lost/Damaged) |
 | `punishments` | Employee penalties | `id` UUID PK, `company_id`, `employee_id`, `type`, `reason`, `amount` (decimal), `date`, `status`, `remarks` |
+| `missing_attendances` | Manual attendance overrides (highest priority) | `id` UUID PK, `employee_id` **varchar(50)**, `company_id`, `date`, `check_in`/`check_out` timestamp, `status` (default present), `notes`, `created_by`. **Priority:** if a record exists for employee+date it is applied BEFORE ZKTeco log data; log processing is skipped for that employee/date |
 | `daily_schedules` | Per-employee daily schedule | `id` UUID PK, `company_id`, `employee_id`, `date`, `schedule_type`, `start_time`, `end_time`, `remarks`, `status` |
 | `night_bills` | Night shift allowance | `id` UUID PK, `company_id`, `employee_id`, `date`, `night_hours` (decimal), `rate` (decimal), `amount` (decimal), `month`, `year`, `status` |
 | `tiffin_bills` | Tiffin/meal allowance | `id` UUID PK, `company_id`, `employee_id`, `date`, `amount` (decimal), `month`, `year`, `status` |
+| `ot_early_exit_deductions` | Monthly early-exit OT deduction ledger | `id` UUID PK, `employee_id` **varchar(50)**, `company_id` UUID, `date` date, `shift_id` UUID, `shift_start_time`/`shift_end_time` varchar(5) (resolved shift), `expected_hours` numeric(6,2), `worked_hours` numeric(6,2), `shortfall_hours` numeric(6,2), `status` (default present), `month`, `year`, `created_by`. **Index:** `(company_id, year, month)` WHERE deleted_at IS NULL, `(employee_id, date)` |
 | `system_settings` | Key-value settings | `id` UUID PK, `key` (unique), `value` |
 
 ### 6.9 Critical Schema Notes
 
-1. **Dual Employee Key System:** `employees.id` is UUID (PK). `employees.employee_id` is VARCHAR(50) (business key). `attendances`, `leaves`, `leave_allocations`, `salaries`, `temporary_shifts`, `salary_increments`, `punishments`, `daily_schedules`, `night_bills`, `tiffin_bills` all reference the VARCHAR business key (`employee_id`), NOT the UUID `id`. This means **no true foreign key constraints** can exist on these relationships. Data integrity is application-level only.
-2. **GORM VARCHAR Override (11 ALTERs):** GORM 1.31.2 forces UUID type on `*_id` columns. `postgres.go` runs `ALTER TABLE ... TYPE varchar(50)` after AutoMigrate to fix `employee_id` columns in `employees`, `attendances`, `leaves`, `leave_allocations`, `salaries`, `temporary_shifts`, `salary_increments`, `punishments`, `daily_schedules`, `night_bills`, `tiffin_bills`.
+1. **Dual Employee Key System:** `employees.id` is UUID (PK). `employees.employee_id` is VARCHAR(50) (business key). `attendances`, `leaves`, `leave_allocations`, `salaries`, `temporary_shifts`, `salary_increments`, `punishments`, `daily_schedules`, `night_bills`, `tiffin_bills`, `ot_early_exit_deductions` all reference the VARCHAR business key (`employee_id`), NOT the UUID `id`. This means **no true foreign key constraints** can exist on these relationships. Data integrity is application-level only.
+2. **GORM VARCHAR Override (12 ALTERs):** GORM 1.31.2 forces UUID type on `*_id` columns. `postgres.go` runs `ALTER TABLE ... TYPE varchar(50)` after AutoMigrate to fix `employee_id` columns in `employees`, `attendances`, `leaves`, `leave_allocations`, `salaries`, `temporary_shifts`, `salary_increments`, `punishments`, `daily_schedules`, `night_bills`, `tiffin_bills`, `ot_early_exit_deductions`.
 3. **No FK Constraints in DB:** `DisableForeignKeyConstraintWhenMigrating: true` means zero database-level foreign keys. All relationships are managed by GORM associations only.
-4. **Auto-Created Performance Indexes (9):** `postgres.go` creates `IF NOT EXISTS` indexes on startup:
+4. **Auto-Created Performance Indexes (10):** `postgres.go` creates `IF NOT EXISTS` indexes on startup:
    - `idx_salaries_company_month_year` on `salaries(company_id, year, month)`
    - `idx_employees_company_status` on `employees(company_id, status)` WHERE deleted_at IS NULL
    - `idx_employees_department` on `employees(department_id)` WHERE deleted_at IS NULL
@@ -329,6 +334,7 @@ Handler
    - `idx_temporary_shifts_company_date` on `temporary_shifts(company_id, date)`
    - `idx_data_logs_date_processed` on `data_logs(date, processed)` WHERE deleted_at IS NULL
    - `idx_attendances_date_status` on `attendances(date, status)`
+   - `idx_ot_early_exit_company_month` on `ot_early_exit_deductions(company_id, year, month)` WHERE deleted_at IS NULL
    - `idx_leaves_status_dates` on `leaves(status, from_date, to_date)`
    - `idx_sessions_user` on `sessions(user_id)` WHERE deleted_at IS NULL
 
@@ -422,7 +428,7 @@ All routes are prefixed with `/api/v1` unless noted. Authentication: Bearer JWT 
 | PUT | `/temporary-shifts/:id` | Update |
 | DELETE | `/temporary-shifts/:id` | Delete |
 
-### 7.9 Attendance (14 endpoints)
+### 7.9 Attendance (20 endpoints)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -442,8 +448,24 @@ All routes are prefixed with `/api/v1` unless noted. Authentication: Bearer JWT 
 | GET | `/attendance/missing` | Employees with data_logs but no attendance for date |
 | GET | `/attendance/absent` | Employees marked absent for date range |
 | GET | `/attendance/monthly-report` | Per-employee monthly summary (present/absent/late/leave/weekend/half_day counts) |
+| POST | `/attendance/ot-early-exit/process` | Recompute monthly early-exit OT deduction ledger (body: company_id, month, year) |
+| GET | `/attendance/ot-early-exit` | List early-exit deduction ledger (filters: company_id, month, year + org filters; returns records, total, total_shortfall, affected_employees) |
+| GET | `/attendance/ot-early-exit/export/excel` | Download early-exit deduction ledger as Excel |
 
 **Query params for attendance list:** `date`, `company_id`, `department_id`, `section_id`, `designation_id`, `line_id`, `group_id`, `shift_id`, `status`, `employee_id`
+
+### 7.9a Missing Attendance (manual overrides)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/missing-attendance` | List manual attendance overrides |
+| POST | `/missing-attendance` | Create override |
+| POST | `/missing-attendance/upsert` | Upsert override by employee + date |
+| POST | `/missing-attendance/bulk` | Bulk upsert overrides |
+| PUT | `/missing-attendance/:id` | Update override |
+| DELETE | `/missing-attendance/:id` | Delete override |
+| POST | `/attendance/bulk-update-missing` | Bulk update missing attendance status/times by attendance IDs |
+| GET | `/attendance/missing/export/excel` | Export missing attendance to Excel |
 
 ### 7.10 Data Logs (ZKTeco Integration)
 
@@ -542,7 +564,7 @@ All routes are prefixed with `/api/v1` unless noted. Authentication: Bearer JWT 
 
 **Pagination:** All `GET` list endpoints support `?page=` (default 1) and `?limit=` (default 20, max 100, clamped) query parameters. Responses are wrapped in `PaginatedResponse` with `data`, `total`, `page`, `limit`, `total_pages`.
 
-**Total API Endpoints:** ~170+ (Public: 7, Protected: ~163)
+**Total API Endpoints:** ~175+ (Public: 7, Protected: ~168+)
 
 ---
 
@@ -619,6 +641,7 @@ ZKTeco Device
 - If employee has approved leave covering the date → `status = "on_leave"` regardless of punches
 - Weekend days are configured per shift via comma-separated abbreviations ("Fri,Sat")
 - Only marks logs processed if attendance creation succeeds (transaction-like behavior via separate updates)
+- **Missing attendance overrides take highest priority**: a `missing_attendances` record for an employee+date is applied before any ZKTeco log data, and ZKTeco processing is skipped for that employee/date
 
 ### 9.2 Attendance → Payroll (The Salary Pipeline)
 
@@ -629,6 +652,9 @@ Body: { company_id, month, year }
     ├──► Load all active employees for company
     ├──► Load monthly attendance report (aggregated present/absent/late/leave/weekend/half_day counts per employee)
     ├──► Load monthly overtime hours per employee (SQL calculation: check_out time - shift.end_time)
+    │
+    ├──► Load monthly early-exit shortfall totals (ot_early_exit_deductions: SUM(shortfall_hours) per employee)
+    │         net_ot = raw_ot - shortfall (clamped at ≥ 0)
     │
     └──► For each employee:
          1. gross = employee.gross_salary
@@ -642,7 +668,7 @@ Body: { company_id, month, year }
          9. per_day_salary = gross / total_days_in_month
          10. absent_deduction = per_day_salary * absent_days
          11. ot_rate = basic / total_days / 8
-         12. ot_amount = ot_hours * ot_rate
+         12. ot_amount = (net_ot hours) * ot_rate
          13. attendance_bonus = 500 if absent_days == 0 AND present_days > 0
          14. net_salary = gross - absent_deduction + ot_amount + attendance_bonus
          15. Upsert salaries table (company_id + employee_id + month + year)
@@ -656,6 +682,7 @@ Body: { company_id, month, year }
 - Medical is a fixed 750 BDT (not 10% of gross)
 - Transport and food use employee-level overrides (defaults: 450 and 1250)
 - OT rate is based on basic salary divided by days in month divided by 8 hours
+- **Early-exit shortfall is subtracted from OT hours before OT amount is computed** (`net_ot = raw_ot - shortfall`, min 0)
 - Attendance bonus is a flat 500 BDT for perfect attendance
 - PF and Tax are calculated as 0 in current implementation (placeholders)
 - Negative net salary is clamped to 0
@@ -690,6 +717,40 @@ PUT /leaves/:id/reject
 - Leave balance is tracked per (employee, leave_type, year) triple
 - Used + Pending cannot exceed Total
 - Approved leaves automatically update attendance status
+
+### 9.4 Early-Exit OT Deduction Flow (OT Early Exit)
+
+**Purpose:** When an employee works fewer hours than their shift (e.g. checks out at 13:00 for an 08:00–17:00 shift), the shortfall (expected − worked) is deducted from that employee's **monthly overtime**. This is stored as an immutable monthly ledger in `ot_early_exit_deductions`, then applied when `salary/process` runs.
+
+```
+POST /api/v1/attendance/ot-early-exit/process
+Body: { company_id, month, year }
+    │
+    ├──► otRepo.ListShortfallRows(companyID, month range)
+    │         Raw SQL joins attends + employees + temporary_shifts + shifts
+    │         Resolve shift: COALESCE(temp.shift_id, attendance.shift_id, employee.shift_id)
+    │         Include only days with check_in AND check_out AND status <> 'on_leave'
+    │         expected = resolved_shift_start/end duration (overnight-aware)
+    │         worked = check_out - check_in (hours)
+    │         Keep rows where 0 < worked < expected
+    │
+    ├──► Exclude government/company holidays (holidayRepo.ListActiveByDateRange, skip weekend_change type)
+    ├──► Exclude weekend days (utils.IsWeekend per employee's resolved shift weekend_days)
+    │
+    └──► otRepo.UpsertMonth(company_id, month, year, rows, user)
+          (transaction: delete existing month rows → batch re-create)
+```
+
+**Shortfall computation per row:**
+- `shortfall_hours = expected_hours - worked_hours`
+- `expected_hours`: shift duration. If `start == end` or `end < start` treat as overnight (+24h).
+- Rows with `worked_hours <= 0` or `worked_hours >= expected` are excluded.
+
+**Salary integration:** `internal/service/salary.go` `ProcessMonth` calls `otEarlyExitRepo.MonthlyShortfallTotals(companyID, month, year)` (SUM shortfall per employee) and subtracts from `GetMonthlyOvertimeHours` per employee, clamped at 0, **before** computing OT amount.
+
+**Exclusions:** Weekend days, company/government holidays (`weekend_change` holiday type skipped), and `on_leave` attendance days are never counted as early exit.
+
+**Ledger query** exposes per-day rows joined with employee name/designation/department, plus month totals (total_records, total_shortfall, affected_employees).
 
 ---
 
@@ -795,9 +856,9 @@ NEXT_PUBLIC_API_URL=http://localhost:5000/api/v1
 | **Salary PF/Tax Placeholders** | Low | Provident Fund and Tax are always 0. No calculation logic implemented. |
 | **Client-Side Rendering Only** | Low | All data pages fetch on mount. No SSR/SSG for dashboard or reports. |
 | **Frontend any Types** | Low | Some TanStack column accessors use `(r: any)` instead of proper generics. |
-| **No Test Coverage** | Low | No `_test.go` files exist in the codebase. |
+| **No Test Coverage** | Low | Only 3 `_test.go` files exist (`leave_form_pdf_test.go`, `job_card_export_test.go`, `id_card_generate_test.go`). Core business logic untested. |
 | **No Transaction Usage in Handlers** | Low | Some handlers update multiple tables without wrapping in `Transaction()`. |
-| ~~**Missing DB Indexes**~~ | ~~Low~~ | ✅ **FIXED** — 9 performance indexes auto-created on startup for salaries, employees, leave_allocations, temporary_shifts, data_logs, attendances, leaves, sessions. |
+| ~~**Missing DB Indexes**~~ | ~~Low~~ | ✅ **FIXED** — 10 performance indexes auto-created on startup for salaries, employees, leave_allocations, temporary_shifts, data_logs, attendances, ot_early_exit_deductions, leaves, sessions. |
 
 ---
 
@@ -1039,5 +1100,5 @@ silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS nid varchar(50)")
 
 ---
 
-*Document Version: 2.1*  
-*Last Updated: 2026-07-25*
+*Document Version: 2.2*  
+*Last Updated: 2026-08-05*

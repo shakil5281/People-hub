@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { CalendarIcon, XIcon } from "lucide-react"
-import { format, set as setDateFields, isValid } from "date-fns"
+import { format, isValid } from "date-fns"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Calendar } from "@/components/ui/calendar"
@@ -18,10 +18,10 @@ interface DatePickerProps {
 
 export function DatePicker({ value, onChange, placeholder = "Pick a date", className, disabled }: DatePickerProps) {
   const [open, setOpen] = React.useState(false)
-  const today = new Date()
-  const [dd, setDd] = React.useState(value ? format(value, "dd") : format(today, "dd"))
-  const [mm, setMm] = React.useState(value ? format(value, "MM") : format(today, "MM"))
-  const [yyyy, setYyyy] = React.useState(value ? format(value, "yyyy") : format(today, "yyyy"))
+  const [calendarMonth, setCalendarMonth] = React.useState<Date>(value || new Date())
+  const [dd, setDd] = React.useState(value ? format(value, "dd") : "")
+  const [mm, setMm] = React.useState(value ? format(value, "MM") : "")
+  const [yyyy, setYyyy] = React.useState(value ? format(value, "yyyy") : "")
 
   const ddRef = React.useRef<HTMLInputElement>(null)
   const mmRef = React.useRef<HTMLInputElement>(null)
@@ -83,6 +83,13 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
     setYyyy("")
   }
 
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setCalendarMonth(value || new Date())
+    }
+    setOpen(nextOpen)
+  }
+
   const displayValue = dd && mm && yyyy ? `${dd}/${mm}/${yyyy}` : ""
 
   return (
@@ -134,7 +141,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
               <XIcon className="size-3.5" />
             </button>
           )}
-          <Popover open={open} onOpenChange={setOpen}>
+          <Popover open={open} onOpenChange={handleOpenChange}>
             <PopoverTrigger asChild>
               <button
                 type="button"
@@ -148,6 +155,8 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
               <Calendar
                 mode="single"
                 selected={value}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
                 onSelect={(date) => {
                   onChange?.(date)
                   setDd(date ? format(date, "dd") : "")

@@ -45,6 +45,8 @@ func Setup(
 	holidayHandler *handlers.HolidayHandler,
 	systemLogHandler *handlers.SystemLogHandler,
 	notificationHandler *handlers.NotificationHandler,
+	missingAttendanceHandler *handlers.MissingAttendanceHandler,
+	otEarlyExitHandler *handlers.OtEarlyExitHandler,
 	jwtSecret string,
 ) {
 	r.GET("/health", handlers.HealthCheck)
@@ -269,6 +271,8 @@ func Setup(
 		attendance.GET("/export/excel", attendanceHandler.ExportExcel)
 		attendance.GET("", attendanceHandler.List)
 		attendance.GET("/monthly-report", attendanceHandler.MonthlyReport)
+		attendance.GET("/monthly-report/export/excel", attendanceHandler.ExportMonthlyReportExcel)
+		attendance.GET("/monthly-report/export/pdf", attendanceHandler.ExportMonthlyReportPDF)
 		attendance.GET("/:id", attendanceHandler.GetByID)
 		attendance.GET("/summary", attendanceHandler.Summary)
 		attendance.GET("/summary/export/excel", attendanceHandler.ExportSummaryExcel)
@@ -286,6 +290,9 @@ func Setup(
 		attendance.POST("", attendanceHandler.Create)
 		attendance.PUT("/:id", attendanceHandler.Update)
 		attendance.DELETE("/:id", attendanceHandler.Delete)
+		attendance.POST("/ot-early-exit/process", otEarlyExitHandler.Compute)
+		attendance.GET("/ot-early-exit", otEarlyExitHandler.List)
+		attendance.GET("/ot-early-exit/export/excel", otEarlyExitHandler.ExportExcel)
 
 		// Admin-only destructive attendance operations
 		attendanceAdmin := attendance.Group("")
@@ -297,6 +304,7 @@ func Setup(
 		attendance.POST("/clock-in", attendanceHandler.ClockIn)
 		attendance.POST("/clock-out", attendanceHandler.ClockOut)
 		attendance.POST("/custom-summary", attendanceHandler.CustomSummaryReport)
+		attendance.POST("/bulk-update-missing", attendanceHandler.BulkUpdateMissing)
 	}
 
 	// Protected data log routes
@@ -314,6 +322,18 @@ func Setup(
 		{
 			dataLogAdmin.DELETE("/delete-all", dataLogHandler.DeleteAll)
 		}
+	}
+
+	// Protected missing attendance routes
+	missingAtt := api.Group("/missing-attendance")
+	missingAtt.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		missingAtt.GET("", missingAttendanceHandler.List)
+		missingAtt.POST("", missingAttendanceHandler.Create)
+		missingAtt.POST("/upsert", missingAttendanceHandler.UpsertByEmployeeAndDate)
+		missingAtt.POST("/bulk", missingAttendanceHandler.BulkUpsert)
+		missingAtt.PUT("/:id", missingAttendanceHandler.Update)
+		missingAtt.DELETE("/:id", missingAttendanceHandler.Delete)
 	}
 
 	// Protected requirement routes
@@ -542,3 +562,4 @@ func Setup(
 		systemLog.DELETE("/purge", systemLogHandler.Purge)
 	}
 }
+

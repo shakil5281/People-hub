@@ -7,15 +7,30 @@ import { DatePicker } from "@/components/ui/date-picker"
 import { TimePicker } from "@/components/ui/time-picker"
 
 function toIso(v: string): string {
-  return v.includes("T")
-    ? v.length === 16 ? v + ":00" : v
-    : v + "T00:00:00"
+  if (!v) return ""
+  if (v.includes("T")) {
+    return v.length === 16 ? v + ":00" : v
+  }
+  if (v.includes(" ")) {
+    return v.replace(" ", "T")
+  }
+  return v + "T00:00:00"
 }
 
 function parseTime(v: string): string {
   if (!v) return ""
   if (v.includes("T")) return v.slice(11, 16)
-  if (v.includes(":")) return v.slice(0, 5)
+  const spaceIdx = v.indexOf(" ")
+  if (spaceIdx !== -1) {
+    const timePart = v.slice(spaceIdx + 1)
+    if (timePart.includes(":")) {
+      const parts = timePart.split(":")
+      if (parts[0].length <= 2) {
+        return `${parts[0].padStart(2, "0")}:${parts[1]?.slice(0, 2).padStart(2, "0") || "00"}`
+      }
+    }
+  }
+  if (v.includes(":") && v.length <= 5) return v.slice(0, 5)
   return ""
 }
 
@@ -24,9 +39,10 @@ interface DateTimePickerProps {
   onChange?: (value: string) => void
   className?: string
   disabled?: boolean
+  autoFocusTime?: boolean
 }
 
-export function DateTimePicker({ value, onChange, className, disabled }: DateTimePickerProps) {
+export function DateTimePicker({ value, onChange, className, disabled, autoFocusTime }: DateTimePickerProps) {
   const iso = value ? toIso(value) : ""
   const parsed = iso ? new Date(iso) : undefined
   const dateObj = parsed && isValid(parsed) ? parsed : undefined
@@ -75,6 +91,7 @@ export function DateTimePicker({ value, onChange, className, disabled }: DateTim
           emit(dateVal, t)
         }}
         disabled={disabled}
+        autoFocus={autoFocusTime}
       />
     </div>
   )

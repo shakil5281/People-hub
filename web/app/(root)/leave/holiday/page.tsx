@@ -13,6 +13,11 @@ import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { DatePicker } from "@/components/ui/date-picker"
+import { Switch } from "@/components/ui/switch"
+import {
+  AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogFooter,
+  AlertDialogTitle, AlertDialogDescription, AlertDialogAction, AlertDialogCancel,
+} from "@/components/ui/alert-dialog"
 import { holidayApi, companyApi } from "@/lib/api"
 
 interface Holiday {
@@ -26,6 +31,7 @@ interface Holiday {
   type: string
   description: string
   status: string
+  created_by: string | null
 }
 
 interface Company {
@@ -49,6 +55,20 @@ function formatDate(val: string | null | undefined) {
   const parts = d.split("-")
   if (parts.length !== 3) return val
   return `${parts[2]}-${parts[1]}-${parts[0]}`
+}
+
+function formatCreatedBy(val: string | null | undefined) {
+  if (!val) return "-"
+  return val.slice(0, 8)
+}
+
+// Human-readable day name from a "YYYY-MM-DD" date, e.g. "Friday".
+function dayName(val: string | null | undefined) {
+  if (!val) return ""
+  const d = val.includes("T") ? val.split("T")[0] : val
+  const dt = new Date(d + "T00:00:00")
+  if (isNaN(dt.getTime())) return ""
+  return format(dt, "EEEE")
 }
 
 const govColumns: ColumnDef<Holiday>[] = [
@@ -77,7 +97,7 @@ const govColumns: ColumnDef<Holiday>[] = [
   },
 ]
 
-const wcColumns: ColumnDef<Holiday>[] = [
+const buildWcColumns = (onToggle: (h: Holiday) => void): ColumnDef<Holiday>[] => [
   { id: "sl", header: "#", cell: ({ row }) => row.index + 1 },
   { accessorKey: "name", header: "Change Name" },
   { accessorKey: "date", header: "General Duty Date", cell: ({ row }) => formatDate(row.original.date) },
@@ -87,13 +107,21 @@ const wcColumns: ColumnDef<Holiday>[] = [
     cell: ({ row }) => formatDate(row.original.weekend_date),
   },
   { accessorKey: "description", header: "Description", cell: ({ row }) => row.original.description || "-" },
+  { accessorKey: "created_by", header: "Created By", cell: ({ row }) => formatCreatedBy(row.original.created_by) },
   {
     accessorKey: "status",
     header: "Status",
     cell: ({ row }) => (
-      <Badge variant={row.original.status === "active" ? "default" : "secondary"} className="capitalize">
-        {row.original.status}
-      </Badge>
+      <div className="flex items-center gap-2">
+        <Switch
+          checked={row.original.status === "active"}
+          onCheckedChange={() => onToggle(row.original)}
+          disabled={row.original.type === "government"}
+        />
+        <Badge variant={row.original.status === "active" ? "default" : "secondary"} className="capitalize">
+          {row.original.status}
+        </Badge>
+      </div>
     ),
   },
 ]
@@ -334,6 +362,16 @@ function WcHolidayDialog({
   const [description, setDescription] = React.useState("")
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [error, setError] = React.useState("")
+  const [confirmOpen, setConfirmOpen] = React.useState(false)
+
+  const previewMessage = React.useMemo(() => {
+    if (!generalDutyDate || !weekendDate) return ""
+    const gdStr = format(generalDutyDate, "yyyy-MM-dd")
+    const wdStr = format(weekendDate, "yyyy-MM-dd")
+    return `You are changing ${dayName(wdStr)} (${formatDate(wdStr)}) from Weekend to General Duty. ` +
+      `You are changing ${dayName(gdStr)} (${formatDate(gdStr)}) to become the Weekend. ` +
+      `This change will affect attendance, payroll, leave, overtime, and all attendance reports.`
+  }, [generalDutyDate, weekendDate])
 
   React.useEffect(() => {
     companyApi.list({ limit: "100" }).then((res) => {
@@ -359,12 +397,18 @@ function WcHolidayDialog({
     setError("")
   }, [editingItem, open, companies])
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name || !generalDutyDate || !weekendDate || !companyId) {
       setError("Name, general duty date, weekend date, and company are required")
       return
     }
+    setError("")
+    setConfirmOpen(true)
+  }
+
+  const doSubmit = async () => {
+    if (!generalDutyDate || !weekendDate) return
     setIsSubmitting(true)
     setError("")
     try {
@@ -390,6 +434,7 @@ function WcHolidayDialog({
         })
         toast.success("Weekend change created successfully")
       }
+      setConfirmOpen(false)
       onOpenChange(false)
       onSuccess()
     } catch (err: unknown) {
@@ -399,6 +444,7 @@ function WcHolidayDialog({
         const axiosErr = err as { response?: { data?: { error?: string } } }
         detail = axiosErr.response?.data?.error || message
       }
+      setConfirmOpen(false)
       setError(detail)
       toast.error(detail)
     } finally {
@@ -499,6 +545,28 @@ function WcHolidayDialog({
           </div>
         </form>
       </DialogContent>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <MoonIcon className="h-5 w-5 text-muted-foreground" />
+              Confirm Weekend Change
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2">
+              <p>{previewMessage}</p>
+              <p>This change will affect attendance, payroll, leave, overtime, and all attendance reports.</p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSubmitting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={(e) => { e.preventDefault(); doSubmit() }} disabled={isSubmitting}>
+              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }
@@ -516,6 +584,10 @@ export default function HolidayPage() {
   const [limit, setLimit] = React.useState(20)
   const [total, setTotal] = React.useState(0)
   const [totalPages, setTotalPages] = React.useState(0)
+
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false)
+  const [pendingDelete, setPendingDelete] = React.useState<Holiday | null>(null)
+  const [togglingId, setTogglingId] = React.useState<string | null>(null)
 
   const fetchData = React.useCallback(async () => {
     setLoading(true)
@@ -557,6 +629,24 @@ export default function HolidayPage() {
       toast.success("Holiday deleted successfully")
     } catch {
       toast.error("Failed to delete holiday")
+    } finally {
+      setDeleteConfirmOpen(false)
+      setPendingDelete(null)
+    }
+  }
+
+  const toggleStatus = async (item: Holiday) => {
+    setTogglingId(item.id)
+    try {
+      const next = item.status === "active" ? "inactive" : "active"
+      await holidayApi.update(item.id, { status: next })
+      setAllData((prev) => prev.map((d) => (d.id === item.id ? { ...d, status: next } : d)))
+      toast.success(`Weekend change ${next === "active" ? "activated" : "deactivated"}`)
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } }
+      toast.error(axiosErr.response?.data?.error || "Failed to update status")
+    } finally {
+      setTogglingId(null)
     }
   }
 
@@ -616,11 +706,29 @@ export default function HolidayPage() {
           </div>
           <DataTable
             data={wcData}
-            columns={wcColumns}
+            columns={buildWcColumns(toggleStatus)}
             onEdit={handleEdit}
-            onDelete={handleDelete}
+            onDelete={(item) => { setPendingDelete(item); setDeleteConfirmOpen(true) }}
             {...sharedTableProps}
           />
+          <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {pendingDelete
+                    ? `Are you sure you want to delete the weekend change "${pendingDelete.name}"? This will restore the original weekend calendar for the affected dates.`
+                    : "Delete this weekend change?"}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={(e) => { e.preventDefault(); if (pendingDelete) handleDelete(pendingDelete) }}>
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </TabsContent>
       </Tabs>
 

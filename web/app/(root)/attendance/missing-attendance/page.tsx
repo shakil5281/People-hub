@@ -1,16 +1,18 @@
 "use client"
 
 import * as React from "react"
-import { UserXIcon, Loader2, PencilIcon, FilterIcon, XIcon } from "lucide-react"
+import { UserXIcon, Loader2, PencilIcon, FilterIcon, XIcon, CheckIcon, SquareIcon, CheckSquareIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
+import { attendanceApi, missingAttendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { formatCheck } from "@/lib/utils"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger, SheetClose } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { DateTimePicker } from "@/components/ui/date-time-picker"
+import { TimePicker } from "@/components/ui/time-picker"
 import { toast } from "sonner"
 
 interface Company { id: string; company_name_en: string }
@@ -69,16 +71,27 @@ export default function MissingAttendancePage() {
   const [selected, setSelected] = React.useState<MissingRecord | null>(null)
   const [inTime, setInTime] = React.useState("")
   const [outTime, setOutTime] = React.useState("")
+  const [entryStatus, setEntryStatus] = React.useState("present")
   const [saving, setSaving] = React.useState(false)
   const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
+  const [sheetKey, setSheetKey] = React.useState(0)
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set())
+  const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false)
+  const [bulkInTime, setBulkInTime] = React.useState("")
+  const [bulkOutTime, setBulkOutTime] = React.useState("")
+  const [bulkStatus, setBulkStatus] = React.useState("present")
+  const [bulkSaving, setBulkSaving] = React.useState(false)
+
+  const selectedRows = React.useMemo(
+    () => data.filter((r) => selectedIds.has(r.id)),
+    [data, selectedIds],
+  )
 
   const computedStatus = React.useMemo(() => {
-    const hasIn = inTime.length > 0 && inTime.includes(":") && !inTime.endsWith("T")
-    const hasOut = outTime.length > 0 && outTime.includes(":") && !outTime.endsWith("T")
-    if (hasIn && hasOut) return "present"
-    if (hasIn || hasOut) return "late"
-    return selected?.status || "absent"
-  }, [inTime, outTime, selected])
+    return entryStatus
+  }, [entryStatus])
 
   const filterDefs: FilterDef[] = React.useMemo(() => [
     { key: "date_range", label: "Date Range", type: "daterange-split", dateRangeKeys: { start: "start_date", end: "end_date" } },
@@ -193,31 +206,109 @@ export default function MissingAttendancePage() {
     fetchData({ start_date: today, end_date: today }, 1)
   }
 
-  function toDT(v: string): string {
-    if (!v) return v
-    return v.replace(" ", "T")
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
-  function fromDT(v: string): string {
-    if (!v) return v
-    return v.replace("T", " ")
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === data.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(data.map((r) => r.id)))
+    }
+  }
+
+  const openBulkDialog = () => {
+    setBulkInTime("")
+    setBulkOutTime("")
+    setBulkStatus("present")
+    setBulkDialogOpen(true)
+  }
+
+  const handleBulkSubmit = async () => {
+    if (selectedIds.size === 0) {
+      toast.error("Please select employees from the table first")
+      return
+    }
+    setBulkSaving(true)
+    try {
+      const attendanceIds: string[] = []
+      for (const row of data) {
+        if (selectedIds.has(row.id)) {
+          attendanceIds.push(row.id)
+        }
+      }
+      if (attendanceIds.length === 0) {
+        toast.error("No records to submit")
+        return
+      }
+      const { data: res } = await attendanceApi.bulkUpdateMissing({
+        status: bulkStatus || undefined,
+        inTime: bulkInTime || undefined,
+        outTime: bulkOutTime || undefined,
+        attendanceIds,
+      })
+      toast.success(res?.message || `Bulk attendance saved for ${attendanceIds.length} record(s)`)
+      setBulkDialogOpen(false)
+      setSelectedIds(new Set())
+      fetchData(filters, page)
+    } catch {
+      toast.error("Failed to save bulk attendance")
+    } finally {
+      setBulkSaving(false)
+    }
   }
 
   function formatDateDDMMYYYY(v: string | null | undefined): string {
     if (!v) return "-"
     const d = v.slice(0, 10)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return v
-    return d.split("-").reverse().join("-")
+    return d.split("-").reverse().join("/")
+  }
+
+  const extractDate = (v: string): string => {
+    const d = v ? v.slice(0, 10) : ""
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : ""
   }
 
   const openSheet = (row: MissingRecord) => {
     setSelected(row)
-    const punches = row.punches || []
-    const punchIn = punches.find((x) => x.type === "I" || x.type === "i" || x.type === "0")
-    const punchOut = punches.find((x) => x.type === "O" || x.type === "o" || x.type === "1")
-    const bestIn = punchIn?.time || row.check_in
-    const bestOut = punchOut?.time || row.check_out
-    setInTime(bestIn ? toDT(bestIn) : bestOut ? row.date + "T07:55" : row.date)
-    setOutTime(bestOut ? toDT(bestOut) : row.date)
+    const rowDate = row.date ? row.date.slice(0, 10) : ""
+
+    // Source of truth is the database attendance record, not raw device punches.
+    const dbIn = row.check_in || ""
+    const dbOut = row.check_out || ""
+
+    let inTimeVal = ""
+    let outTimeVal = ""
+
+    if (!dbIn && dbOut) {
+      // In Time missing, Out Time present: use Out Time only for the date,
+      // keep In Time empty, show the actual Out Time value.
+      inTimeVal = extractDate(dbOut) || rowDate
+      outTimeVal = dbOut
+    } else if (dbIn && !dbOut) {
+      // Out Time missing, In Time present: show the actual In Time value,
+      // use In Time only for the date, keep Out Time empty.
+      inTimeVal = dbIn
+      outTimeVal = extractDate(dbIn) || rowDate
+    } else if (dbIn && dbOut) {
+      inTimeVal = dbIn
+      outTimeVal = dbOut
+    } else {
+      inTimeVal = rowDate
+      outTimeVal = rowDate
+    }
+
+    setInTime(inTimeVal)
+    setOutTime(outTimeVal)
+    setEntryStatus(row.status || "present")
+    setSheetKey((k) => k + 1)
     setSheetOpen(true)
   }
 
@@ -225,22 +316,24 @@ export default function MissingAttendancePage() {
     if (!selected) return
     setSaving(true)
     try {
-      const sendIn = inTime && inTime.includes("T") ? fromDT(inTime) : ""
-      const sendOut = outTime && outTime.includes("T") ? fromDT(outTime) : ""
-      const dateUsed = sendIn ? sendIn.slice(0, 10) : sendOut ? sendOut.slice(0, 10) : selected.date
-      await attendanceApi.create({
+      const sendIn = inTime || null
+      const sendOut = outTime || null
+
+      const payload: Record<string, unknown> = {
         employee_id: selected.employee_id,
         company_id: selected.company_id,
-        date: dateUsed,
-        ...(sendIn ? { check_in: sendIn } : {}),
-        ...(sendOut ? { check_out: sendOut } : {}),
+        date: selected.date,
+        check_in: sendIn,
+        check_out: sendOut,
         status: computedStatus,
-      })
-      toast.success("Attendance updated successfully")
+      }
+
+      await missingAttendanceApi.upsert(payload)
+      toast.success("Missing attendance saved successfully")
       setSheetOpen(false)
       fetchData(filters, page)
     } catch {
-      toast.error("Failed to update attendance")
+      toast.error("Failed to save missing attendance")
     } finally {
       setSaving(false)
     }
@@ -250,50 +343,59 @@ export default function MissingAttendancePage() {
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
+      {/* Header */}
       <div className="px-4 lg:px-6">
-        <div className="flex items-center gap-2">
-          <UserXIcon className="h-6 w-6 text-muted-foreground" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">Missing Attendance</h1>
-            <p className="text-muted-foreground mt-1">Attendance records missing check-in or check-out time</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <UserXIcon className="h-6 w-6 text-muted-foreground" />
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">Missing Attendance</h1>
+              <p className="text-muted-foreground mt-0.5 text-sm md:mt-1">Attendance records missing check-in or check-out time</p>
+            </div>
           </div>
-        </div>
-        <div className="md:hidden mt-3">
-          <ButtonGroup className="w-full">
-            <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
-              <SheetTrigger asChild>
-                <Button variant="outline" className="flex-1">
-                  <FilterIcon className="mr-2 h-4 w-4" />
-                  Filters
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
-                <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
-                  <SheetTitle className="text-base">Filters</SheetTitle>
-                  <SheetClose asChild>
-                    <Button variant="ghost" size="icon-sm">
-                      <XIcon className="h-4 w-4" />
-                    </Button>
-                  </SheetClose>
-                </SheetHeader>
-                <div className="flex-1 overflow-y-auto px-4 py-4">
-                  <FilterBar
-                    filters={filterDefs}
-                    values={filters}
-                    onChange={handleChange}
-                    onApply={() => { handleApply(); setMobileFilterOpen(false) }}
-                    onReset={() => { handleReset(); setMobileFilterOpen(false) }}
-                    submitting={loading}
-                    singleColumn
-                    noBorder
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
-          </ButtonGroup>
+          <div className="flex items-center gap-2">
+            {selectedIds.size > 0 && (
+              <Button onClick={openBulkDialog} className="flex-1 sm:flex-none">
+                Bulk Submit ({selectedIds.size})
+              </Button>
+            )}
+            <div className="md:hidden">
+              <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
+                <SheetTrigger asChild>
+                  <Button variant="outline">
+                    <FilterIcon className="mr-2 h-4 w-4" />
+                    Filters
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col" showCloseButton={false}>
+                  <SheetHeader className="px-4 py-3 border-b flex flex-row items-center justify-between">
+                    <SheetTitle className="text-base">Filters</SheetTitle>
+                    <SheetClose asChild>
+                      <Button variant="ghost" size="icon-sm">
+                        <XIcon className="h-4 w-4" />
+                      </Button>
+                    </SheetClose>
+                  </SheetHeader>
+                  <div className="flex-1 overflow-y-auto px-4 py-4">
+                    <FilterBar
+                      filters={filterDefs}
+                      values={filters}
+                      onChange={handleChange}
+                      onApply={() => { handleApply(); setMobileFilterOpen(false) }}
+                      onReset={() => { handleReset(); setMobileFilterOpen(false) }}
+                      submitting={loading}
+                      singleColumn
+                      noBorder
+                    />
+                  </div>
+                </SheetContent>
+              </Sheet>
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* Desktop Filter */}
       <div className="px-4 lg:px-6 hidden md:block">
         <FilterBar
           filters={filterDefs}
@@ -305,28 +407,38 @@ export default function MissingAttendancePage() {
         />
       </div>
 
+      {/* Error */}
       {error && (
         <div className="px-4 lg:px-6">
           <div className="rounded-md bg-destructive/15 px-4 py-3 text-sm text-destructive">{error}</div>
         </div>
       )}
 
+      {/* Table */}
       <div className="px-4 lg:px-6">
         <div className="rounded-lg border bg-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b bg-muted/50">
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground w-10">Sl</th>
+                  <th className="px-3 py-2.5 w-10">
+                    <button type="button" onClick={toggleSelectAll} className="text-muted-foreground hover:text-foreground">
+                      {selectedIds.size === data.length && data.length > 0 ? (
+                        <CheckSquareIcon className="size-4" />
+                      ) : (
+                        <SquareIcon className="size-4" />
+                      )}
+                    </button>
+                  </th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Employee ID</th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Name</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Designation</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Shift</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground hidden md:table-cell">Designation</th>
+                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground hidden lg:table-cell">Shift</th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Date</th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">In Time</th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Out Time</th>
                   <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Status</th>
-                  <th className="px-3 py-2.5 text-left font-medium text-muted-foreground w-16">Action</th>
+                  <th className="px-3 py-2.5 text-right font-medium text-muted-foreground w-16">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -349,13 +461,21 @@ export default function MissingAttendancePage() {
                     </td>
                   </tr>
                 ) : (
-                  data.map((row, i) => (
+                  data.map((row) => (
                     <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30">
-                      <td className="px-3 py-2">{(page - 1) * limit + i + 1}</td>
+                      <td className="px-3 py-2">
+                        <button type="button" onClick={() => toggleSelect(row.id)} className="text-muted-foreground hover:text-foreground">
+                          {selectedIds.has(row.id) ? (
+                            <CheckSquareIcon className="size-4" />
+                          ) : (
+                            <SquareIcon className="size-4" />
+                          )}
+                        </button>
+                      </td>
                       <td className="px-3 py-2 font-mono text-xs">{row.employee_id}</td>
                       <td className="px-3 py-2 font-medium">{row.employee_name}</td>
-                      <td className="px-3 py-2 text-muted-foreground">{row.designation || "-"}</td>
-                      <td className="px-3 py-2">{row.shift_name || "-"}</td>
+                      <td className="px-3 py-2 text-muted-foreground hidden md:table-cell">{row.designation || "-"}</td>
+                      <td className="px-3 py-2 hidden lg:table-cell">{row.shift_name || "-"}</td>
                       <td className="px-3 py-2">{formatDateDDMMYYYY(row.date)}</td>
                       <td className="px-3 py-2">
                         {row.check_in ? (
@@ -376,7 +496,7 @@ export default function MissingAttendancePage() {
                           {statusMap[row.status] || row.status}
                         </Badge>
                       </td>
-                      <td className="px-3 py-2">
+                      <td className="px-3 py-2 text-right">
                         <Button
                           variant="ghost"
                           size="icon"
@@ -421,8 +541,9 @@ export default function MissingAttendancePage() {
         </div>
       </div>
 
+      {/* Edit Sheet */}
       <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-        <SheetContent side="right">
+        <SheetContent side="right" className="w-full sm:max-w-md max-h-[100vh] overflow-y-auto">
           <SheetHeader>
             <SheetTitle>Edit Attendance</SheetTitle>
             <SheetDescription>Update check-in and check-out time</SheetDescription>
@@ -436,28 +557,41 @@ export default function MissingAttendancePage() {
                 <div><span className="text-muted-foreground">Designation: </span><span className="font-medium">{selected.designation || "-"}</span></div>
                 <div><span className="text-muted-foreground">Shift: </span><span className="font-medium">{selected.shift_name || "-"}</span></div>
                 <div><span className="text-muted-foreground">Date: </span><span className="font-medium">{formatDateDDMMYYYY(selected.date)}</span></div>
-                {selected.punches && selected.punches.length > 0 && (
-                  <div className="pt-1.5 border-t border-border mt-1.5">
-                    <span className="text-muted-foreground text-xs">Punch Logs: </span>
-                    <div className="flex flex-wrap gap-1.5 mt-1">
-                      {selected.punches.map((p, i) => (
-                        <Badge key={i} variant={p.type === "I" ? "default" : "secondary"} className="text-xs">
-                          {p.type === "I" ? "IN" : "OUT"} {formatCheck(p.time)}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div className="flex flex-col gap-3">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-muted-foreground">In Time</label>
-                  <DateTimePicker value={inTime} onChange={setInTime} />
+                  <DateTimePicker
+                    key={`edit-in-${sheetKey}`}
+                    value={inTime}
+                    onChange={setInTime}
+                    autoFocusTime={!selected?.check_in}
+                  />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Out Time</label>
-                  <DateTimePicker value={outTime} onChange={setOutTime} />
+                  <DateTimePicker
+                    key={`edit-out-${sheetKey}`}
+                    value={outTime}
+                    onChange={setOutTime}
+                    autoFocusTime={!!selected?.check_in && !selected?.check_out}
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Status</label>
+                  <select
+                    value={entryStatus}
+                    onChange={(e) => setEntryStatus(e.target.value)}
+                    className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <option value="present">Present</option>
+                    <option value="absent">Absent</option>
+                    <option value="late">Late</option>
+                    <option value="half_day">Half Day</option>
+                    <option value="on_leave">On Leave</option>
+                    <option value="weekend">Weekend</option>
+                  </select>
                 </div>
                 <div className="flex items-center gap-2 pt-1 text-xs text-muted-foreground">
                   Status will be: <Badge variant={computedStatus === "absent" ? "destructive" : "secondary"}>{statusMap[computedStatus] || computedStatus}</Badge>
@@ -472,6 +606,60 @@ export default function MissingAttendancePage() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Bulk Submit Dialog */}
+      <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+        <DialogContent className="min-w-87.5 sm:min-w-[700px]">
+          <DialogHeader>
+            <DialogTitle className="text-lg">Bulk Attendance</DialogTitle>
+            <p className="text-sm text-muted-foreground">{selectedIds.size} attendance record(s) selected</p>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-4 py-2">
+            {/* Notice: dates are preserved per record */}
+            <div className="rounded-md bg-muted/40 px-3 py-2.5 text-sm text-muted-foreground">
+              The original attendance date for each record will be used automatically.
+            </div>
+
+            {/* Time row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">In Time</label>
+                <TimePicker value={bulkInTime} onChange={setBulkInTime} />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium">Out Time</label>
+                <TimePicker value={bulkOutTime} onChange={setBulkOutTime} />
+              </div>
+            </div>
+
+            {/* Status */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-sm font-medium">Status</label>
+              <select
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value)}
+                className="flex h-10 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="present">Present</option>
+                <option value="absent">Absent</option>
+                <option value="late">Late</option>
+                <option value="half_day">Half Day</option>
+                <option value="on_leave">On Leave</option>
+                <option value="weekend">Weekend</option>
+              </select>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleBulkSubmit} disabled={bulkSaving || selectedRows.length === 0}>
+              {bulkSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Submit
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

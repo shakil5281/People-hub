@@ -71,6 +71,7 @@ export const attendanceNav = [
   { title: "Job Age", url: "/attendance/job-age", icon: ClockIcon },
   { title: "Over Time Sheet", url: "/attendance/over-time-sheet", icon: ClockIcon },
   { title: "Over Time Summary", url: "/attendance/over-time-summary", icon: ChartColumnIcon },
+  { title: "OT Early Exit", url: "/attendance/ot-early-exit", icon: ClockIcon },
   { title: "Manual Attendance", url: "/attendance/manual-attendance", icon: ClipboardCheckIcon },
   { title: "Missing Attendance", url: "/attendance/missing-attendance", icon: UserXIcon },
   { title: "Absent Status", url: "/attendance/absent-status", icon: UserXIcon },
