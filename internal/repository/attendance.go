@@ -84,8 +84,16 @@ func (r *AttendanceRepository) CountRangeByDate(startDate, endDate, companyID, d
 }
 
 func (r *AttendanceRepository) CountFilteredByDate(date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID string) (int64, error) {
-	base := r.db.Model(&models.Attendance{}).
-		Where("date = ? AND deleted_at IS NULL", date)
+	return r.CountFilteredByDateRange(date, date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID)
+}
+
+func (r *AttendanceRepository) CountFilteredByDateRange(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID string) (int64, error) {
+	base := r.db.Model(&models.Attendance{}).Where("deleted_at IS NULL")
+	if startDate != "" && endDate != "" {
+		base = base.Where("date BETWEEN ? AND ?", startDate, endDate)
+	} else if startDate != "" {
+		base = base.Where("date = ?", startDate)
+	}
 	if companyID != "" {
 		base = base.Where("company_id = ?", companyID)
 	}
@@ -124,6 +132,13 @@ func (r *AttendanceRepository) FindByID(id string) (*models.Attendance, error) {
 	return &attendance, err
 }
 
+func (r *AttendanceRepository) DeleteBulk(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.Where("id IN ?", ids).Delete(&models.Attendance{}).Error
+}
+
 func (r *AttendanceRepository) ListByDate(date string, page, limit int) ([]models.Attendance, int64, error) {
 	base := r.db.Model(&models.Attendance{}).Where("date = ? AND deleted_at IS NULL", date)
 	var total int64
@@ -157,7 +172,16 @@ func (r *AttendanceRepository) ListByDateAndEmployeeIDs(date string, employeeIDs
 }
 
 func (r *AttendanceRepository) ListByDateFiltered(date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID string, page, limit int) ([]models.Attendance, int64, error) {
-	base := r.db.Model(&models.Attendance{}).Where("date = ? AND deleted_at IS NULL", date)
+	return r.ListByDateRangeFiltered(date, date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID, page, limit)
+}
+
+func (r *AttendanceRepository) ListByDateRangeFiltered(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID string, page, limit int) ([]models.Attendance, int64, error) {
+	base := r.db.Model(&models.Attendance{}).Where("deleted_at IS NULL")
+	if startDate != "" && endDate != "" {
+		base = base.Where("date BETWEEN ? AND ?", startDate, endDate)
+	} else if startDate != "" {
+		base = base.Where("date = ?", startDate)
+	}
 	if companyID != "" {
 		base = base.Where("company_id = ?", companyID)
 	}
@@ -190,7 +214,7 @@ func (r *AttendanceRepository) ListByDateFiltered(date, companyID, departmentID,
 		return nil, 0, err
 	}
 	var attendances []models.Attendance
-	err := base.Preload("Employee.DesignationRef").Preload("Employee").Preload("Shift").Order("LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
+	err := base.Preload("Employee.DesignationRef").Preload("Employee").Preload("Shift").Order("date DESC, LENGTH(employee_id) ASC, employee_id ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
 	return attendances, total, err
 }
 
@@ -723,7 +747,7 @@ func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyI
 
 	var employees []models.Employee
 	err := r.db.Where("employee_id IN (?)", subQuery).
-		Preload("DesignationRef").Preload("Department").
+		Preload("DesignationRef").Preload("Department").Preload("Company").
 		Order("LENGTH(employee_id) ASC, employee_id ASC").
 		Find(&employees).Error
 	return employees, err
@@ -830,6 +854,52 @@ func (r *AttendanceRepository) ListByStatus(startDate, endDate, status, companyI
 	return attendances, total, err
 }
 
+// CountAbsencesByEmployee returns the number of absent records per employee in a date range
+// that also match the same org/status filters as the absent report rows.
+func (r *AttendanceRepository) CountAbsencesByEmployee(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID string) (map[string]int64, error) {
+	base := r.db.Model(&models.Attendance{}).
+		Select("employee_id, COUNT(*) AS absent_count").
+		Where("date BETWEEN ? AND ? AND status = 'absent' AND deleted_at IS NULL", startDate, endDate).
+		Group("employee_id")
+	if companyID != "" {
+		base = base.Where("company_id = ?", companyID)
+	}
+	if departmentID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", departmentID)
+	}
+	if sectionID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE section_id = ?)", sectionID)
+	}
+	if designationID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE designation_id = ?)", designationID)
+	}
+	if lineID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE line_id = ?)", lineID)
+	}
+	if groupID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE group_id = ?)", groupID)
+	}
+	if shiftID != "" {
+		base = base.Where("shift_id = ?", shiftID)
+	}
+	if employeeID != "" {
+		base = base.Where("employee_id = ?", employeeID)
+	}
+
+	var counts []struct {
+		EmployeeID  string `gorm:"column:employee_id"`
+		AbsentCount int64  `gorm:"column:absent_count"`
+	}
+	if err := base.Scan(&counts).Error; err != nil {
+		return nil, err
+	}
+	result := make(map[string]int64, len(counts))
+	for _, c := range counts {
+		result[c.EmployeeID] = c.AbsentCount
+	}
+	return result, nil
+}
+
 func (r *AttendanceRepository) GetMonthlyOvertimeHours(companyID, startDate, endDate string) (map[string]float64, error) {
 	var records []struct {
 		EmployeeID string  `gorm:"column:employee_id"`
@@ -838,7 +908,7 @@ func (r *AttendanceRepository) GetMonthlyOvertimeHours(companyID, startDate, end
 	err := r.db.Table("attendances a").
 		Select(`
 			a.employee_id,
-			COALESCE(SUM(
+			FLOOR(COALESCE(SUM(
 				CASE
 					WHEN e.over_time_status = false THEN 0
 					WHEN a.check_out IS NOT NULL AND s.end_time IS NOT NULL THEN
@@ -851,7 +921,7 @@ func (r *AttendanceRepository) GetMonthlyOvertimeHours(companyID, startDate, end
 						END
 					ELSE 0
 				END
-			), 0) as overtime_hours
+			), 0)) as overtime_hours
 		`).
 		Joins("JOIN employees e ON e.employee_id = a.employee_id").
 		Joins("LEFT JOIN shifts s ON s.id = COALESCE(a.shift_id, e.shift_id)").
@@ -910,6 +980,46 @@ func (r *AttendanceRepository) ListMissing(startDate, endDate, companyID, depart
 func (r *AttendanceRepository) DeleteAfterDate(employeeID, date string) (int64, error) {
 	res := r.db.Where("employee_id = ? AND date > ? AND deleted_at IS NULL", employeeID, date).Delete(&models.Attendance{})
 	return res.RowsAffected, res.Error
+}
+
+// ListCustom lists all attendance records in a date range (any status) with flexible filters.
+func (r *AttendanceRepository) ListCustom(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID string, page, limit int) ([]models.Attendance, int64, error) {
+	base := r.db.Model(&models.Attendance{}).
+		Where("date BETWEEN ? AND ? AND deleted_at IS NULL", startDate, endDate)
+	if companyID != "" {
+		base = base.Where("company_id = ?", companyID)
+	}
+	if departmentID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", departmentID)
+	}
+	if sectionID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE section_id = ?)", sectionID)
+	}
+	if designationID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE designation_id = ?)", designationID)
+	}
+	if lineID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE line_id = ?)", lineID)
+	}
+	if groupID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE group_id = ?)", groupID)
+	}
+	if shiftID != "" {
+		base = base.Where("shift_id = ?", shiftID)
+	}
+	if status != "" {
+		base = base.Where("status = ?", status)
+	}
+	if employeeID != "" {
+		base = base.Where("employee_id ILIKE ?", "%"+employeeID+"%")
+	}
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var attendances []models.Attendance
+	err := base.Preload("Employee.DesignationRef").Preload("Employee").Preload("Shift").Order("date ASC, created_at ASC").Offset((page - 1) * limit).Limit(limit).Find(&attendances).Error
+	return attendances, total, err
 }
 
 // CustomSummarySection queries attendance summary for a single report section with flexible filters.

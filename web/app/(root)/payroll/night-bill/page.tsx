@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { nightBillApi, companyApi, departmentApi, sectionApi, designationApi } from "@/lib/api"
+import { formatCheck } from "@/lib/utils"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -18,9 +19,11 @@ interface NightBill {
   id: string
   company_id: string
   employee_id: string
-  date: string
+  attendance_date: string
+  in_time?: string | null
+  out_time?: string | null
   bill_type: string
-  night_hours: number
+  eligible_hours: number
   rate: number
   amount: number
   status: string
@@ -83,10 +86,10 @@ export default function NightBillPage() {
       options: companies.map((c) => ({ value: c.id, label: c.company_name_en })),
     },
     {
-      key: "date_from", label: "Date From", type: "datepicker",
+      key: "date_from", label: "From Date", type: "datepicker",
     },
     {
-      key: "date_to", label: "Date To", type: "datepicker",
+      key: "date_to", label: "To Date", type: "datepicker",
     },
     {
       key: "bill_type", label: "Bill Type", type: "select",
@@ -106,13 +109,21 @@ export default function NightBillPage() {
       header: "Name",
       accessorFn: (r) => r.employee?.name_en || "-",
     },
-    { accessorKey: "date", header: "Date" },
+    { accessorKey: "attendance_date", header: "Date" },
+    {
+      accessorKey: "in_time", header: "In Time",
+      cell: ({ row }) => <span className="tabular-nums text-xs">{formatCheck(row.original.in_time)}</span>,
+    },
+    {
+      accessorKey: "out_time", header: "Out Time",
+      cell: ({ row }) => <span className="tabular-nums text-xs">{formatCheck(row.original.out_time)}</span>,
+    },
     {
       accessorKey: "bill_type", header: "Type",
       cell: ({ row }) => <span className="capitalize">{row.original.bill_type}</span>,
     },
-    { accessorKey: "night_hours", header: "Hours",
-      cell: ({ row }) => row.original.night_hours > 0 ? row.original.night_hours.toFixed(2) : "—",
+    { accessorKey: "eligible_hours", header: "Hours",
+      cell: ({ row }) => row.original.eligible_hours > 0 ? row.original.eligible_hours.toFixed(2) : "—",
     },
     {
       accessorKey: "rate", header: "Rate",
@@ -132,11 +143,13 @@ export default function NightBillPage() {
     setLoading(true)
     try {
       const params: Record<string, string> = { page: String(p ?? page), limit: String(l ?? limit) }
-      ;["company_id", "employee_id", "bill_type", "date_from", "date_to"].forEach((k) => {
+      ;["company_id", "employee_id", "bill_type"].forEach((k) => {
         if (f[k]) params[k] = f[k]
       })
+      if (f.date_from) params.start_date = f.date_from
+      if (f.date_to) params.end_date = f.date_to
       const { data: res } = await nightBillApi.list(params)
-      setData(Array.isArray(res.data) ? res.data : [])
+      setData(Array.isArray(res.data) ? (res.data as unknown as NightBill[]) : [])
       setTotal(res.total ?? 0)
       setTotalPages(res.total_pages ?? 0)
     } catch {

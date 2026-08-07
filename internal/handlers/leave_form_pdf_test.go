@@ -66,11 +66,14 @@ func TestRenderLeaveFormPDF(t *testing.T) {
 		font := leaveFormFont(pdf, lang)
 		renderLeaveFormPDFPage(pdf, font, lang, data, labels)
 
-		out := "C:\\Users\\shaki\\AppData\\Local\\Temp\\opencode\\leave_form_" + lang + ".pdf"
+		out := t.TempDir() + "/leave_form_" + lang + ".pdf"
 		if err := pdf.OutputFileAndClose(out); err != nil {
 			t.Fatalf("lang=%s Output: %v", lang, err)
 		}
 		info, _ := os.Stat(out)
+		if info.Size() == 0 {
+			t.Fatalf("lang=%s PDF generated but size is 0", lang)
+		}
 		t.Logf("lang=%s size=%d", lang, info.Size())
 	}
 }

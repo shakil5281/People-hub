@@ -1,7 +1,8 @@
 "use client"
 
 import * as React from "react"
-import { CalendarRangeIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
+import { CalendarRangeIcon, Loader2, FilterIcon, XIcon, FileDownIcon, FileBarChartIcon } from "lucide-react"
+import Link from "next/link"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { salaryApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi } from "@/lib/api"
@@ -59,6 +60,7 @@ const columns: ColumnDef<DailySalaryRecord>[] = [
 export default function DailySalarySheetPage() {
   const [data, setData] = React.useState<DailySalaryRecord[]>([])
   const [loading, setLoading] = React.useState(false)
+  const [exporting, setExporting] = React.useState(false)
   const [totals, setTotals] = React.useState<Record<string, number>>({})
   const [filters, setFilters] = React.useState<Record<string, string>>({ date: today })
   const [companies, setCompanies] = React.useState<Company[]>([])
@@ -122,15 +124,48 @@ export default function DailySalarySheetPage() {
   const handleReset = () => { setFilters({ date: today }); setData([]); setTotals({}) }
   const handleChange = (key: string, value: string) => setFilters((prev) => ({ ...prev, [key]: value }))
 
+  const handleExcelExport = async () => {
+    setExporting(true)
+    try {
+      const date = filters.date || today
+      const active: Record<string, string> = { date, company_id: filters.company_id || "" }
+      if (filters.department_id) active.department_id = filters.department_id
+      if (filters.section_id) active.section_id = filters.section_id
+      if (filters.designation_id) active.designation_id = filters.designation_id
+      if (filters.line_id) active.line_id = filters.line_id
+      if (filters.group_id) active.group_id = filters.group_id
+
+      const res = await salaryApi.dailySheetExport(active)
+      const url = window.URL.createObjectURL(new Blob([res.data]))
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `daily_salary_sheet_${date}.xlsx`
+      a.click()
+      window.URL.revokeObjectURL(url)
+    } finally { setExporting(false) }
+  }
+
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6">
+      <div className="px-4 lg:px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <CalendarRangeIcon className="h-6 w-6 text-muted-foreground" />
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Daily Salary Sheet</h1>
             <p className="text-muted-foreground mt-1">Daily salary calculation sheet</p>
           </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExcelExport} disabled={exporting || data.length === 0}>
+            <FileDownIcon className="mr-2 h-4 w-4" />
+            {exporting ? "Exporting..." : "Excel"}
+          </Button>
+          <Button size="sm" asChild>
+            <Link href="/payroll/daily-salary-summary">
+              <FileBarChartIcon className="mr-2 h-4 w-4" />
+              Summary Report
+            </Link>
+          </Button>
         </div>
         <div className="md:hidden mt-3">
           <ButtonGroup className="w-full">

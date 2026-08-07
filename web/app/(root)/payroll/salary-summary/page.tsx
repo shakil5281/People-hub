@@ -42,13 +42,14 @@ const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth()
 const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
 
-const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const fmt = (n: number) => Math.round(n || 0).toLocaleString()
 
 const TABS = [
   { value: "department", label: "Department" },
   { value: "section", label: "Section" },
   { value: "designation", label: "Designation" },
   { value: "line", label: "Line" },
+  { value: "custom", label: "Custom Summary" },
 ]
 
 export default function SalarySummaryPage() {
@@ -123,7 +124,7 @@ export default function SalarySummaryPage() {
   React.useEffect(() => { if (companyId) handleLoad() }, [companyId, month, year, tab])
 
   const columns: ColumnDef<SummaryRow>[] = React.useMemo(() => {
-    const labelMap: Record<string, string> = { department: "Department", section: "Section", designation: "Designation", line: "Line" }
+    const labelMap: Record<string, string> = { department: "Department", section: "Section", designation: "Designation", line: "Line", custom: "Category / Line" }
     return [
       { accessorKey: "group_key", header: labelMap[tab] || "Group" },
       { accessorKey: "employees", header: "Employees" },

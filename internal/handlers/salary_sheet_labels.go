@@ -34,6 +34,7 @@ type salarySheetLabels struct {
 	AttBonus       string
 	NetSalary      string
 	Status         string
+	Signature      string
 
 	// Summary export
 	GrandTotal string
@@ -84,6 +85,7 @@ var salarySheetEnLabels = salarySheetLabels{
 	AttBonus:       "Att. Bonus",
 	NetSalary:      "Net Salary",
 	Status:         "Status",
+	Signature:      "Signature",
 
 	GrandTotal: "Grand Total",
 	TotalLabel: "Total",
@@ -132,6 +134,7 @@ var salarySheetBnLabels = salarySheetLabels{
 	AttBonus:       "Dcw¯'wZ †evbvm",
 	NetSalary:      "wbU †eZb",
 	Status:         "Ae¯'v",
+	Signature:      "¯^v¶i",
 
 	GrandTotal: "me©‡gvU",
 	TotalLabel: "‡gvU",
@@ -186,6 +189,7 @@ func bijoyLabels(l salarySheetLabels) salarySheetLabels {
 	l.AttBonus = toBijoy(l.AttBonus)
 	l.NetSalary = toBijoy(l.NetSalary)
 	l.Status = toBijoy(l.Status)
+	l.Signature = toBijoy(l.Signature)
 	l.GrandTotal = toBijoy(l.GrandTotal)
 	l.TotalLabel = toBijoy(l.TotalLabel)
 	l.GroupLabel = toBijoy(l.GroupLabel)

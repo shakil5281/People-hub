@@ -121,8 +121,8 @@ if (-not $SkipBuild) {
   Set-Location "$ROOT\web"
   $env:NEXT_PUBLIC_BASE_PATH = "/people-hub"
   $env:NEXT_PUBLIC_API_URL = "http://localhost:8081/api/v1"
-  npm install --silent 2>$null
-  npm run build
+  yarn install --silent 2>$null
+  yarn run build
   if ($LASTEXITCODE -ne 0) { Write-Error "Frontend build failed"; return }
   Write-Host "  -> web\build\standalone"
 

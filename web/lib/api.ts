@@ -201,6 +201,7 @@ export const attendanceApi = {
   create: (data: Record<string, unknown>) => api.post("/attendance", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/attendance/${id}`, data),
   delete: (id: string) => api.delete(`/attendance/${id}`),
+  deleteBulk: (ids: string[]) => api.post("/attendance/bulk-delete", { ids }),
   clockIn: (data: Record<string, unknown>) => api.post("/attendance/clock-in", data),
   clockOut: (data: Record<string, unknown>) => api.post("/attendance/clock-out", data),
   jobCard: (params?: Record<string, string>) => api.get("/attendance/job-card", { params }),
@@ -222,8 +223,14 @@ export const attendanceApi = {
   exportMonthlyReportExcel: (params?: Record<string, string>) => api.get("/attendance/monthly-report/export/excel", { params, responseType: "blob" }),
   exportMonthlyReportPdf: (params?: Record<string, string>) => api.get("/attendance/monthly-report/export/pdf", { params, responseType: "blob" }),
   customSummary: (data: { company_id: string; date: string; sections: Record<string, unknown>[] }) => api.post("/attendance/custom-summary?company_id=" + data.company_id + "&date=" + data.date, data.sections),
+  customDailySummary: (params?: Record<string, string>) => api.get("/attendance/custom-daily-summary", { params }),
+  exportCustomDailySummaryExcel: (params?: Record<string, string>) => api.get("/attendance/custom-daily-summary/export/excel", { params, responseType: "blob" }),
+  exportCustomDailySummaryPdf: (params?: Record<string, string>) => api.get("/attendance/custom-daily-summary/export/pdf", { params, responseType: "blob" }),
+  helpersCustomSummary: (params?: Record<string, string>) => api.get("/attendance/custom-summary/helpers", { params }),
+  operatorsCustomSummary: (params?: Record<string, string>) => api.get("/attendance/custom-summary/operators", { params }),
   exportExcel: (params?: Record<string, string>) => api.get("/attendance/export/excel", { params, responseType: "blob" }),
   bulkUpdateMissing: (data: { status?: string; inTime?: string; outTime?: string; attendanceIds: string[] }) => api.post("/attendance/bulk-update-missing", data),
+  custom: (params: Record<string, string>) => api.get("/attendance/custom", { params }),
 }
 
 export const otEarlyExitApi = {
@@ -231,6 +238,79 @@ export const otEarlyExitApi = {
   list: (params: Record<string, string>) => api.get("/attendance/ot-early-exit", { params }),
   exportExcel: (params?: Record<string, string>) => api.get("/attendance/ot-early-exit/export/excel", { params, responseType: "blob" }),
 }
+
+export const nightBillApi = {
+  list: (params?: Record<string, string>) => api.get<PaginatedResponse<NightBillRecord>>("/attendance/night-bill", { params }),
+  process: (data: { start_date: string; end_date: string; company_id?: string; mode?: string; fixed_amount?: number; hourly_rate?: number; use_night_bill_list?: boolean }) => api.post<{ processed_count: number; total_amount: number }>("/attendance/night-bill/process", data),
+  processConfig: (data: { companyId: string; fromDate: string; toDate: string }) => api.post<{ success: boolean; processed: number; generated: number; skipped: number; duplicates: number; errors?: string[] }>("/night-bill/process", data),
+  create: (data: { company_id: string; employee_id: string; attendance_date: string; bill_type?: string; eligible_hours?: number; rate?: number; amount: number; remarks?: string }) => api.post<NightBillRecord>("/attendance/night-bill", data),
+  bulkCreate: (data: Record<string, unknown>) => api.post("/attendance/night-bill", data),
+  listEligible: (params?: Record<string, string>) => api.get("/attendance/night-bill", { params }),
+  update: (id: string, data: Record<string, unknown>) => api.put<NightBillRecord>(`/attendance/night-bill/${id}`, data),
+  delete: (id: string) => api.delete(`/attendance/night-bill/${id}`),
+  deleteBulk: (ids: string[]) => api.post("/attendance/night-bill/bulk-delete", { ids }),
+  exportExcel: (params?: Record<string, string>) => api.get("/attendance/night-bill/export/excel", { params, responseType: "blob" }),
+  exportPdf: (params?: Record<string, string>) => api.get("/attendance/night-bill/export/pdf", { params, responseType: "blob" }),
+}
+
+export interface NightBillEmployeeListRecord {
+  id: string
+  company_id: string
+  employee_id: string
+  bill_type: "fixed" | "hourly"
+  fixed_amount: number
+  hourly_rate: number
+  is_active: boolean
+  remarks?: string
+  created_at: string
+  updated_at: string
+  employee?: {
+    id: string
+    employee_id: string
+    name_en: string
+    designationRef?: { id: string; name: string }
+    departmentRef?: { id: string; name: string }
+    sectionRef?: { id: string; name: string }
+    lineRef?: { id: string; name: string }
+    groupRef?: { id: string; name: string }
+  }
+  company?: { id: string; company_name_en: string }
+}
+
+export const nightBillEmployeeListApi = {
+  list: (params?: Record<string, string>) =>
+    api.get<PaginatedResponse<NightBillEmployeeListRecord>>("/attendance/night-bill/employee-list", { params }),
+  create: (data: {
+    company_id: string
+    employee_id: string
+    bill_type: "fixed" | "hourly"
+    fixed_amount?: number
+    hourly_rate?: number
+    remarks?: string
+  }) => api.post<NightBillEmployeeListRecord>("/attendance/night-bill/employee-list", data),
+  bulkCreate: (data: {
+    entries: Array<{
+      company_id: string
+      employee_id: string
+      bill_type: "fixed" | "hourly"
+      fixed_amount?: number
+      hourly_rate?: number
+      remarks?: string
+    }>
+  }) => api.post<{ saved: number; skipped: string[]; message: string }>("/attendance/night-bill/employee-list/bulk", data),
+  update: (id: string, data: {
+    bill_type?: string
+    fixed_amount?: number
+    hourly_rate?: number
+    is_active?: boolean
+    remarks?: string
+  }) => api.put<NightBillEmployeeListRecord>(`/attendance/night-bill/employee-list/${id}`, data),
+  delete: (id: string) => api.delete(`/attendance/night-bill/employee-list/${id}`),
+  bulkDelete: (ids: string[]) => api.post("/attendance/night-bill/employee-list/bulk-delete", { ids }),
+  check: (employeeId: string) =>
+    api.get<{ exists: boolean; record: NightBillEmployeeListRecord | null }>(`/attendance/night-bill/employee-list/check/${employeeId}`),
+}
+
 
 export const missingAttendanceApi = {
   list: (params: Record<string, string>) => api.get("/missing-attendance", { params }),
@@ -358,6 +438,10 @@ export const salaryApi = {
   summaryExport: (params: Record<string, string>) => api.get("/salary/summary/export", { params, responseType: "blob" }),
   summaryExportPdf: (params: Record<string, string>) => api.get("/salary/summary/export/pdf", { params, responseType: "blob" }),
   dailySheet: (params?: Record<string, string>) => api.get("/salary/daily-sheet", { params }),
+  dailySheetExport: (params: Record<string, string>) => api.get("/salary/daily-sheet/export", { params, responseType: "blob" }),
+  dailySummary: (params?: Record<string, string>) => api.get("/salary/daily-summary", { params }),
+  dailySummaryExport: (params: Record<string, string>) => api.get("/salary/daily-summary/export", { params, responseType: "blob" }),
+  dailySummaryExportPdf: (params: Record<string, string>) => api.get("/salary/daily-summary/export/pdf", { params, responseType: "blob" }),
   bankSheet: (params?: Record<string, string>) => api.get("/salary/bank-sheet", { params }),
   bankSheetExport: (params: Record<string, string>) => api.get("/salary/bank-sheet/export", { params, responseType: "blob" }),
 }
@@ -385,12 +469,7 @@ export const dailyScheduleApi = {
   delete: (id: string) => api.delete(`/daily-schedules/${id}`),
 }
 
-export const nightBillApi = {
-  list: (params?: Record<string, string>) => api.get("/night-bills", { params }),
-  bulkCreate: (data: Record<string, unknown>) => api.post("/night-bills/bulk", data),
-  listEligible: (params?: Record<string, string>) => api.get("/night-bills/eligible", { params }),
-  delete: (id: string) => api.delete(`/night-bills/${id}`),
-}
+
 
 export const tiffinBillApi = {
   list: (params?: Record<string, string>) => api.get("/tiffin-bills", { params }),
@@ -421,6 +500,7 @@ export const notificationApi = {
   markAsRead: (id: string) => api.put(`/notifications/${id}/read`),
   markAllAsRead: () => api.put("/notifications/read-all"),
   delete: (id: string) => api.delete(`/notifications/${id}`),
+  create: (data: { user_id: string; title: string; message: string; type?: string; metadata?: string }) => api.post<Notification>("/notifications", data),
 }
 
 export interface Notification {
@@ -442,4 +522,34 @@ export const eidBonusApi = {
   summary: (params?: Record<string, string>) => api.get("/eid-bonus/summary", { params }),
   bankSheet: (params?: Record<string, string>) => api.get("/eid-bonus/bank-sheet", { params }),
   exportExcel: (params: Record<string, string>) => api.get("/eid-bonus/export/excel", { params, responseType: "blob" }),
+}
+
+export interface NightBillRecord {
+  id: string
+  attendance_id?: string | null
+  company_id: string
+  employee_id: string
+  attendance_date: string
+  shift_id?: string | null
+  in_time?: string | null
+  out_time?: string | null
+  bill_type: "fixed" | "hourly" | "manual"
+  shift_end_time?: string | null
+  eligible_hours: number
+  rate: number
+  amount: number
+  remarks?: string
+  processed_at?: string | null
+  created_at: string
+  employee?: {
+    id: string
+    employee_id: string
+    name_en: string
+    designation_id?: string
+    designationRef?: { id: string; name: string }
+    departmentRef?: { id: string; name: string }
+    sectionRef?: { id: string; name: string }
+  }
+  company?: { id: string; company_name_en: string }
+  shift?: { id: string; name: string; end_time: string }
 }

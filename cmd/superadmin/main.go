@@ -44,14 +44,14 @@ func main() {
 
 func seedRole(db *gorm.DB) *models.Role {
 	var role models.Role
-	err := db.Where("name = ? AND is_system = ?", "superadmin", true).First(&role).Error
+	err := db.Where("name = ? AND is_system = ?", "super_admin", true).First(&role).Error
 	if err == nil {
 		fmt.Println("Superadmin role already exists, skipping creation")
 		return &role
 	}
 
 	role = models.Role{
-		Name:        "superadmin",
+		Name:        "super_admin",
 		Description: "Super administrator with full system access",
 		IsSystem:    true,
 	}

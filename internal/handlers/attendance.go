@@ -170,7 +170,24 @@ func toJobCardRows(list []models.Attendance) []JobCardRow {
 // @Failure      500  {object}  map[string]string
 // @Router       /attendance [get]
 func (h *AttendanceHandler) List(c *gin.Context) {
-	date := c.DefaultQuery("date", time.Now().Format("2006-01-02"))
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	date := c.Query("date")
+
+	if date == "" {
+		if startDate != "" {
+			date = startDate
+		} else {
+			date = time.Now().Format("2006-01-02")
+		}
+	}
+	if startDate == "" {
+		startDate = date
+	}
+	if endDate == "" {
+		endDate = date
+	}
+
 	companyID := c.Query("company_id")
 	departmentID := c.Query("department_id")
 	sectionID := c.Query("section_id")
@@ -183,9 +200,9 @@ func (h *AttendanceHandler) List(c *gin.Context) {
 
 	p := utils.ParsePagination(c)
 
-	hasFilters := companyID != "" || departmentID != "" || sectionID != "" || designationID != "" || lineID != "" || groupID != "" || shiftID != "" || status != "" || employeeID != ""
+	hasFilters := companyID != "" || departmentID != "" || sectionID != "" || designationID != "" || lineID != "" || groupID != "" || shiftID != "" || status != "" || employeeID != "" || startDate != endDate
 	if hasFilters {
-		realCount, err := h.attendanceRepo.CountFilteredByDate(date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID)
+		realCount, err := h.attendanceRepo.CountFilteredByDateRange(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -195,7 +212,7 @@ func (h *AttendanceHandler) List(c *gin.Context) {
 			return
 		}
 
-		attendances, total, err := h.attendanceRepo.ListByDateFiltered(date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID, p.Page, p.Limit)
+		attendances, total, err := h.attendanceRepo.ListByDateRangeFiltered(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID, p.Page, p.Limit)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -306,6 +323,7 @@ func (h *AttendanceHandler) Create(c *gin.Context) {
 			existing.ShiftID = &req.ShiftID
 		}
 		existing.UpdatedBy = &userID
+		existing.CalculateHours()
 		if err := h.attendanceRepo.Update(existing); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -314,6 +332,7 @@ func (h *AttendanceHandler) Create(c *gin.Context) {
 		return
 	}
 
+	attendance.CalculateHours()
 	if err := h.attendanceRepo.Create(attendance); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -372,6 +391,7 @@ func (h *AttendanceHandler) Update(c *gin.Context) {
 		attendance.ShiftID = &req.ShiftID
 	}
 
+	attendance.CalculateHours()
 	if err := h.attendanceRepo.Update(attendance); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -480,6 +500,9 @@ func (h *AttendanceHandler) ListJobCard(c *gin.Context) {
 				dp = e.Department.Name
 			}
 			cn := ""
+			if e.Company.CompanyNameEn != "" {
+				cn = e.Company.CompanyNameEn
+			}
 			jo := ""
 			if !e.JoiningDate.IsZero() {
 				jo = e.JoiningDate.Format("2006-01-02")
@@ -640,6 +663,40 @@ func (h *AttendanceHandler) DeleteAll(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "All attendance records deleted permanently"})
+}
+
+type BulkDeleteAttendanceRequest struct {
+	IDs []string `json:"ids" binding:"required"`
+}
+
+// DeleteBulk godoc
+//
+// @Summary      Bulk delete attendance records
+// @Description  Delete multiple attendance records by ID array
+// @Tags         Attendance
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        request body BulkDeleteAttendanceRequest true "Attendance IDs to delete"
+// @Success      200  {object}  map[string]string
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /attendance/bulk-delete [post]
+func (h *AttendanceHandler) DeleteBulk(c *gin.Context) {
+	var req BulkDeleteAttendanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if len(req.IDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "no attendance IDs provided"})
+		return
+	}
+	if err := h.attendanceRepo.DeleteBulk(req.IDs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%d attendance record(s) deleted successfully", len(req.IDs))})
 }
 
 // AttendanceStats godoc
@@ -842,6 +899,59 @@ func (h *AttendanceHandler) MissingAttendance(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(h.buildAttendanceRows(attendances, startDate, endDate), total, p))
+}
+
+// CustomAttendance godoc
+//
+// @Summary      Custom attendance report
+// @Description  Get all attendance records in a date range (any status) with filters, for manual update
+// @Tags         Attendance
+// @Security     BearerAuth
+// @Produce      json
+// @Param        start_date     query string false "Start date (YYYY-MM-DD)"
+// @Param        end_date       query string false "End date (YYYY-MM-DD)"
+// @Param        company_id     query string false "Filter by company"
+// @Param        department_id  query string false "Filter by department"
+// @Param        section_id     query string false "Filter by section"
+// @Param        designation_id query string false "Filter by designation"
+// @Param        line_id        query string false "Filter by line"
+// @Param        group_id       query string false "Filter by group"
+// @Param        shift_id       query string false "Filter by shift"
+// @Param        status         query string false "Filter by status"
+// @Param        employee_id    query string false "Search by employee ID (partial match)"
+// @Param        page           query int    false "Page number (default: 1)"
+// @Param        limit          query int    false "Page size (default: 20, max: 100)"
+// @Success      200  {object}  utils.PaginatedResponse
+// @Failure      500  {object}  map[string]string
+// @Router       /attendance/custom [get]
+func (h *AttendanceHandler) CustomAttendance(c *gin.Context) {
+	startDate := c.DefaultQuery("start_date", time.Now().Format("2006-01-02"))
+	endDate := c.DefaultQuery("end_date", time.Now().Format("2006-01-02"))
+	companyID := c.Query("company_id")
+	departmentID := c.Query("department_id")
+	sectionID := c.Query("section_id")
+	designationID := c.Query("designation_id")
+	lineID := c.Query("line_id")
+	groupID := c.Query("group_id")
+	shiftID := c.Query("shift_id")
+	status := c.Query("status")
+	employeeID := c.Query("employee_id")
+
+	p := utils.ParsePagination(c)
+
+	attendances, total, err := h.attendanceRepo.ListCustom(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID, p.Page, p.Limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(h.buildAttendanceRows(attendances, startDate, endDate), total, p))
+}
+
+// buildAttendanceRows builds the API response rows for attendance lists, enriching
+// each record with designation, shift name, formatted times and raw punch logs.
+func (h *AttendanceHandler) buildAttendanceRows(attendances []models.Attendance, startDate, endDate string) []map[string]interface{} {
 	badgeNumbers := make([]string, 0, len(attendances))
 	empBadgeMap := make(map[string]string)
 	for _, a := range attendances {
@@ -903,7 +1013,7 @@ func (h *AttendanceHandler) MissingAttendance(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, utils.NewPaginatedResponse(result, total, p))
+	return result
 }
 
 // MonthlyReport godoc
@@ -1024,7 +1134,23 @@ func (h *AttendanceHandler) AbsentAttendance(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, utils.NewPaginatedResponse(attendances, total, p))
+	// Enrich each row with how many total absent days that employee has in the range.
+	absentCounts, _ := h.attendanceRepo.CountAbsencesByEmployee(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID)
+	rows := make([]gin.H, 0, len(attendances))
+	for _, a := range attendances {
+		rows = append(rows, gin.H{
+			"id":            a.ID,
+			"employee_id":   a.EmployeeID,
+			"date":          a.Date,
+			"status":        a.Status,
+			"check_in":      a.CheckIn,
+			"check_out":     a.CheckOut,
+			"total_absent":  absentCounts[a.EmployeeID],
+			"employee":      a.Employee,
+		})
+	}
+
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(rows, total, p))
 }
 
 func colNameAttendance(n int) string {

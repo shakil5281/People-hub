@@ -26,12 +26,13 @@ interface FilterBarProps {
   submitting: boolean
   singleColumn?: boolean
   noBorder?: boolean
+  applyLabel?: string
 }
 
 const selectClass =
   "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed"
 
-export function FilterBar({ filters, values, onChange, onApply, onReset, submitting, singleColumn, noBorder }: FilterBarProps) {
+export function FilterBar({ filters, values, onChange, onApply, onReset, submitting, singleColumn, noBorder, applyLabel }: FilterBarProps) {
   const hasFilters = Object.values(values).some((v) => v !== "")
 
   return (
@@ -128,7 +129,7 @@ export function FilterBar({ filters, values, onChange, onApply, onReset, submitt
       <div className="flex items-center gap-2 mt-4">
         <Button onClick={onApply} disabled={submitting}>
           {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Apply
+          {applyLabel || "Apply"}
         </Button>
         {hasFilters && (
           <Button variant="outline" onClick={onReset} disabled={submitting}>

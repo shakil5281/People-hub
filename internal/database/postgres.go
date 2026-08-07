@@ -23,6 +23,36 @@ func Connect(cfg *config.Config) {
 		log.Fatal("Failed to connect to database:", err)
 	}
 
+	// Night Bill: migrate legacy columns to spec names before AutoMigrate maps the new model.
+	// Guarded with information_schema checks so they are idempotent across restarts.
+	db.Exec(`
+		DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='date') THEN
+				ALTER TABLE night_bills RENAME COLUMN "date" TO attendance_date;
+			END IF;
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='check_in') THEN
+				ALTER TABLE night_bills RENAME COLUMN check_in TO in_time;
+			END IF;
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='check_out') THEN
+				ALTER TABLE night_bills RENAME COLUMN check_out TO out_time;
+			END IF;
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='mode') THEN
+				ALTER TABLE night_bills RENAME COLUMN mode TO bill_type;
+			END IF;
+			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='extra_hours') THEN
+				ALTER TABLE night_bills RENAME COLUMN extra_hours TO eligible_hours;
+			END IF;
+		END $$;
+	`)
+	db.Exec("ALTER TABLE night_bills ADD COLUMN IF NOT EXISTS attendance_id uuid")
+	db.Exec("ALTER TABLE night_bills ADD COLUMN IF NOT EXISTS processed_at timestamp")
+	// Align in/out with attendance timestamps (timestamp without time zone) so the wall-clock
+	// values match the Job Card. Existing timestamptz instants are converted via UTC.
+	db.Exec(`ALTER TABLE night_bills ALTER COLUMN in_time TYPE timestamp WITHOUT TIME ZONE USING in_time AT TIME ZONE 'UTC'`)
+	db.Exec(`ALTER TABLE night_bills ALTER COLUMN out_time TYPE timestamp WITHOUT TIME ZONE USING out_time AT TIME ZONE 'UTC'`)
+	db.Exec("CREATE INDEX IF NOT EXISTS idx_night_bills_employee_date_type ON night_bills(employee_id, attendance_date, bill_type)")
+
 	// GORM v1.31.2 forces UUID on *_id columns, overriding type:varchar(50) tags.
 	// Use silent session for main AutoMigrate to suppress benign constraint management noise.
 	silentMigrate := db.Session(&gorm.Session{Logger: logger.Default.LogMode(logger.Silent)})
@@ -42,14 +72,14 @@ func Connect(cfg *config.Config) {
 		&models.Holiday{},
 		&models.MissingAttendance{},
 		&models.OtEarlyExitDeduction{},
+		&models.NightBill{},
+		&models.NightBillEmployeeList{},
 	)
 	// Ensure new tables were created; if not, create them explicitly.
 	db.Exec("CREATE TABLE IF NOT EXISTS punishments (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS daily_schedules (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS tiffin_bills (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
-	// Drop removed tables
-	db.Exec("DROP TABLE IF EXISTS night_bill_processes")
-	db.Exec("DROP TABLE IF EXISTS night_bills")
+	db.Exec("CREATE TABLE IF NOT EXISTS night_bills (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	// Re-run AutoMigrate after ensuring tables exist so columns/indexes are added.
 	db.AutoMigrate(
 		&models.SalaryIncrement{},
@@ -58,6 +88,8 @@ func Connect(cfg *config.Config) {
 		&models.SystemLog{},
 		&models.Notification{},
 		&models.EidBonus{},
+		&models.NightBill{},
+		&models.NightBillEmployeeList{},
 	)
 
 	// Use silent session for ALTER statements to avoid noisy ERROR logs when tables don't exist yet
@@ -81,6 +113,10 @@ func Connect(cfg *config.Config) {
 	alterCol("separations", "employee_id")
 	alterCol("missing_attendances", "employee_id")
 	alterCol("ot_early_exit_deductions", "employee_id")
+	alterCol("night_bill_employee_lists", "employee_id")
+	// Recreate employee_id unique index as partial so soft-deleted records don't block re-adding an employee.
+	silentDB.Exec("DROP INDEX IF EXISTS idx_night_bill_employee_lists_employee_id")
+	silentDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_night_bill_employee_lists_employee_id ON night_bill_employee_lists(employee_id) WHERE deleted_at IS NULL")
 	silentDB.Exec("ALTER TABLE separations ADD COLUMN IF NOT EXISTS company_id uuid")
 	silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS nid varchar(50)")
 	silentDB.Exec("ALTER TABLE employees ADD COLUMN IF NOT EXISTS present_post_office varchar(100)")

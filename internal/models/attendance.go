@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -28,4 +29,31 @@ type Attendance struct {
 	Employee Employee `json:"employee" gorm:"foreignKey:EmployeeID;references:EmployeeID"`
 	Company  Company  `json:"company" gorm:"foreignKey:CompanyID"`
 	Shift    *Shift   `json:"shift,omitempty" gorm:"foreignKey:ShiftID"`
+}
+
+func (a *Attendance) CalculateHours() {
+	if a.CheckIn == nil || a.CheckOut == nil {
+		return
+	}
+	duration := a.CheckOut.Sub(*a.CheckIn)
+	if duration < 0 {
+		return
+	}
+	hours := int(duration.Hours())
+	minutes := int(duration.Minutes()) % 60
+	th := fmt.Sprintf("%02d:%02d", hours, minutes)
+	a.TotalHours = &th
+
+	if hours > 8 {
+		ot := fmt.Sprintf("%d", hours-8)
+		a.OverTime = &ot
+	} else if a.OverTime == nil || *a.OverTime == "" {
+		zero := "0"
+		a.OverTime = &zero
+	}
+}
+
+func (a *Attendance) BeforeSave(tx *gorm.DB) error {
+	a.CalculateHours()
+	return nil
 }

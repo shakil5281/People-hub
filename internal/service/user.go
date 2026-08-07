@@ -175,13 +175,13 @@ func (s *UserService) DeleteUser(id string) error {
 	roles, _ := s.userRepo.GetUserRoles(id)
 	hasSuperAdmin := false
 	for _, r := range roles {
-		if r.Name == "superadmin" {
+		if isSuperAdminRole(r.Name) {
 			hasSuperAdmin = true
 			break
 		}
 	}
 	if hasSuperAdmin {
-		count, _ := s.userRepo.CountByRole("superadmin")
+		count, _ := s.userRepo.CountByRole("super_admin")
 		if count <= 1 {
 			return errors.New("cannot delete the last super admin")
 		}
@@ -207,7 +207,7 @@ func (s *UserService) AssignRoles(id string, req AssignRolesRequest, currentUser
 			}
 			return err
 		}
-		if role.Name == "superadmin" && !contains(currentUserRoles, "superadmin") {
+		if isSuperAdminRole(role.Name) && !contains(currentUserRoles, "superadmin") && !contains(currentUserRoles, "super_admin") {
 			return errors.New("only super admin can assign the superadmin role")
 		}
 	}
@@ -215,7 +215,7 @@ func (s *UserService) AssignRoles(id string, req AssignRolesRequest, currentUser
 	currentRoles, _ := s.userRepo.GetUserRoles(id)
 	currentHasSuper := false
 	for _, r := range currentRoles {
-		if r.Name == "superadmin" {
+		if isSuperAdminRole(r.Name) {
 			currentHasSuper = true
 			break
 		}
@@ -224,13 +224,13 @@ func (s *UserService) AssignRoles(id string, req AssignRolesRequest, currentUser
 		stillHasSuper := false
 		for _, roleID := range req.RoleIDs {
 			role, err := s.roleRepo.FindByID(roleID)
-			if err == nil && role.Name == "superadmin" {
+			if err == nil && isSuperAdminRole(role.Name) {
 				stillHasSuper = true
 				break
 			}
 		}
 		if !stillHasSuper {
-			count, _ := s.userRepo.CountByRole("superadmin")
+			count, _ := s.userRepo.CountByRole("super_admin")
 			if count <= 1 {
 				return errors.New("cannot remove superadmin from the last super admin")
 			}
@@ -357,6 +357,10 @@ func contains(list []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func isSuperAdminRole(name string) bool {
+	return name == "superadmin" || name == "super_admin"
 }
 
 func generateResetToken() (string, string, error) {

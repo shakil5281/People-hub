@@ -303,7 +303,7 @@ func (h *DatabaseHandler) Reset(c *gin.Context) {
 		&models.Holiday{},
 		&models.SystemLog{},
 		&models.Notification{},
-		&models.EidBonus{},
+		&models.EidBonus{}, &models.NightBill{},
 	); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to drop tables: " + err.Error()})
 		return
@@ -326,7 +326,7 @@ func (h *DatabaseHandler) Reset(c *gin.Context) {
 		&models.Holiday{},
 		&models.SystemLog{},
 		&models.Notification{},
-		&models.EidBonus{},
+		&models.EidBonus{}, &models.NightBill{},
 	); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "migration failed: " + err.Error()})
 		return

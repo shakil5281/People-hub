@@ -47,11 +47,20 @@ func Setup(
 	notificationHandler *handlers.NotificationHandler,
 	missingAttendanceHandler *handlers.MissingAttendanceHandler,
 	otEarlyExitHandler *handlers.OtEarlyExitHandler,
+	nightBillHandler *handlers.NightBillHandler,
+	nightBillEmployeeListHandler *handlers.NightBillEmployeeListHandler,
 	jwtSecret string,
 ) {
 	r.GET("/health", handlers.HealthCheck)
 
 	api := r.Group("/api/v1")
+
+	// Top-level night-bill processing (spec endpoint)
+	nightBillProcess := api.Group("/night-bill")
+	nightBillProcess.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		nightBillProcess.POST("/process", nightBillHandler.ProcessFromConfig)
+	}
 
 	// Public auth routes
 	auth := api.Group("/auth")
@@ -192,7 +201,7 @@ func Setup(
 
 		// Admin-only destructive database operations
 		databaseAdmin := database.Group("")
-		databaseAdmin.Use(middleware.RequireRole("superadmin"))
+		databaseAdmin.Use(middleware.RequireRole("super_admin"))
 		{
 			databaseAdmin.POST("/backup", databaseHandler.Backup)
 			databaseAdmin.POST("/import", databaseHandler.Import)
@@ -276,6 +285,11 @@ func Setup(
 		attendance.GET("/:id", attendanceHandler.GetByID)
 		attendance.GET("/summary", attendanceHandler.Summary)
 		attendance.GET("/summary/export/excel", attendanceHandler.ExportSummaryExcel)
+		attendance.GET("/custom-daily-summary", attendanceHandler.GetCustomDailySummary)
+		attendance.GET("/custom-daily-summary/export/excel", attendanceHandler.ExportCustomDailySummaryExcel)
+		attendance.GET("/custom-daily-summary/export/pdf", attendanceHandler.ExportCustomDailySummaryPDF)
+		attendance.GET("/custom-summary/helpers", attendanceHandler.GetHelperCustomSummary)
+		attendance.GET("/custom-summary/operators", attendanceHandler.GetOperatorCustomSummary)
 		attendance.GET("/overtime", attendanceHandler.Overtime)
 		attendance.GET("/overtime/export/excel", attendanceHandler.ExportOvertimeExcel)
 		attendance.GET("/overtime-summary", attendanceHandler.OvertimeSummary)
@@ -284,19 +298,39 @@ func Setup(
 		attendance.GET("/job-card/export", attendanceHandler.ExportJobCard)
 		attendance.GET("/stats", attendanceHandler.Stats)
 		attendance.GET("/missing", attendanceHandler.MissingAttendance)
+		attendance.GET("/custom", attendanceHandler.CustomAttendance)
 		attendance.GET("/absent", attendanceHandler.AbsentAttendance)
 		attendance.GET("/absent/export/excel", attendanceHandler.ExportAbsentExcel)
 		attendance.GET("/missing/export/excel", attendanceHandler.ExportMissingAttendanceExcel)
 		attendance.POST("", attendanceHandler.Create)
+		attendance.POST("/bulk-delete", attendanceHandler.DeleteBulk)
 		attendance.PUT("/:id", attendanceHandler.Update)
 		attendance.DELETE("/:id", attendanceHandler.Delete)
 		attendance.POST("/ot-early-exit/process", otEarlyExitHandler.Compute)
 		attendance.GET("/ot-early-exit", otEarlyExitHandler.List)
 		attendance.GET("/ot-early-exit/export/excel", otEarlyExitHandler.ExportExcel)
 
+		attendance.GET("/night-bill", nightBillHandler.List)
+		attendance.POST("/night-bill", nightBillHandler.Create)
+		attendance.POST("/night-bill/process", nightBillHandler.Process)
+		attendance.PUT("/night-bill/:id", nightBillHandler.Update)
+		attendance.DELETE("/night-bill/:id", nightBillHandler.Delete)
+		attendance.POST("/night-bill/bulk-delete", nightBillHandler.DeleteBulk)
+		attendance.GET("/night-bill/export/excel", nightBillHandler.ExportExcel)
+		attendance.GET("/night-bill/export/pdf", nightBillHandler.ExportPDF)
+
+		// Night Bill Employee List
+		attendance.GET("/night-bill/employee-list", nightBillEmployeeListHandler.List)
+		attendance.POST("/night-bill/employee-list", nightBillEmployeeListHandler.Create)
+		attendance.POST("/night-bill/employee-list/bulk", nightBillEmployeeListHandler.BulkCreate)
+		attendance.PUT("/night-bill/employee-list/:id", nightBillEmployeeListHandler.Update)
+		attendance.DELETE("/night-bill/employee-list/:id", nightBillEmployeeListHandler.Delete)
+		attendance.POST("/night-bill/employee-list/bulk-delete", nightBillEmployeeListHandler.BulkDelete)
+		attendance.GET("/night-bill/employee-list/check/:employee_id", nightBillEmployeeListHandler.CheckEmployee)
+
 		// Admin-only destructive attendance operations
 		attendanceAdmin := attendance.Group("")
-		attendanceAdmin.Use(middleware.RequireRole("superadmin"))
+		attendanceAdmin.Use(middleware.RequireRole("admin"))
 		{
 			attendanceAdmin.DELETE("/delete-all", attendanceHandler.DeleteAll)
 		}
@@ -318,7 +352,7 @@ func Setup(
 
 		// Admin-only destructive data-log operations
 		dataLogAdmin := dataLog.Group("")
-		dataLogAdmin.Use(middleware.RequireRole("superadmin"))
+		dataLogAdmin.Use(middleware.RequireRole("super_admin"))
 		{
 			dataLogAdmin.DELETE("/delete-all", dataLogHandler.DeleteAll)
 		}
@@ -361,6 +395,7 @@ func Setup(
 		separation.POST("/:id/process", separationHandler.ProcessOne)
 		separation.POST("/:id/cancel", separationHandler.Cancel)
 		separation.POST("/:id/reactivate", separationHandler.Reactivate)
+		separation.GET("/:id/export/pdf", separationHandler.ExportPDF)
 	}
 
 	// Protected id-card routes
@@ -462,6 +497,10 @@ func Setup(
 		salary.GET("/summary/export", salaryHandler.SummaryExport)
 		salary.GET("/summary/export/pdf", salaryHandler.SummaryExportPDF)
 		salary.GET("/daily-sheet", salaryHandler.DailySheet)
+		salary.GET("/daily-sheet/export", salaryHandler.DailySheetExport)
+		salary.GET("/daily-summary", salaryHandler.DailySummary)
+		salary.GET("/daily-summary/export", salaryHandler.DailySummaryExport)
+		salary.GET("/daily-summary/export/pdf", salaryHandler.DailySummaryExportPDF)
 		salary.GET("/bank-sheet", salaryHandler.BankSheet)
 		salary.GET("/bank-sheet/export", salaryHandler.BankSheetExportAll)
 		salary.GET("/increments", salaryIncrementHandler.List)
@@ -553,7 +592,7 @@ func Setup(
 
 	// Protected system-logs routes
 	systemLog := api.Group("/system-logs")
-	systemLog.Use(middleware.AuthMiddleware(jwtSecret), middleware.RequireRole("superadmin"))
+	systemLog.Use(middleware.AuthMiddleware(jwtSecret), middleware.RequireRole("super_admin"))
 	{
 		systemLog.GET("", systemLogHandler.List)
 		systemLog.GET("/stats", systemLogHandler.Stats)
@@ -562,4 +601,5 @@ func Setup(
 		systemLog.DELETE("/purge", systemLogHandler.Purge)
 	}
 }
+
 

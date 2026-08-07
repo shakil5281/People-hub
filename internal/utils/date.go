@@ -2,6 +2,7 @@ package utils
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -86,4 +87,23 @@ func IsWeekend(dateStr string, weekendDays string) bool {
 		}
 	}
 	return false
+}
+
+// FormatBillDate converts a "YYYY-MM-DD" string to "DD-MM-YYYY" for reports/exports.
+func FormatBillDate(dateStr string) string {
+	if dateStr == "" {
+		return ""
+	}
+	if t, err := time.Parse("2006-01-02", dateStr); err == nil {
+		return t.Format("02-01-2006")
+	}
+	if t, err := time.Parse(time.RFC3339, dateStr); err == nil {
+		return t.Format("02-01-2006")
+	}
+	return dateStr
+}
+
+// FormatHours renders an hours value without trailing decimals when whole (e.g. "1" instead of "1.00").
+func FormatHours(hours float64) string {
+	return strconv.FormatFloat(hours, 'f', -1, 64)
 }

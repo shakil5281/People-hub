@@ -22,6 +22,9 @@ interface EmployeeInfo {
   designation_ref?: { name: string }
   joining_date: string
   department?: { name: string }
+  group_ref?: { name: string }
+  line_ref?: { name: string }
+  employee_type?: string
 }
 
 interface SalaryRecord {
@@ -61,6 +64,23 @@ const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
 const labelCls = "text-xs font-medium text-muted-foreground"
 
+const CUSTOM_TABS = [
+  "All",
+  "Office Staff",
+  "Production Staff",
+  "Line - 1",
+  "Line - 2",
+  "Line - 3",
+  "Line - 4",
+  "Line - 5",
+  "Line - 6",
+  "Line - 7",
+  "Cutting",
+  "Finishing",
+  "Quality",
+  "Loader & Cleaner"
+]
+
 export default function SalarySheetPage() {
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [departments, setDepartments] = React.useState<Department[]>([])
@@ -82,7 +102,7 @@ export default function SalarySheetPage() {
   const [year, setYear] = React.useState(currentYear)
 
   const [data, setData] = React.useState<SalaryRecord[]>([])
-  const [totals, setTotals] = React.useState<Record<string,number> | null>(null)
+  const [activeTab, setActiveTab] = React.useState("All")
   const [loading, setLoading] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
   const [lang, setLang] = React.useState<"en" | "bn">("en")
@@ -166,10 +186,8 @@ export default function SalarySheetPage() {
 
       const { data: res } = await salaryApi.sheet(params)
       setData((res.salaries || []).map((s: any, i: number) => ({ ...s, id: s.id || `s-${i}` })))
-      setTotals(res.totals || null)
     } catch {
       setData([])
-      setTotals(null)
     } finally {
       setLoading(false)
     }
@@ -186,14 +204,64 @@ export default function SalarySheetPage() {
     setGroupId("")
     setShiftId("")
     setEmployeeId("")
+    setActiveTab("All")
   }
+
+  // Filter records by selected custom tab
+  const filteredData = React.useMemo(() => {
+    if (activeTab === "All") return data
+
+    return data.filter(s => {
+      const grpName = (s.employee?.group_ref?.name || "").toLowerCase()
+      const empType = (s.employee?.employee_type || "").toLowerCase()
+      const deptName = (s.employee?.department?.name || "").toLowerCase()
+      let lineName = s.employee?.line_ref?.name || "No Line"
+      if (lineName.toLowerCase() === "admin") {
+        lineName = "Loader & Cleaner"
+      }
+
+      const isStaff = grpName.includes("staff") || empType.includes("staff")
+
+      if (activeTab === "Office Staff") {
+        return isStaff && !deptName.includes("production") && !deptName.includes("maintenance")
+      }
+      if (activeTab === "Production Staff") {
+        return isStaff && (deptName.includes("production") || deptName.includes("maintenance"))
+      }
+
+      // Worker lines
+      return lineName.toLowerCase().replaceAll(" ", "").replaceAll("-", "") === activeTab.toLowerCase().replaceAll(" ", "").replaceAll("-", "")
+    })
+  }, [data, activeTab])
+
+  // Calculate live dynamic totals for filtered records
+  const filteredTotals = React.useMemo(() => {
+    if (!filteredData.length) return null
+    return filteredData.reduce((acc, s) => ({
+      gross_salary: acc.gross_salary + (s.gross_salary || 0),
+      absent_deduction: acc.absent_deduction + (s.absent_deduction || 0),
+      overtime_hours: acc.overtime_hours + (s.overtime_hours || 0),
+      overtime_amount: acc.overtime_amount + (s.overtime_amount || 0),
+      attendance_bonus: acc.attendance_bonus + (s.attendance_bonus || 0),
+      total_deductions: acc.total_deductions + (s.total_deductions || 0),
+      present_days: acc.present_days + (s.present_days || 0),
+      absent_days: acc.absent_days + (s.absent_days || 0),
+      late_days: acc.late_days + (s.late_days || 0),
+      leave_days: acc.leave_days + (s.leave_days || 0),
+      holiday_days: acc.holiday_days + (s.holiday_days || 0),
+      weekend_days: acc.weekend_days + (s.weekend_days || 0),
+      net_salary: acc.net_salary + (s.net_salary || 0),
+    }), {
+      gross_salary: 0, absent_deduction: 0, overtime_hours: 0, overtime_amount: 0, attendance_bonus: 0, total_deductions: 0,
+      present_days: 0, absent_days: 0, late_days: 0, leave_days: 0, holiday_days: 0, weekend_days: 0, net_salary: 0
+    })
+  }, [filteredData])
 
   const cols: ColumnDef<SalaryRecord>[] = [
     {id:"sl",header:"Sl",cell:({row}:any)=>row.index+1},
     {id:"emp_code",header:"Employee ID",accessorFn:(r:any)=>r.employee?.employee_id},
-    {id:"emp_name",header:"Name",accessorFn:(r:any)=>r.employee?.name_en},
-    {id:"designation",header:"Designation",accessorFn:(r:any)=>r.employee?.designation_ref?.name||"-"},
-    {id:"joining_date",header:"Joining Date",accessorFn:(r:any)=>r.employee?.joining_date?.split("T")[0]},
+    {id:"emp_name",header:()=><div className="text-left">Name</div>,accessorFn:(r:any)=>r.employee?.name_en,cell:({getValue}:any)=><div className="text-left font-medium">{getValue()}</div>},
+    {id:"designation",header:()=><div className="text-left">Designation</div>,accessorFn:(r:any)=>r.employee?.designation_ref?.name||"-",cell:({getValue}:any)=><div className="text-left">{getValue()}</div>},
     {accessorKey:"total_days",header:"Working Days"},
     {accessorKey:"present_days",header:"Present"},
     {accessorKey:"absent_days",header:"Absent"},
@@ -201,20 +269,20 @@ export default function SalarySheetPage() {
     {accessorKey:"leave_days",header:"Leave"},
     {accessorKey:"holiday_days",header:"Holiday"},
     {accessorKey:"weekend_days",header:"Weekend"},
-    {accessorKey:"basic_salary",header:"Basic Salary",cell:({row}:any)=>row.original.basic_salary.toLocaleString()},
-    {accessorKey:"house_rent",header:"House Rent",cell:({row}:any)=>row.original.house_rent.toLocaleString()},
-    {accessorKey:"medical_allowance",header:"Medical",cell:({row}:any)=>row.original.medical_allowance.toLocaleString()},
-    {accessorKey:"transport_allowance",header:"Transport",cell:({row}:any)=>row.original.transport_allowance.toLocaleString()},
-    {accessorKey:"food_allowance",header:"Food",cell:({row}:any)=>row.original.food_allowance.toLocaleString()},
-    {accessorKey:"other_allowance",header:"Other",cell:({row}:any)=>row.original.other_allowance.toLocaleString()},
-    {accessorKey:"gross_salary",header:"Gross",cell:({row}:any)=>row.original.gross_salary.toLocaleString()},
-    {accessorKey:"absent_deduction",header:"Absent Ded.",cell:({row}:any)=>row.original.absent_deduction.toLocaleString()},
-    {accessorKey:"overtime_hours",header:"OT Hours",cell:({row}:any)=>row.original.overtime_hours.toFixed(2)},
-    {accessorKey:"overtime_rate",header:"OT Rate",cell:({row}:any)=>row.original.overtime_rate.toFixed(2)},
-    {accessorKey:"overtime_amount",header:"OT Amount",cell:({row}:any)=>row.original.overtime_amount.toLocaleString()},
-    {accessorKey:"attendance_bonus",header:"Att. Bonus",cell:({row}:any)=>row.original.attendance_bonus.toLocaleString()},
-    {accessorKey:"net_salary",header:"Net Salary",cell:({row}:any)=>row.original.net_salary.toLocaleString()},
-    {accessorKey:"status",header:"Status"},
+    {accessorKey:"basic_salary",header:"Basic Salary",cell:({row}:any)=>Math.round(row.original.basic_salary).toLocaleString()},
+    {accessorKey:"house_rent",header:"House Rent",cell:({row}:any)=>Math.round(row.original.house_rent).toLocaleString()},
+    {accessorKey:"medical_allowance",header:"Medical",cell:({row}:any)=>Math.round(row.original.medical_allowance).toLocaleString()},
+    {accessorKey:"transport_allowance",header:"Transport",cell:({row}:any)=>Math.round(row.original.transport_allowance).toLocaleString()},
+    {accessorKey:"food_allowance",header:"Food",cell:({row}:any)=>Math.round(row.original.food_allowance).toLocaleString()},
+    {accessorKey:"gross_salary",header:"Gross",cell:({row}:any)=>Math.round(row.original.gross_salary).toLocaleString()},
+    {accessorKey:"absent_deduction",header:"Absent Ded.",cell:({row}:any)=>Math.round(row.original.absent_deduction).toLocaleString()},
+    {accessorKey:"total_deductions",header:"Total Ded.",cell:({row}:any)=>Math.round(row.original.total_deductions).toLocaleString()},
+    {accessorKey:"overtime_hours",header:"OT Hours",cell:({row}:any)=>Math.round(row.original.overtime_hours)},
+    {accessorKey:"overtime_rate",header:"OT Rate",cell:({row}:any)=>Math.round(row.original.overtime_rate)},
+    {accessorKey:"overtime_amount",header:"OT Amount",cell:({row}:any)=>Math.round(row.original.overtime_amount).toLocaleString()},
+    {accessorKey:"attendance_bonus",header:"Att. Bonus",cell:({row}:any)=>Math.round(row.original.attendance_bonus).toLocaleString()},
+    {accessorKey:"net_salary",header:"Net Salary",cell:({row}:any)=>Math.round(row.original.net_salary).toLocaleString()},
+    {id:"signature",header:"Signature",cell:()=>""},
   ]
 
   return (
@@ -254,6 +322,41 @@ export default function SalarySheetPage() {
                   month: String(month + 1),
                   year: String(year),
                   lang,
+                  mode: "master",
+                }
+                if (departmentId) params.department_id = departmentId
+                if (sectionId) params.section_id = sectionId
+                if (designationId) params.designation_id = designationId
+                if (lineId) params.line_id = lineId
+                if (groupId) params.group_id = groupId
+                if (shiftId) params.shift_id = shiftId
+                if (employeeId) params.employee_id = employeeId
+                const res = await salaryApi.sheetExport(params)
+                const url = window.URL.createObjectURL(new Blob([res.data]))
+                const a = document.createElement("a")
+                a.href = url
+                a.download = `master_sheet_${MONTHS[month]}_${year}_${lang}.xlsx`
+                a.click()
+                window.URL.revokeObjectURL(url)
+              } finally { setExporting(false) }
+            }}
+          >
+            <FileDownIcon className="mr-2 h-4 w-4 text-emerald-600" />
+            {exporting ? "Exporting..." : "Master Sheet"}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={exporting || !applied}
+            onClick={async () => {
+              setExporting(true)
+              try {
+                const params: Record<string, string> = {
+                  company_id: companyId,
+                  month: String(month + 1),
+                  year: String(year),
+                  lang,
+                  mode: "salary",
                 }
                 if (departmentId) params.department_id = departmentId
                 if (sectionId) params.section_id = sectionId
@@ -272,8 +375,8 @@ export default function SalarySheetPage() {
               } finally { setExporting(false) }
             }}
           >
-            <FileDownIcon className="mr-2 h-4 w-4" />
-            {exporting ? "Exporting..." : "Excel"}
+            <FileDownIcon className="mr-2 h-4 w-4 text-emerald-600" />
+            {exporting ? "Exporting..." : "Salary Sheet"}
           </Button>
           <Button
             variant="outline"
@@ -305,7 +408,7 @@ export default function SalarySheetPage() {
               } finally { setExporting(false) }
             }}
           >
-            <FileDownIcon className="mr-2 h-4 w-4" />
+            <FileDownIcon className="mr-2 h-4 w-4 text-rose-600" />
             {exporting ? "Exporting..." : "PDF"}
           </Button>
           <Link href="/payroll/bank-sheet">
@@ -364,7 +467,11 @@ export default function SalarySheetPage() {
               <label className={labelCls}>Line</label>
               <select value={lineId} onChange={e => setLineId(e.target.value)} className={selectCls}>
                 <option value="">All</option>
-                {lines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                {lines.map(l => (
+                  <option key={l.id} value={l.id}>
+                    {l.name.toLowerCase() === "admin" ? "Loader & Cleaner" : l.name}
+                  </option>
+                ))}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -404,31 +511,54 @@ export default function SalarySheetPage() {
       </div>
 
       {applied && (
-        <div className="px-4 lg:px-6">
-          <h2 className="text-lg font-semibold mb-2">{MONTHS[month]} {year} - Salary Sheet</h2>
-        </div>
-      )}
+        <div className="px-4 lg:px-6 flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold">{MONTHS[month]} {year} - Salary Sheet</h2>
+            <span className="text-xs text-muted-foreground">Showing {filteredData.length} records</span>
+          </div>
 
-      {totals && (
-        <div className="px-4 lg:px-6">
-          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground mb-2 p-3 rounded-lg border bg-card">
-            <span>Gross: <strong className="text-foreground">{totals.gross_salary?.toLocaleString()}</strong></span>
-            <span>Absent Ded.: <strong className="text-foreground">{totals.absent_deduction?.toLocaleString()}</strong></span>
-            <span>OT Hrs: <strong className="text-foreground">{totals.overtime_hours?.toFixed(2)}</strong></span>
-            <span>OT Amt: <strong className="text-foreground">{totals.overtime_amount?.toLocaleString()}</strong></span>
-            <span>Att. Bonus: <strong className="text-foreground">{totals.attendance_bonus?.toLocaleString()}</strong></span>
-            <span>Deductions: <strong className="text-foreground">{totals.total_deductions?.toLocaleString()}</strong></span>
-            <span>Present: <strong className="text-foreground">{totals.present_days}</strong></span>
-            <span>Absent: <strong className="text-foreground">{totals.absent_days}</strong></span>
-            <span>Late: <strong className="text-foreground">{totals.late_days}</strong></span>
-            <span>Leave: <strong className="text-foreground">{totals.leave_days}</strong></span>
-            <span>Holiday: <strong className="text-foreground">{totals.holiday_days}</strong></span>
-            <span>Weekend: <strong className="text-foreground">{totals.weekend_days}</strong></span>
-            <span>Net: <strong className="text-foreground">{totals.net_salary?.toLocaleString()}</strong></span>
+          {/* Interactive Custom Category & Line Serial Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 border-b scrollbar-none">
+            {CUSTOM_TABS.map(tab => {
+              const isActive = activeTab === tab
+              return (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-all whitespace-nowrap ${
+                    isActive
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  }`}
+                >
+                  {tab}
+                </button>
+              )
+            })}
           </div>
         </div>
       )}
-      <DataTable data={data} columns={cols} loading={loading} />
+
+      {filteredTotals && (
+        <div className="px-4 lg:px-6">
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-muted-foreground mb-2 p-3 rounded-lg border bg-card">
+            <span>Gross: <strong className="text-foreground">{Math.round(filteredTotals.gross_salary).toLocaleString()}</strong></span>
+            <span>Absent Ded.: <strong className="text-foreground">{Math.round(filteredTotals.absent_deduction).toLocaleString()}</strong></span>
+            <span>OT Hrs: <strong className="text-foreground">{Math.round(filteredTotals.overtime_hours)}</strong></span>
+            <span>OT Amt: <strong className="text-foreground">{Math.round(filteredTotals.overtime_amount).toLocaleString()}</strong></span>
+            <span>Att. Bonus: <strong className="text-foreground">{Math.round(filteredTotals.attendance_bonus).toLocaleString()}</strong></span>
+            <span>Deductions: <strong className="text-foreground">{Math.round(filteredTotals.total_deductions).toLocaleString()}</strong></span>
+            <span>Present: <strong className="text-foreground">{filteredTotals.present_days}</strong></span>
+            <span>Absent: <strong className="text-foreground">{filteredTotals.absent_days}</strong></span>
+            <span>Late: <strong className="text-foreground">{filteredTotals.late_days}</strong></span>
+            <span>Leave: <strong className="text-foreground">{filteredTotals.leave_days}</strong></span>
+            <span>Holiday: <strong className="text-foreground">{filteredTotals.holiday_days}</strong></span>
+            <span>Weekend: <strong className="text-foreground">{filteredTotals.weekend_days}</strong></span>
+            <span>Net: <strong className="text-foreground">{Math.round(filteredTotals.net_salary).toLocaleString()}</strong></span>
+          </div>
+        </div>
+      )}
+      <DataTable data={filteredData} columns={cols} loading={loading} />
     </div>
   )
 }

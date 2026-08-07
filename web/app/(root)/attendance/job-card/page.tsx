@@ -1,24 +1,15 @@
 "use client"
 
 import * as React from "react"
-import { ClipboardListIcon, Loader2, ChevronLeftIcon, ChevronRightIcon, FilterIcon, XIcon, FileText, FileSpreadsheet, Download } from "lucide-react"
+import { ClipboardListIcon, Loader2, ChevronLeftIcon, ChevronRightIcon, FilterIcon, XIcon, FileText, FileSpreadsheet } from "lucide-react"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { formatCheck } from "@/lib/utils"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 
 interface JobCardRecord {
   id: string
@@ -43,8 +34,16 @@ interface Shift { id: string; name: string }
 
 const today = new Date().toISOString().split("T")[0]
 
-const statusMap: Record<string, string> = {
-  present: "P", late: "L", absent: "A", half_day: "H", leave: "V", on_leave: "V", weekend: "W",
+const statusMapEn: Record<string, string> = {
+  present: "P", late: "L", absent: "A", half_day: "HD", leave: "V", on_leave: "V", weekend: "W", holiday: "H",
+}
+
+const statusMapBn: Record<string, string> = {
+  present: "উপস্থিত", late: "বিলম্বে", absent: "অনুপস্থিত", half_day: "অর্ধদিবস", leave: "ছুটি", on_leave: "ছুটি", weekend: "সাপ্তাহিক ছুটি", holiday: "সরকারি ছুটি",
+}
+
+const dayMapBn: Record<string, string> = {
+  Sun: "রবিবার", Mon: "সোমবার", Tue: "মঙ্গলবার", Wed: "বুধবার", Thu: "বৃহস্পতিবার", Fri: "শুক্রবার", Sat: "শনিবার",
 }
 
 export default function JobCardPage() {
@@ -55,6 +54,7 @@ export default function JobCardPage() {
   const [fetchingList, setFetchingList] = React.useState(false)
   const [error, setError] = React.useState("")
   const [submitting, setSubmitting] = React.useState(false)
+  const [lang, setLang] = React.useState<"en" | "bn">("en")
   const [filters, setFilters] = React.useState<Record<string, string>>({
     start_date: today,
     end_date: today,
@@ -213,24 +213,21 @@ export default function JobCardPage() {
     URL.revokeObjectURL(url)
   }
 
-  const handleExport = async (format: "pdf" | "excel", lang?: string, all?: boolean) => {
-    if (!all && !currentEmpId) {
+  const handleExport = async (format: "pdf" | "excel", lang?: string) => {
+    if (!currentEmpId) {
       toast.error("No employee selected to export")
       return
     }
     setSubmitting(true)
     try {
       const params = buildParams()
-      if (!all) params.employee_id = currentEmpId
+      params.employee_id = currentEmpId
       if (lang) params.lang = lang
       const res = format === "pdf"
         ? await attendanceApi.exportJobCardPdf(params)
         : await attendanceApi.exportJobCardExcel(params)
       const range = `${(filters.start_date || today).replace(/-/g, "")}_${(filters.end_date || today).replace(/-/g, "")}`
-      const empPart = all ? "all" : currentEmpId
-      const name = format === "pdf"
-        ? `job_card_${empPart}_${range}${lang ? `_${lang}` : ""}.pdf`
-        : `job_card_${empPart}_${range}.xlsx`
+      const name = `job_card_${currentEmpId}_${range}${lang ? `_${lang}` : ""}.${format === "pdf" ? "pdf" : "xlsx"}`
       downloadExport(res, name)
       toast.success(format === "pdf" ? "PDF exported" : "Excel exported")
     } catch {
@@ -251,6 +248,9 @@ export default function JobCardPage() {
     return acc
   }, {})
   const totalLateMinutes = data.reduce((sum, r) => sum + (r.late_minutes || 0), 0)
+  const totalOT = data.reduce((sum, r) => sum + (Number(r.over_time) || 0), 0)
+
+  const activeStatusMap = lang === "bn" ? statusMapBn : statusMapEn
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -259,53 +259,37 @@ export default function JobCardPage() {
           <div className="flex items-center gap-2">
             <ClipboardListIcon className="h-6 w-6 text-muted-foreground" />
             <div>
-              <h1 className="text-lg md:text-3xl font-bold tracking-tight">Job Card</h1>
-              <p className="text-muted-foreground mt-1">Employee attendance job card report</p>
+              <h1 className="text-lg md:text-3xl font-bold tracking-tight">
+                {lang === "bn" ? "চাকুরী কার্ড" : "Job Card"}
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                {lang === "bn" ? "কর্মচারীদের উপস্থিতি জব কার্ড প্রতিবেদন" : "Employee attendance job card report"}
+              </p>
             </div>
           </div>
           <div className="hidden md:flex items-center gap-2">
-            <ButtonGroup>
-              <Button variant="outline" onClick={() => handleExport("pdf", "en", false)} disabled={submitting || !currentEmpId}>
-                <FileText className="h-4 w-4 mr-1.5 text-destructive" />
-                PDF
-              </Button>
-              <Button variant="outline" onClick={() => handleExport("pdf", "bn", false)} disabled={submitting || !currentEmpId}>
-                <FileText className="h-4 w-4 mr-1.5 text-blue-600" />
-                বাংলা
-              </Button>
-              <Button variant="outline" onClick={() => handleExport("excel", undefined, false)} disabled={submitting || !currentEmpId}>
-                <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" />
-                Excel
-              </Button>
-            </ButtonGroup>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="default" disabled={submitting}>
-                  {submitting ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Download className="h-4 w-4 mr-1.5" />}
-                  Export
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Export Job Card</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => handleExport("pdf", "en", false)}>
-                  <FileText className="mr-2 h-4 w-4 text-destructive" /> PDF (English)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport("pdf", "bn", false)}>
-                  <FileText className="mr-2 h-4 w-4 text-blue-600" /> PDF (বাংলা)
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport("excel", undefined, false)}>
-                  <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" /> Excel
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => handleExport("pdf", "en", true)}>
-                  <FileText className="mr-2 h-4 w-4 text-destructive" /> PDF — All Filtered
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleExport("excel", undefined, true)}>
-                  <FileSpreadsheet className="mr-2 h-4 w-4 text-emerald-600" /> Excel — All Filtered
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <div className="flex border rounded-md overflow-hidden">
+              <button
+                className={`px-2 py-1 text-xs font-medium ${lang === "en" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+                onClick={() => setLang("en")}
+              >
+                EN
+              </button>
+              <button
+                className={`px-2 py-1 text-xs font-medium ${lang === "bn" ? "bg-primary text-primary-foreground" : "bg-muted"}`}
+                onClick={() => setLang("bn")}
+              >
+                BN
+              </button>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => handleExport("excel", lang)} disabled={submitting || !currentEmpId}>
+              <FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" />
+              {submitting ? "Exporting..." : "Excel"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleExport("pdf", lang)} disabled={submitting || !currentEmpId}>
+              <FileText className="h-4 w-4 mr-1.5 text-destructive" />
+              {submitting ? "Exporting..." : "PDF"}
+            </Button>
           </div>
         </div>
         <div className="md:hidden flex items-center justify-end gap-2 mt-3">
@@ -370,16 +354,16 @@ export default function JobCardPage() {
           {emp && (
             <div className="border-b bg-muted/30 px-4 py-3">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
-                <div><span className="text-muted-foreground">Name: </span><span className="font-medium">{emp.name_en}</span></div>
-                <div><span className="text-muted-foreground">Code: </span><span className="font-medium">{emp.employee_id}</span></div>
-                <div><span className="text-muted-foreground">Designation: </span><span className="font-medium">{emp.designation || "-"}</span></div>
-                <div><span className="text-muted-foreground">Department: </span><span className="font-medium">{emp.department || "-"}</span></div>
-                <div><span className="text-muted-foreground">Phone: </span><span className="font-medium">{emp.phone || "-"}</span></div>
-                <div><span className="text-muted-foreground">Joining: </span><span className="font-medium">{emp.joining_date ? format(new Date(emp.joining_date), "dd MMM yyyy") : "-"}</span></div>
-                <div><span className="text-muted-foreground">Period: </span><span className="font-medium">
-                  {filters.start_date ? `${filters.start_date.split("-").reverse().join("-")} - ${(filters.end_date || filters.start_date).split("-").reverse().join("-")}` : "-"}
+                <div><span className="text-muted-foreground">{lang === "bn" ? "নাম: " : "Name: "}</span><span className="font-medium">{emp.name_en}</span></div>
+                <div><span className="text-muted-foreground">{lang === "bn" ? "কর্মী আইডি: " : "Code: "}</span><span className="font-medium">{emp.employee_id}</span></div>
+                <div><span className="text-muted-foreground">{lang === "bn" ? "পদবী: " : "Designation: "}</span><span className="font-medium">{emp.designation || "-"}</span></div>
+                <div><span className="text-muted-foreground">{lang === "bn" ? "বিভাগ: " : "Department: "}</span><span className="font-medium">{emp.department || "-"}</span></div>
+                <div><span className="text-muted-foreground">{lang === "bn" ? "মোবাইল: " : "Phone: "}</span><span className="font-medium">{emp.phone || "-"}</span></div>
+                <div><span className="text-muted-foreground">{lang === "bn" ? "যোগদানের তারিখ: " : "Joining: "}</span><span className="font-medium">{emp.joining_date ? format(new Date(emp.joining_date), "dd-MM-yyyy") : "-"}</span></div>
+                <div><span className="text-muted-foreground">{lang === "bn" ? "সময়কাল: " : "Period: "}</span><span className="font-medium">
+                  {filters.start_date ? `${filters.start_date.split("-").reverse().join("-")} ${lang === "bn" ? "হতে" : "-"} ${(filters.end_date || filters.start_date).split("-").reverse().join("-")} ${lang === "bn" ? "পর্যন্ত" : ""}` : "-"}
                 </span></div>
-                <div><span className="text-muted-foreground">Days: </span><span className="font-medium">{data.length}</span></div>
+                <div><span className="text-muted-foreground">{lang === "bn" ? "মোট কার্যদিবস: " : "Days: "}</span><span className="font-medium">{data.length}</span></div>
               </div>
             </div>
           )}
@@ -389,15 +373,15 @@ export default function JobCardPage() {
               <thead>
                 <tr className="border-b">
                   <th className="px-3 py-2.5 text-left font-semibold w-10">#</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Date</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Shift</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Day</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">In Time</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Out Time</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Hours</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">OT</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Late (min)</th>
-                  <th className="px-3 py-2.5 text-left font-semibold">Status</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "তারিখ" : "Date"}</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "শিফট" : "Shift"}</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "বার" : "Day"}</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "প্রবেশ" : "In Time"}</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "প্রস্থান" : "Out Time"}</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "কর্মঘণ্টা" : "Hours"}</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "ওটি" : "OT"}</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "বিলম্ব (মি.)" : "Late (min)"}</th>
+                  <th className="px-3 py-2.5 text-left font-semibold">{lang === "bn" ? "অবস্থা" : "Status"}</th>
                 </tr>
               </thead>
               <tbody>
@@ -421,19 +405,22 @@ export default function JobCardPage() {
                       : row.status === "half_day" ? "text-yellow-700"
                       : row.status === "on_leave" ? "text-indigo-700"
                       : "text-muted-foreground"
+                    const formattedDate = format(new Date(row.date), "dd-MM-yyyy")
+                    const dayStr = format(new Date(row.date), "EEE")
+                    const displayDay = lang === "bn" ? (dayMapBn[dayStr] || dayStr) : dayStr
                     return (
                       <tr key={row.id} className={`border-b last:border-0 ${bg} hover:bg-muted/50 transition-colors`}>
                         <td className="px-3 py-2">{i + 1}</td>
-                        <td className="px-3 py-2">{format(new Date(row.date), "dd MMM yyyy")}</td>
+                        <td className="px-3 py-2">{formattedDate}</td>
                         <td className="px-3 py-2">{row.shift_name || "-"}</td>
-                        <td className="px-3 py-2">{format(new Date(row.date), "EEE")}</td>
+                        <td className="px-3 py-2">{displayDay}</td>
                         <td className="px-3 py-2">{formatCheck(row.check_in)}</td>
                         <td className="px-3 py-2">{formatCheck(row.check_out)}</td>
                         <td className="px-3 py-2">{row.total_hours || "-"}</td>
                         <td className="px-3 py-2">{row.over_time || "-"}</td>
                         <td className="px-3 py-2">{row.late_minutes > 0 ? row.late_minutes : "-"}</td>
                         <td className={`px-3 py-2 font-semibold ${tc}`}>
-                          {statusMap[row.status] || row.status}
+                          {activeStatusMap[row.status] || row.status}
                         </td>
                       </tr>
                     )
@@ -446,13 +433,14 @@ export default function JobCardPage() {
           {data.length > 0 && (
             <div className="border-t px-4 py-3">
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                <span className="text-muted-foreground">Total Days: <b>{data.length}</b></span>
+                <span className="text-muted-foreground">{lang === "bn" ? "মোট কার্যদিবস" : "Total Days"}: <b>{data.length}</b></span>
                 {Object.entries(totalByStatus).map(([s, c]) => (
                   <span key={s} className="text-muted-foreground">
-                    {s === "on_leave" ? "Leave" : s.charAt(0).toUpperCase() + s.slice(1)}: <b>{c}</b>
+                    {(lang === "bn" ? statusMapBn[s] : s === "on_leave" ? "Leave" : s.charAt(0).toUpperCase() + s.slice(1)) || s}: <b>{c}</b>
                   </span>
                 ))}
-                <span className="text-muted-foreground">Late Minutes: <b>{totalLateMinutes}</b></span>
+                <span className="text-muted-foreground">{lang === "bn" ? "মোট বিলম্ব" : "Late Minutes"}: <b>{totalLateMinutes} {lang === "bn" ? "মিনিট" : "min"}</b></span>
+                <span className="text-muted-foreground">{lang === "bn" ? "মোট ওভারটাইম" : "Total OT"}: <b>{totalOT ? totalOT.toFixed(2) : 0} {lang === "bn" ? "ঘণ্টা" : "hrs"}</b></span>
               </div>
             </div>
           )}
@@ -461,3 +449,4 @@ export default function JobCardPage() {
     </div>
   )
 }
+

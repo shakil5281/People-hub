@@ -95,6 +95,7 @@ type Employee struct {
 	User              *User             `json:"user,omitempty" gorm:"foreignKey:UserID"`
 	Company           Company           `json:"company" gorm:"foreignKey:CompanyID"`
 	Department        *Department       `json:"department,omitempty" gorm:"foreignKey:DepartmentID"`
+	DepartmentRef     *Department       `json:"department_ref,omitempty" gorm:"foreignKey:DepartmentID"`
 	SectionRef        *Section          `json:"section_ref,omitempty" gorm:"foreignKey:SectionID"`
 	DesignationRef    *Designation      `json:"designation_ref,omitempty" gorm:"foreignKey:DesignationID"`
 	LineRef           *Line             `json:"line_ref,omitempty" gorm:"foreignKey:LineID"`

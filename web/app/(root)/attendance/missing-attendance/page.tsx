@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { UserXIcon, Loader2, PencilIcon, FilterIcon, XIcon, CheckIcon, SquareIcon, CheckSquareIcon } from "lucide-react"
+import { UserXIcon, Loader2, PencilIcon, FilterIcon, XIcon, CheckIcon, SquareIcon, CheckSquareIcon, ClipboardEditIcon } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { attendanceApi, missingAttendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
@@ -359,6 +359,12 @@ export default function MissingAttendancePage() {
                 Bulk Submit ({selectedIds.size})
               </Button>
             )}
+            <Button asChild variant="outline" className="flex-1 sm:flex-none">
+              <a href="/attendance/custom-attendance">
+                <ClipboardEditIcon className="mr-2 h-4 w-4" />
+                Custom Attendance
+              </a>
+            </Button>
             <div className="md:hidden">
               <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
                 <SheetTrigger asChild>

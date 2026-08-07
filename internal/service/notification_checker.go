@@ -53,6 +53,8 @@ func (nc *NotificationChecker) runChecks() {
 	nc.checkLateArrivals(today, adminIDs)
 	nc.checkApprovedLeaveMismatch(today, adminIDs)
 	nc.checkStalePendingLeaves(adminIDs)
+	nc.checkSalarySheetMonthComplete(adminIDs)
+	nc.checkIncompleteTasks(adminIDs)
 }
 
 func (nc *NotificationChecker) getAdminUserIDs() []string {
@@ -76,20 +78,20 @@ func (nc *NotificationChecker) checkMissingAttendance(today string, adminIDs []s
 		Where("NOT EXISTS (SELECT 1 FROM attendances WHERE attendances.employee_id = employees.employee_id AND attendances.date = ?)", today).
 		Find(&employees)
 
-	for _, emp := range employees {
+	if len(employees) > 0 {
 		for _, uid := range adminIDs {
-			title := "Missing Attendance"
-			message := emp.NameEn + " (" + emp.EmployeeID + ") has no attendance record for today."
-			nc.createNotification(uid, title, message, "warning", "missing_attendance")
+			title := "Missing Attendance Report"
+			message := fmt.Sprintf("There are %d active employees with missing attendance records today (%s).", len(employees), today)
+			nc.createNotification(uid, title, message, "warning", "missing_attendance_report")
 		}
 	}
 }
 
 func (nc *NotificationChecker) checkLateArrivals(today string, adminIDs []string) {
 	var lateRecords []struct {
-		EmployeeID   string
-		NameEn       string
-		LateMinutes  int
+		EmployeeID  string
+		NameEn      string
+		LateMinutes int
 	}
 	nc.db.Table("attendances").
 		Select("attendances.employee_id, employees.name_en, attendances.late_minutes").
@@ -152,13 +154,60 @@ func (nc *NotificationChecker) checkStalePendingLeaves(adminIDs []string) {
 	}
 }
 
+func (nc *NotificationChecker) checkSalarySheetMonthComplete(adminIDs []string) {
+	now := time.Now()
+	prevMonthDate := now.AddDate(0, -1, 0)
+	pMonth := int(prevMonthDate.Month())
+	pYear := prevMonthDate.Year()
+
+	var salaryCount int64
+	nc.db.Model(&models.Salary{}).
+		Where("month = ? AND year = ? AND deleted_at IS NULL", pMonth, pYear).
+		Count(&salaryCount)
+
+	if salaryCount == 0 {
+		monthName := prevMonthDate.Month().String()
+		for _, uid := range adminIDs {
+			title := "Salary Sheet Pending"
+			message := fmt.Sprintf("Salary sheet for completed month %s %d has not been generated yet.", monthName, pYear)
+			nc.createNotification(uid, title, message, "warning", "salary_sheet_pending")
+		}
+	}
+}
+
+func (nc *NotificationChecker) checkIncompleteTasks(adminIDs []string) {
+	var pendingLeavesCount int64
+	nc.db.Model(&models.Leave{}).
+		Where("status = ? AND deleted_at IS NULL", "pending").
+		Count(&pendingLeavesCount)
+
+	if pendingLeavesCount > 0 {
+		for _, uid := range adminIDs {
+			title := "Incomplete Task: Pending Leaves"
+			message := fmt.Sprintf("There are %d leave applications awaiting approval.", pendingLeavesCount)
+			nc.createNotification(uid, title, message, "info", "pending_leaves_task")
+		}
+	}
+}
+
 func (nc *NotificationChecker) createNotification(userID, title, message, notifType, metadata string) {
+	// Deduplicate: check if notification with same user_id, metadata, and title was created in the last 24 hours
+	var count int64
+	yesterday := time.Now().Add(-24 * time.Hour)
+	nc.db.Model(&models.Notification{}).
+		Where("user_id = ? AND metadata = ? AND title = ? AND created_at >= ?", userID, metadata, title, yesterday).
+		Count(&count)
+
+	if count > 0 {
+		return
+	}
+
 	notif := &models.Notification{
-		UserID:   userID,
-		Title:    title,
-		Message:  message,
-		Type:     notifType,
-		Metadata: &metadata,
+		UserID:    userID,
+		Title:     title,
+		Message:   message,
+		Type:      notifType,
+		Metadata:  &metadata,
 		CreatedBy: &userID,
 	}
 	if err := nc.notificationRepo.Create(notif); err != nil {

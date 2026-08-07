@@ -262,6 +262,7 @@ func (h *MissingAttendanceHandler) UpsertByEmployeeAndDate(c *gin.Context) {
 		existingAtt.CheckIn = ma.CheckIn
 		existingAtt.CheckOut = ma.CheckOut
 		existingAtt.Status = ma.Status
+		existingAtt.CalculateHours()
 		h.attRepo.Update(existingAtt)
 	} else {
 		att := &models.Attendance{
@@ -272,6 +273,7 @@ func (h *MissingAttendanceHandler) UpsertByEmployeeAndDate(c *gin.Context) {
 			CheckOut:   ma.CheckOut,
 			Status:     ma.Status,
 		}
+		att.CalculateHours()
 		h.attRepo.Create(att)
 	}
 

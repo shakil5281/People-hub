@@ -5,9 +5,8 @@ import { BellIcon, CheckCheckIcon, InfoIcon, AlertTriangleIcon, AlertCircleIcon,
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 import { notificationApi, type Notification } from "@/lib/api"
 import { toast } from "sonner"
@@ -67,8 +66,13 @@ export default function NotificationsPage() {
     }
   }, [page, filter])
 
-  React.useEffect(() => { fetchData() }, [fetchData])
-  React.useEffect(() => { setPage(1) }, [filter])
+  React.useEffect(() => {
+    fetchData()
+  }, [fetchData])
+
+  React.useEffect(() => {
+    setPage(1)
+  }, [filter])
 
   const unreadCount = React.useMemo(() => notifications.filter((n) => !n.is_read).length, [notifications])
 
@@ -171,8 +175,10 @@ export default function NotificationsPage() {
                 <CardContent className="flex flex-col items-center gap-3 py-12">
                   <BellIcon className="h-10 w-10 text-muted-foreground/40" />
                   <p className="text-sm text-muted-foreground">
-                    {filter === "all" ? "No notifications yet"
-                      : filter === "unread" ? "All caught up! No unread notifications"
+                    {filter === "all"
+                      ? "No notifications yet"
+                      : filter === "unread"
+                      ? "All caught up! No unread notifications"
                       : "No read notifications"}
                   </p>
                 </CardContent>
@@ -180,55 +186,55 @@ export default function NotificationsPage() {
             ) : (
               <div className="space-y-2">
                 {notifications.map((n) => {
-                const config = typeConfig[n.type] || typeConfig.info
-                const Icon = config.icon
-                return (
-                  <Card key={n.id} className={cn("transition-colors", !n.is_read && "border-l-2 border-l-primary bg-muted/30")}>
-                    <CardContent className="flex items-start gap-3 p-4">
-                      <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", config.color)}>
-                        <Icon className="h-4 w-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                          <p className="text-sm font-medium truncate">{n.title}</p>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {!n.is_read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
-                            <Badge variant={typeVariant[n.type] || "outline"} className="text-[10px] capitalize">{n.type}</Badge>
-                            <span className="text-xs text-muted-foreground/60">{relativeTime(n.created_at)}</span>
-                          </div>
+                  const config = typeConfig[n.type as keyof typeof typeConfig] || typeConfig.info
+                  const Icon = config.icon
+                  return (
+                    <Card key={n.id} className={cn("transition-colors", !n.is_read && "border-l-2 border-l-primary bg-muted/30")}>
+                      <CardContent className="flex items-start gap-3 p-4">
+                        <div className={cn("flex h-9 w-9 shrink-0 items-center justify-center rounded-full", config.color)}>
+                          <Icon className="h-4 w-4" />
                         </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">{n.message}</p>
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        {!n.is_read && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkAsRead(n.id)} title="Mark as read">
-                            <CheckCheckIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                            <p className="text-sm font-medium truncate">{n.title}</p>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {!n.is_read && <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                              <Badge variant={typeVariant[n.type] || "outline"} className="text-[10px] capitalize">{n.type}</Badge>
+                              <span className="text-xs text-muted-foreground/60">{relativeTime(n.created_at)}</span>
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-0.5">{n.message}</p>
+                        </div>
+                        <div className="flex shrink-0 gap-1">
+                          {!n.is_read && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleMarkAsRead(n.id)} title="Mark as read">
+                              <CheckCheckIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDismiss(n.id)} title="Dismiss">
+                            <XIcon className="h-3.5 w-3.5 text-muted-foreground" />
                           </Button>
-                        )}
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleDismiss(n.id)} title="Dismiss">
-                          <XIcon className="h-3.5 w-3.5 text-muted-foreground" />
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-              {totalPages > 1 && (
-                <div className="flex justify-center gap-2 pt-2">
-                  <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
-                    Previous
-                  </Button>
-                  <span className="flex items-center text-sm text-muted-foreground px-2">
-                    Page {page} of {totalPages}
-                  </span>
-                  <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
-                    Next
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </TabsContent>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )
+                })}
+                {totalPages > 1 && (
+                  <div className="flex justify-center gap-2 pt-2">
+                    <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
+                      Previous
+                    </Button>
+                    <span className="flex items-center text-sm text-muted-foreground px-2">
+                      Page {page} of {totalPages}
+                    </span>
+                    <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>
+                      Next
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </TabsContent>
         </Tabs>
       </div>
     </div>

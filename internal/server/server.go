@@ -120,6 +120,13 @@ func New(cfg *config.Config) *gin.Engine {
 	eidBonusService := service.NewEidBonusService(employeeRepo, eidBonusRepo)
 	eidBonusHandler := handlers.NewEidBonusHandler(eidBonusService, eidBonusRepo)
 
+	nightBillRepo := repository.NewNightBillRepository(database.DB)
+	nightBillEmployeeListRepo := repository.NewNightBillEmployeeListRepository(database.DB)
+	nightBillService := service.NewNightBillService(database.DB, nightBillRepo, nightBillEmployeeListRepo)
+	nightBillHandler := handlers.NewNightBillHandler(nightBillService, nightBillRepo, companyRepo)
+
+	nightBillEmployeeListHandler := handlers.NewNightBillEmployeeListHandler(nightBillEmployeeListRepo)
+
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
@@ -133,7 +140,7 @@ func New(cfg *config.Config) *gin.Engine {
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, missingAttendanceHandler, otEarlyExitHandler, cfg.JWTSecret)
+	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, missingAttendanceHandler, otEarlyExitHandler, nightBillHandler, nightBillEmployeeListHandler, cfg.JWTSecret)
 
 	return r
 }

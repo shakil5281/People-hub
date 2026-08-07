@@ -49,7 +49,9 @@ func RequireRole(role string) gin.HandlerFunc {
 			return
 		}
 
-		if !slices.Contains(roleList, role) && !slices.Contains(roleList, "superadmin") {
+		if !slices.Contains(roleList, role) &&
+			!slices.Contains(roleList, "superadmin") &&
+			!slices.Contains(roleList, "super_admin") {
 			c.JSON(http.StatusForbidden, gin.H{"error": "insufficient role"})
 			c.Abort()
 			return

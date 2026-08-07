@@ -125,3 +125,10 @@ func (r *SeparationRepository) FindPendingDue(processDate string) ([]models.Sepa
 		Find(&list).Error
 	return list, err
 }
+
+func (r *SeparationRepository) FindEmployeeByCode(empCode string) (*models.Employee, error) {
+	var emp models.Employee
+	err := r.db.Preload("Company").Preload("Department").Preload("DesignationRef").Preload("SectionRef").
+		Where("employee_id = ? AND deleted_at IS NULL", empCode).First(&emp).Error
+	return &emp, err
+}

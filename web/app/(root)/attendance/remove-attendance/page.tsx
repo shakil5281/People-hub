@@ -49,7 +49,8 @@ interface AttendanceRecord {
   check_out: string | null
   total_hours: string | null
   status: string
-  employee?: { employee_id: string; name_en: string; designation_ref?: { name: string } }
+  employee_name?: string
+  designation?: string
 }
 
 const today = new Date().toISOString().split("T")[0]
@@ -169,21 +170,18 @@ export default function RemoveAttendancePage() {
 
     if (!selectedRows.length) return
     setDeleting(true)
-    let success = 0
-    let failed = 0
-    for (const row of selectedRows) {
-      try {
-        await attendanceApi.delete(row.id)
-        success++
-      } catch {
-        failed++
-      }
+    try {
+      const ids = selectedRows.map((r) => r.id)
+      await attendanceApi.deleteBulk(ids)
+      toast.success(`Deleted ${ids.length} attendance record(s)`)
+      setSelectedRows([])
+      fetchData()
+    } catch {
+      toast.error("Failed to delete selected records")
+    } finally {
+      setDeleting(false)
+      setConfirmOpen(false)
     }
-    toast.success(`Deleted ${success} record(s)` + (failed ? `, ${failed} failed` : ""))
-    setSelectedRows([])
-    setDeleting(false)
-    setConfirmOpen(false)
-    fetchData()
   }
 
   const columns: ColumnDef<AttendanceRecord>[] = React.useMemo(() => [
@@ -191,17 +189,17 @@ export default function RemoveAttendancePage() {
     {
       accessorKey: "employee_id",
       header: "Employee ID",
-      cell: ({ row }) => row.original.employee?.employee_id || row.original.employee_id,
+      cell: ({ row }) => row.original.employee_id,
     },
     {
-      accessorKey: "employee.name_en",
+      accessorKey: "employee_name",
       header: "Name",
-      cell: ({ row }) => row.original.employee?.name_en || "-",
+      cell: ({ row }) => row.original.employee_name || "-",
     },
     {
-      accessorKey: "employee.designation_ref.name",
+      accessorKey: "designation",
       header: "Designation",
-      cell: ({ row }) => row.original.employee?.designation_ref?.name || "-",
+      cell: ({ row }) => row.original.designation || "-",
     },
     { accessorKey: "date", header: "Date", cell: ({ row }) => row.original.date?.split("-").reverse().join("-") },
     { accessorKey: "check_in", header: "In", cell: ({ row }) => formatCheck(row.original.check_in) },
@@ -260,6 +258,16 @@ export default function RemoveAttendancePage() {
               Delete Selected ({selectedRows.length})
             </Button>
           )}
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-destructive hover:bg-destructive/10 border-destructive/30"
+            onClick={() => { setDeleteType("all"); setConfirmOpen(true) }}
+            disabled={deleting || total === 0}
+          >
+            <Trash2Icon className="mr-1 h-4 w-4" />
+            Delete All
+          </Button>
         </div>
       </div>
 

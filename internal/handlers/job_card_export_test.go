@@ -74,44 +74,41 @@ func TestRenderJobCardPDF(t *testing.T) {
 	font := loadBanglaFont(pdf)
 	labels := jobCardEnLabels
 	company := models.Company{CompanyNameEn: "ABC Garments Ltd."}
-	period := jobCardPeriod("2026-07-01", "2026-07-10")
+	period := jobCardPeriod("2026-07-01", "2026-07-10", "en")
 
 	for _, sec := range sampleJobCardSections() {
 		pdf.AddPage()
-		drawJobCardPage(pdf, font, labels, company, period, sec)
+		drawJobCardPage(pdf, font, labels, "en", company, period, sec)
 	}
 	if pdf.Error() != nil {
 		t.Fatalf("pdf error: %v", pdf.Error())
 	}
-	out := "C:\\Users\\shaki\\AppData\\Local\\Temp\\opencode\\job_card_en.pdf"
+	out := os.TempDir() + "\\job_card_en.pdf"
 	if err := pdf.OutputFileAndClose(out); err != nil {
 		t.Fatalf("output: %v", err)
 	}
-	info, _ := os.Stat(out)
-	t.Logf("job card en pdf size=%d", info.Size())
 
-	// BN
+	// BN (SutonnyMJ)
 	pdf2 := gofpdf.New("P", "mm", "A4", "")
 	pdf2.SetMargins(10, 10, 10)
 	pdf2.SetAutoPageBreak(false, 0)
 	font2 := loadBanglaFont(pdf2)
+	periodBn := jobCardPeriod("2026-07-01", "2026-07-10", "bn")
 	for _, sec := range sampleJobCardSections() {
 		pdf2.AddPage()
-		drawJobCardPage(pdf2, font2, jobCardBnLabels, company, period, sec)
+		drawJobCardPage(pdf2, font2, jobCardBnLabels, "bn", company, periodBn, sec)
 	}
-	out2 := "C:\\Users\\shaki\\AppData\\Local\\Temp\\opencode\\job_card_bn.pdf"
+	out2 := os.TempDir() + "\\job_card_bn.pdf"
 	if err := pdf2.OutputFileAndClose(out2); err != nil {
 		t.Fatalf("output bn: %v", err)
 	}
-	info2, _ := os.Stat(out2)
-	t.Logf("job card bn pdf size=%d", info2.Size())
 }
 
 func TestRenderJobCardExcel(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	router := gin.New()
 	router.GET("/export", func(c *gin.Context) {
-		renderJobCardExcel(c, "2026-07-01", "2026-07-10", sampleJobCardSections())
+		renderJobCardExcel(c, "2026-07-01", "2026-07-10", "en", sampleJobCardSections())
 	})
 
 	req := httptest.NewRequest("GET", "/export", nil)
@@ -124,22 +121,19 @@ func TestRenderJobCardExcel(t *testing.T) {
 	if w.Body.Len() == 0 {
 		t.Fatal("empty body")
 	}
-	out := "C:\\Users\\shaki\\AppData\\Local\\Temp\\opencode\\job_card.xlsx"
-	if err := os.WriteFile(out, w.Body.Bytes(), 0o644); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	info, _ := os.Stat(out)
-	t.Logf("job card xlsx size=%d", info.Size())
 }
 
 func TestJobCardHelpers(t *testing.T) {
-	if jobCardStatusCode("absent") != "A" {
+	if jobCardStatusCode("absent", "en") != "A" {
 		t.Fatal("absent status code wrong")
 	}
-	if jobCardStatusCode("half_day") != "HD" {
+	if jobCardStatusCode("absent", "bn") != "Abycw¯’Z" {
+		t.Fatalf("absent status code bn wrong: %s", jobCardStatusCode("absent", "bn"))
+	}
+	if jobCardStatusCode("half_day", "en") != "HD" {
 		t.Fatal("half_day status code wrong")
 	}
-	if jobCardDateDisplay("2026-07-01") != "01 Jul 2026" {
+	if jobCardDateDisplay("2026-07-01") != "01-07-2026" {
 		t.Fatal("date display wrong: " + jobCardDateDisplay("2026-07-01"))
 	}
 	secs := groupJobCard(sampleJobCardSections()[0].Rows)

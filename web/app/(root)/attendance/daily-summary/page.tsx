@@ -299,6 +299,10 @@ export default function DailySummaryPage() {
             </div>
           </div>
           <ButtonGroup className="hidden md:flex">
+            <Button variant="default" onClick={() => window.location.href = "/attendance/custom-summary"}>
+              <FileTextIcon className="mr-2 h-4 w-4" />
+              Custom Summary
+            </Button>
             <Button onClick={handleExport} disabled={exporting} variant="outline">
               {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
               {exporting ? "Exporting..." : "Export Excel"}

@@ -80,6 +80,7 @@ func (r *MissingAttendanceRepository) BulkUpsert(records []models.MissingAttenda
 				existingAtt.CheckIn = ma.CheckIn
 				existingAtt.CheckOut = ma.CheckOut
 				existingAtt.Status = ma.Status
+				existingAtt.CalculateHours()
 				attRepo.Update(existingAtt)
 			} else {
 				att := &models.Attendance{
@@ -90,6 +91,7 @@ func (r *MissingAttendanceRepository) BulkUpsert(records []models.MissingAttenda
 					CheckOut:   ma.CheckOut,
 					Status:     ma.Status,
 				}
+				att.CalculateHours()
 				attRepo.Create(att)
 			}
 		}

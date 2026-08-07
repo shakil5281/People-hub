@@ -7,6 +7,8 @@ import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
+import { DatePicker } from "@/components/ui/date-picker"
+import { format, isValid } from "date-fns"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, shiftApi, groupApi } from "@/lib/api"
 
 interface Company { id: string; company_name_en: string }
@@ -23,6 +25,7 @@ interface AbsentRecord {
   date: string
   status: string
   check_in: string | null
+  total_absent?: number | string
   employee?: { employee_id: string; name_en: string; designation_ref?: { name: string }; department?: { name: string }; section_ref?: { name: string } }
 }
 
@@ -66,11 +69,24 @@ const columns: ColumnDef<AbsentRecord>[] = [
     header: "Status",
     cell: () => <span className="text-red-600 font-bold">A</span>,
   },
+  {
+    id: "total_absent",
+    header: "Total Absent Count",
+    cell: ({ row }) => <span className="font-semibold">{row.original.total_absent ?? "-"}</span>,
+  },
 ]
 
 const selectClass = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 
 const today = new Date().toISOString().split("T")[0]
+
+const toDate = (s?: string): Date | undefined => {
+  if (!s) return undefined
+  const d = new Date(`${s}T00:00:00`)
+  return isValid(d) ? d : undefined
+}
+
+const fromDate = (d?: Date): string => (d ? format(d, "yyyy-MM-dd") : "")
 
 export default function AbsentStatusPage() {
   const [data, setData] = React.useState<AbsentRecord[]>([])
@@ -248,11 +264,11 @@ export default function AbsentStatusPage() {
                 <div className="grid grid-cols-1 gap-3">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Start Date</label>
-                    <input type="date" value={filters.start_date || ""} onChange={(e) => setFilter("start_date", e.target.value)} className={selectClass} />
+                    <DatePicker value={toDate(filters.start_date)} onChange={(d) => setFilter("start_date", fromDate(d))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-muted-foreground">End Date</label>
-                    <input type="date" value={filters.end_date || ""} onChange={(e) => setFilter("end_date", e.target.value)} className={selectClass} />
+                    <DatePicker value={toDate(filters.end_date)} onChange={(d) => setFilter("end_date", fromDate(d))} />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Company</label>
@@ -323,12 +339,12 @@ export default function AbsentStatusPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-muted-foreground">Start Date</label>
-              <input type="date" value={filters.start_date || ""} onChange={(e) => setFilter("start_date", e.target.value)} className={selectClass} />
+              <DatePicker value={toDate(filters.start_date)} onChange={(d) => setFilter("start_date", fromDate(d))} />
             </div>
 
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-medium text-muted-foreground">End Date</label>
-              <input type="date" value={filters.end_date || ""} onChange={(e) => setFilter("end_date", e.target.value)} className={selectClass} />
+              <DatePicker value={toDate(filters.end_date)} onChange={(d) => setFilter("end_date", fromDate(d))} />
             </div>
 
             <div className="flex flex-col gap-1.5">

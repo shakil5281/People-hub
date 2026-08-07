@@ -18,6 +18,10 @@ func NewSalaryRepository(db *gorm.DB) *SalaryRepository {
 	return &SalaryRepository{db: db}
 }
 
+func (r *SalaryRepository) DB() *gorm.DB {
+	return r.db
+}
+
 func (r *SalaryRepository) Create(salary *models.Salary) error {
 	return r.db.Create(salary).Error
 }
