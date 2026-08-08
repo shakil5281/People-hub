@@ -195,19 +195,20 @@ func (nc *NotificationChecker) createNotification(userID, title, message, notifT
 	var count int64
 	yesterday := time.Now().Add(-24 * time.Hour)
 	nc.db.Model(&models.Notification{}).
-		Where("user_id = ? AND metadata = ? AND title = ? AND created_at >= ?", userID, metadata, title, yesterday).
+		Where("user_id = ? AND metadata::text LIKE ? AND title = ? AND created_at >= ?", userID, "%"+metadata+"%", title, yesterday).
 		Count(&count)
 
 	if count > 0 {
 		return
 	}
 
+	jsonMeta := fmt.Sprintf(`"%s"`, metadata)
 	notif := &models.Notification{
 		UserID:    userID,
 		Title:     title,
 		Message:   message,
 		Type:      notifType,
-		Metadata:  &metadata,
+		Metadata:  &jsonMeta,
 		CreatedBy: &userID,
 	}
 	if err := nc.notificationRepo.Create(notif); err != nil {

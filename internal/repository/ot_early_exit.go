@@ -1,9 +1,11 @@
 package repository
 
 import (
+	"math"
 	"time"
 
 	"github.com/shakil5281/peoplehub-api/internal/models"
+	"github.com/shakil5281/peoplehub-api/internal/utils"
 	"gorm.io/gorm"
 )
 
@@ -76,6 +78,7 @@ func (r *OtEarlyExitRepository) ListShortfallRows(companyID, startDate, endDate 
 			AND a.deleted_at IS NULL
 			AND a.check_in IS NOT NULL AND a.check_out IS NOT NULL
 			AND a.status <> 'on_leave'
+			AND e.over_time_status = true
 		ORDER BY a.employee_id, a.date
 	`, companyID, startDate, endDate).Scan(&rows).Error
 	if err != nil {
@@ -85,18 +88,21 @@ func (r *OtEarlyExitRepository) ListShortfallRows(companyID, startDate, endDate 
 	result := make([]ShortfallRow, 0, len(rows))
 	for i := range rows {
 		rw := rows[i]
-		if rw.ShiftStartTime == "" || rw.ShiftEndTime == "" || rw.CheckIn == nil || rw.CheckOut == nil {
-			continue
-		}
-		start, err1 := time.Parse("15:04", rw.ShiftStartTime)
-		end, err2 := time.Parse("15:04", rw.ShiftEndTime)
-		if err1 != nil || err2 != nil {
+		if rw.CheckIn == nil || rw.CheckOut == nil {
 			continue
 		}
 
-		expected := expectedShiftHours(start, end)
-		worked := rw.CheckOut.Sub(*rw.CheckIn).Hours()
-		if worked <= 0 || worked >= expected {
+		worked := utils.CalcNetWorkHours(*rw.CheckIn, *rw.CheckOut)
+
+		// Baseline expected daily working hours = 8 hours
+		expectedWork := 8.0
+		if worked >= expectedWork {
+			continue
+		}
+
+		shortfall := expectedWork - worked
+		shortfallOT := math.Round(shortfall)
+		if shortfallOT <= 0 {
 			continue
 		}
 
@@ -111,9 +117,9 @@ func (r *OtEarlyExitRepository) ListShortfallRows(companyID, startDate, endDate 
 			ShiftStartTime: rw.ShiftStartTime,
 			ShiftEndTime:   rw.ShiftEndTime,
 			WeekendDays:    rw.WeekendDays,
-			ExpectedHours:  round2(expected),
-			WorkedHours:    round2(worked),
-			ShortfallHours: round2(expected - worked),
+			ExpectedHours:  8.0,
+			WorkedHours:    math.Round(worked),
+			ShortfallHours: shortfallOT,
 		})
 	}
 	return result, nil
@@ -126,6 +132,19 @@ func expectedShiftHours(start, end time.Time) float64 {
 		delta += 24 * time.Hour
 	}
 	return delta.Hours()
+}
+
+// calcShortfallOTHours converts short work duration into whole integer OT hours deducted.
+// Uses integer floor matching Salary Sheet calculation (e.g. 2.93h -> 2h OT deducted).
+func calcShortfallOTHours(diffHours float64) float64 {
+	if diffHours < 1.0 {
+		return 0
+	}
+	return float64(int(diffHours))
+}
+
+func round0(v float64) float64 {
+	return float64(int64(v + 0.5))
 }
 
 func round2(v float64) float64 {
@@ -142,26 +161,25 @@ func (r *OtEarlyExitRepository) UpsertMonth(companyID string, month, year int, r
 		if len(rows) == 0 {
 			return nil
 		}
-		by := createdBy
-		records := make([]models.OtEarlyExitDeduction, 0, len(rows))
-		for i := range rows {
-			records = append(records, models.OtEarlyExitDeduction{
-				EmployeeID:     rows[i].EmployeeID,
-				CompanyID:      rows[i].CompanyID,
-				Date:           rows[i].Date,
-				ShiftID:        rows[i].ShiftID,
-				ShiftStartTime: rows[i].ShiftStartTime,
-				ShiftEndTime:   rows[i].ShiftEndTime,
-				ExpectedHours:  rows[i].ExpectedHours,
-				WorkedHours:    rows[i].WorkedHours,
-				ShortfallHours: rows[i].ShortfallHours,
-				Status:         rows[i].Status,
+		toInsert := make([]models.OtEarlyExitDeduction, len(rows))
+		for i, r := range rows {
+			toInsert[i] = models.OtEarlyExitDeduction{
+				CompanyID:      companyID,
+				EmployeeID:     r.EmployeeID,
 				Month:          month,
 				Year:           year,
-				CreatedBy:      &by,
-			})
+				Date:           r.Date,
+				Status:         r.Status,
+				ShiftID:        r.ShiftID,
+				ShiftStartTime: r.ShiftStartTime,
+				ShiftEndTime:   r.ShiftEndTime,
+				ExpectedHours:  r.ExpectedHours,
+				WorkedHours:    r.WorkedHours,
+				ShortfallHours: r.ShortfallHours,
+				CreatedBy:      &createdBy,
+			}
 		}
-		return tx.Create(&records).Error
+		return tx.Create(&toInsert).Error
 	})
 }
 
@@ -171,11 +189,14 @@ func (r *OtEarlyExitRepository) MonthlyShortfallTotals(companyID string, month, 
 		EmployeeID string  `gorm:"column:employee_id"`
 		Total      float64 `gorm:"column:total"`
 	}
-	err := r.db.Model(&models.OtEarlyExitDeduction{}).
-		Select("employee_id, SUM(shortfall_hours) as total").
-		Where("company_id = ? AND month = ? AND year = ? AND deleted_at IS NULL", companyID, month, year).
-		Group("employee_id").
-		Scan(&records).Error
+	q := r.db.Table("ot_early_exit_deductions o").
+		Select("o.employee_id, SUM(o.shortfall_hours) as total").
+		Joins("JOIN employees e ON e.employee_id = o.employee_id").
+		Where("o.month = ? AND o.year = ? AND o.deleted_at IS NULL AND e.over_time_status = true", month, year)
+	if companyID != "" {
+		q = q.Where("o.company_id = ?", companyID)
+	}
+	err := q.Group("o.employee_id").Scan(&records).Error
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +226,11 @@ func (r *OtEarlyExitRepository) List(companyID string, month, year int, departme
 		Joins("JOIN employees ON employees.employee_id = o.employee_id").
 		Joins("LEFT JOIN designations ON designations.id = employees.designation_id").
 		Joins("LEFT JOIN departments ON departments.id = employees.department_id").
-		Where("o.company_id = ? AND o.month = ? AND o.year = ? AND o.deleted_at IS NULL", companyID, month, year)
+		Where("o.month = ? AND o.year = ? AND o.deleted_at IS NULL AND employees.over_time_status = true", month, year)
+
+	if companyID != "" {
+		query = query.Where("o.company_id = ?", companyID)
+	}
 
 	if departmentID != "" {
 		query = query.Where("employees.department_id = ?", departmentID)
@@ -261,4 +286,48 @@ func (r *OtEarlyExitRepository) List(companyID string, month, year int, departme
 		}
 	}
 	return results, total, nil
+}
+
+// ListStats computes total shortfall hours and affected employee count for the given filter parameters.
+func (r *OtEarlyExitRepository) ListStats(companyID string, month, year int, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID string) (float64, int64, error) {
+	type summary struct {
+		TotalShortfall float64 `gorm:"column:total_shortfall"`
+		Affected       int64   `gorm:"column:affected"`
+	}
+	query := r.db.Table("ot_early_exit_deductions o").
+		Select(`
+			COALESCE(SUM(o.shortfall_hours), 0) as total_shortfall,
+			COUNT(DISTINCT o.employee_id) as affected
+		`).
+		Joins("JOIN employees ON employees.employee_id = o.employee_id").
+		Where("o.month = ? AND o.year = ? AND o.deleted_at IS NULL AND employees.over_time_status = true", month, year)
+
+	if companyID != "" {
+		query = query.Where("o.company_id = ?", companyID)
+	}
+	if departmentID != "" {
+		query = query.Where("employees.department_id = ?", departmentID)
+	}
+	if sectionID != "" {
+		query = query.Where("employees.section_id = ?", sectionID)
+	}
+	if designationID != "" {
+		query = query.Where("employees.designation_id = ?", designationID)
+	}
+	if lineID != "" {
+		query = query.Where("employees.line_id = ?", lineID)
+	}
+	if groupID != "" {
+		query = query.Where("employees.group_id = ?", groupID)
+	}
+	if shiftID != "" {
+		query = query.Where("employees.shift_id = ?", shiftID)
+	}
+	if employeeID != "" {
+		query = query.Where("o.employee_id ILIKE ?", "%"+employeeID+"%")
+	}
+
+	var sum summary
+	err := query.Scan(&sum).Error
+	return round2(sum.TotalShortfall), sum.Affected, err
 }

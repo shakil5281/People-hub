@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shakil5281/peoplehub-api/internal/models"
@@ -167,12 +169,20 @@ func (h *NotificationHandler) Create(c *gin.Context) {
 		notifType = "info"
 	}
 	createdBy := c.GetString("user_id")
+	var metaPtr *string
+	if req.Metadata != nil && *req.Metadata != "" {
+		m := *req.Metadata
+		if !strings.HasPrefix(m, "{") && !strings.HasPrefix(m, "[") && !strings.HasPrefix(m, `"`) {
+			m = fmt.Sprintf(`"%s"`, m)
+		}
+		metaPtr = &m
+	}
 	n := &models.Notification{
 		UserID:    req.UserID,
 		Title:     req.Title,
 		Message:   req.Message,
 		Type:      notifType,
-		Metadata:  req.Metadata,
+		Metadata:  metaPtr,
 		CreatedBy: &createdBy,
 	}
 	if err := h.notifRepo.Create(n); err != nil {

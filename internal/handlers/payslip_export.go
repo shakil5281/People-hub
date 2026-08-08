@@ -61,6 +61,7 @@ type payslipLabels struct {
 	Leave      string
 	Late       string
 	OTHours    string
+	OTRate     string
 
 	Earnings    string
 	Description string
@@ -136,6 +137,7 @@ var enLabels = payslipLabels{
 	Leave:       "Leave",
 	Late:        "Late",
 	OTHours:     "OT Hours",
+	OTRate:      "OT Rate",
 
 	Earnings:    "EARNINGS",
 	Description: "Description",
@@ -211,6 +213,7 @@ var bnLabels = payslipLabels{
 	Leave:       "ছুটির দিন",
 	Late:        "দেরি",
 	OTHours:     "ওটি ঘণ্টা",
+	OTRate:      "ওটি রেট",
 
 	Earnings:    "আয়",
 	Description: "বিবরণ",
@@ -299,6 +302,7 @@ func buildPayslipLabels(lang string, company models.Company) payslipLabels {
 		labels.Leave = utils.UnicodeToBijoy(labels.Leave)
 		labels.Late = utils.UnicodeToBijoy(labels.Late)
 		labels.OTHours = utils.UnicodeToBijoy(labels.OTHours)
+		labels.OTRate = utils.UnicodeToBijoy(labels.OTRate)
 		labels.Earnings = utils.UnicodeToBijoy(labels.Earnings)
 		labels.Description = utils.UnicodeToBijoy(labels.Description)
 		labels.Amount = utils.UnicodeToBijoy(labels.Amount)
@@ -618,6 +622,7 @@ func buildPayslipCardWithCopy(s *models.Salary, month, year int, lang string, la
 			{labels.Leave, fmt.Sprint(s.LeaveDays)},
 			{labels.Late, fmt.Sprint(s.LateDays)},
 			{labels.OTHours, fmtMoney(s.OvertimeHours)},
+			{labels.OTRate, fmtMoney(s.OvertimeRate)},
 		},
 
 		Earnings: []payslipRow{

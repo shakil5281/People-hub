@@ -21,7 +21,8 @@ type SalaryService struct {
 	attendanceRepo  *repository.AttendanceRepository
 	salaryRepo      *repository.SalaryRepository
 	groupRepo       *repository.GroupRepository
-	otEarlyExitRepo *repository.OtEarlyExitRepository
+	otEarlyExitRepo    *repository.OtEarlyExitRepository
+	otEarlyExitService *OtEarlyExitService
 }
 
 func NewSalaryService(
@@ -30,13 +31,15 @@ func NewSalaryService(
 	salaryRepo *repository.SalaryRepository,
 	groupRepo *repository.GroupRepository,
 	otEarlyExitRepo *repository.OtEarlyExitRepository,
+	otEarlyExitService *OtEarlyExitService,
 ) *SalaryService {
 	return &SalaryService{
-		employeeRepo:    employeeRepo,
-		attendanceRepo:  attendanceRepo,
-		salaryRepo:      salaryRepo,
-		groupRepo:       groupRepo,
-		otEarlyExitRepo: otEarlyExitRepo,
+		employeeRepo:       employeeRepo,
+		attendanceRepo:     attendanceRepo,
+		salaryRepo:         salaryRepo,
+		groupRepo:          groupRepo,
+		otEarlyExitRepo:    otEarlyExitRepo,
+		otEarlyExitService: otEarlyExitService,
 	}
 }
 
@@ -48,21 +51,20 @@ type MonthResult struct {
 	Year      int
 }
 
-// ProcessMonth calculates and upserts salaries for all active employees using the new formula:
-//
-//	core        = Gross - Transport(450) - Food(1250) - Medical(750)
-//	Basic       = core / 1.5
-//	House Rent  = core - Basic
-//	OT Rate     = (Basic / 208) * 2 if over_time_status else 0
-//	OT Amount   = OT Hours * OT Rate
-//	Attendance Bonus = 725 for Worker / 300 for Staff / 0 others if absent_days == 0 AND present_days > 0
-//	Net Salary  = Gross - AbsentDeduction + OTAmount + AttendanceBonus
-func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID string) (*MonthResult, error) {
+// ProcessMonth calculates and upserts salaries for all active employees.
+// If deductEarlyExit is true (default), early-exit shortfall hours are deducted from monthly OT.
+// If deductEarlyExit is false, shortfalls are NOT deducted from OT ("do not pay less" formula).
+func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID string, deductEarlyExit bool) (*MonthResult, error) {
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 	endDate := startDate.AddDate(0, 1, -1)
 	startStr := startDate.Format("2006-01-02")
 	endStr := endDate.Format("2006-01-02")
 	daysInMonth := endDate.Day()
+
+	// 1. Auto-compute early exit shortfalls for the month so the table is up-to-date
+	if s.otEarlyExitService != nil {
+		_, _ = s.otEarlyExitService.ComputeEarlyExitDeductions(companyID, month, year, userID)
+	}
 
 	employees, err := s.employeeRepo.ListActiveAll(companyID)
 	if err != nil {
@@ -100,10 +102,9 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		return nil, fmt.Errorf("fetch overtime: %w", err)
 	}
 
-	// Early-exit shortfall is deducted from the employee's monthly overtime.
-	// net OT = raw OT - shortfall (clamped at 0).
+	// 2. Early-exit shortfall deduction: net OT = raw OT - shortfall (if deductEarlyExit is true).
 	shortfallMap := make(map[string]float64)
-	if s.otEarlyExitRepo != nil {
+	if s.otEarlyExitRepo != nil && deductEarlyExit {
 		if shortfalls, sfErr := s.otEarlyExitRepo.MonthlyShortfallTotals(companyID, month, year); sfErr == nil {
 			shortfallMap = shortfalls
 		}
@@ -119,7 +120,10 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		if groupName == "" && emp.GroupRef != nil {
 			groupName = emp.GroupRef.Name
 		}
-		netOt := otHoursMap[emp.EmployeeID] - shortfallMap[emp.EmployeeID]
+		netOt := otHoursMap[emp.EmployeeID]
+		if deductEarlyExit {
+			netOt = netOt - shortfallMap[emp.EmployeeID]
+		}
 		if netOt < 0 {
 			netOt = 0
 		}

@@ -42,7 +42,9 @@ interface LeaveRecord {
 interface Company { id: string; company_name_en: string }
 interface Department { id: string; name: string }
 
-const today = new Date().toISOString().split("T")[0]
+const _now = new Date()
+const defaultFromDate = format(new Date(_now.getFullYear(), _now.getMonth() - 1, 1), "yyyy-MM-dd")
+const defaultToDate = format(new Date(_now.getFullYear(), _now.getMonth() + 1, 0), "yyyy-MM-dd")
 
 const statusBadge = (status: string) => {
   const variant = status === "approved" ? "default" : status === "rejected" ? "destructive" : status === "cancelled" ? "secondary" : "outline"
@@ -56,8 +58,8 @@ export default function LeavePage() {
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [departments, setDepartments] = React.useState<Department[]>([])
   const [filters, setFilters] = React.useState<Record<string, string>>({
-    from_date: today,
-    to_date: today,
+    from_date: defaultFromDate,
+    to_date: defaultToDate,
   })
   const [rejectDialogOpen, setRejectDialogOpen] = React.useState(false)
   const [rejectingId, setRejectingId] = React.useState<string | null>(null)
@@ -189,7 +191,7 @@ export default function LeavePage() {
       setCompanies(Array.isArray(cRes.data?.data) ? cRes.data.data : [])
       setDepartments(Array.isArray(dRes.data?.data) ? dRes.data.data : [])
     }).catch(() => {})
-    fetchData({ from_date: today, to_date: today }, 1, 20)
+    fetchData({ from_date: defaultFromDate, to_date: defaultToDate }, 1, 20)
   }, [])
 
   React.useEffect(() => {
@@ -210,8 +212,8 @@ export default function LeavePage() {
   const handleReset = () => {
     setPage(1)
     setLimit(20)
-    setFilters({ from_date: today, to_date: today })
-    fetchData({ from_date: today, to_date: today }, 1, 20)
+    setFilters({ from_date: defaultFromDate, to_date: defaultToDate })
+    fetchData({ from_date: defaultFromDate, to_date: defaultToDate }, 1, 20)
   }
 
   const handleApprove = async (id: string) => {

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"strconv"
 	"time"
@@ -94,9 +95,11 @@ func (h *OtEarlyExitHandler) List(c *gin.Context) {
 	month, _ := strconv.Atoi(c.Query("month"))
 	year, _ := strconv.Atoi(c.Query("year"))
 
-	if companyID == "" || month == 0 || year == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "company_id, month, and year are required"})
-		return
+	if month < 1 || month > 12 {
+		month = int(time.Now().Month())
+	}
+	if year == 0 {
+		year = time.Now().Year()
 	}
 
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -119,14 +122,12 @@ func (h *OtEarlyExitHandler) List(c *gin.Context) {
 		return
 	}
 
-	// Month totals for stat cards
-	totals, _ := h.otService.ShortfallTotals(companyID, month, year)
-	var totalShortfall float64
-	var affected int
-	for _, v := range totals {
-		totalShortfall += v
-		affected++
-	}
+	// Month totals for stat cards matching active filters
+	totalShortfall, affected, _ := h.otRepo.ListStats(
+		companyID, month, year,
+		c.Query("department_id"), c.Query("section_id"), c.Query("designation_id"),
+		c.Query("line_id"), c.Query("group_id"), c.Query("shift_id"), c.Query("employee_id"),
+	)
 
 	c.JSON(http.StatusOK, gin.H{
 		"records":         records,
@@ -142,21 +143,14 @@ func (h *OtEarlyExitHandler) List(c *gin.Context) {
 
 // ExportOtEarlyExitExcel godoc
 //
-//	@Summary      Export early-exit OT deductions to Excel
-//	@Description  Download the monthly early-exit deduction ledger as an Excel file
+//	@Summary      Export early-exit overtime deductions to Excel
+//	@Description  Generate and download Excel report of early-exit deductions
 //	@Tags         Attendance
 //	@Security     BearerAuth
 //	@Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
 //	@Param        company_id     query string true  "Company ID"
 //	@Param        month          query int    true  "Month (1-12)"
 //	@Param        year           query int    true  "Year"
-//	@Param        department_id  query string false "Filter by department"
-//	@Param        section_id     query string false "Filter by section"
-//	@Param        designation_id query string false "Filter by designation"
-//	@Param        line_id        query string false "Filter by line"
-//	@Param        group_id       query string false "Filter by group"
-//	@Param        shift_id       query string false "Filter by shift"
-//	@Param        employee_id    query string false "Search by employee ID (partial match)"
 //	@Success      200  {file}  file
 //	@Failure      400  {object}  map[string]string
 //	@Failure      500  {object}  map[string]string
@@ -166,9 +160,11 @@ func (h *OtEarlyExitHandler) ExportExcel(c *gin.Context) {
 	month, _ := strconv.Atoi(c.Query("month"))
 	year, _ := strconv.Atoi(c.Query("year"))
 
-	if companyID == "" || month == 0 || year == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "company_id, month, and year are required"})
-		return
+	if month < 1 || month > 12 {
+		month = int(time.Now().Month())
+	}
+	if year == 0 {
+		year = time.Now().Year()
 	}
 
 	records, _, err := h.otRepo.List(
@@ -279,9 +275,9 @@ func buildOtEarlyExitExcel(companyName, companyAddress, monthLabel string, recor
 			date = date[:10]
 		}
 		shift := fmt.Sprintf("%v", rec["shift_start"]) + " - " + fmt.Sprintf("%v", rec["shift_end"])
-		expected := numOrZero(rec["expected_hours"])
-		worked := numOrZero(rec["worked_hours"])
-		shortfall := numOrZero(rec["shortfall_hours"])
+		expected := math.Round(numOrZero(rec["expected_hours"]))
+		worked := math.Round(numOrZero(rec["worked_hours"]))
+		shortfall := math.Round(numOrZero(rec["shortfall_hours"]))
 		totalShortfall += shortfall
 
 		values := []struct {

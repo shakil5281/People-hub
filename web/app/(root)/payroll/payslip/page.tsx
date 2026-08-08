@@ -181,7 +181,8 @@ function PayslipCard({ s, month, year }: { s: PayslipRecord; month: number; year
     ["Absent", String(s.absent_days ?? 0)],
     ["Leave", String(s.leave_days ?? 0)],
     ["Late", String(s.late_days ?? 0)],
-    ["OT Hours", String(Math.floor(s.overtime_hours))],
+    ["OT Hours", String(Math.floor(s.overtime_hours ?? 0))],
+    ["OT Rate", fmt(s.overtime_rate ?? 0)],
   ]
 
   const earnings: [string, string][] = [

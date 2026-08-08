@@ -67,11 +67,11 @@ export default function OtEarlyExitPage() {
     { accessorKey: "employee_id", header: "Emp. ID" },
     { accessorKey: "department", header: "Department" },
     { accessorKey: "designation", header: "Designation" },
-    { accessorKey: "date", header: "Date", cell: ({ row }) => row.original.date ? row.original.date.split("-").reverse().join("-") : "-" },
+    { accessorKey: "date", header: "Date", cell: ({ row }) => row.original.date ? row.original.date.split("T")[0].split("-").reverse().join("-") : "-" },
     { accessorKey: "shift_start", header: "Shift", cell: ({ row }) => `${row.original.shift_start} - ${row.original.shift_end}` },
-    { accessorKey: "expected_hours", header: "Expected", cell: ({ row }) => (row.original.expected_hours ?? 0).toFixed(2) },
-    { accessorKey: "worked_hours", header: "Worked", cell: ({ row }) => (row.original.worked_hours ?? 0).toFixed(2) },
-    { accessorKey: "shortfall_hours", header: "Shortfall", cell: ({ row }) => (row.original.shortfall_hours ?? 0).toFixed(2) },
+    { accessorKey: "expected_hours", header: "Expected", cell: ({ row }) => `${Math.round(row.original.expected_hours ?? 0)} hrs` },
+    { accessorKey: "worked_hours", header: "Worked", cell: ({ row }) => `${Math.round(row.original.worked_hours ?? 0)} hrs` },
+    { accessorKey: "shortfall_hours", header: "OT Deducted", cell: ({ row }) => `${Math.round(row.original.shortfall_hours ?? 0)} hrs` },
   ]
 
   const activeParams = (f?: Record<string, string>) => {
@@ -174,14 +174,24 @@ export default function OtEarlyExitPage() {
       groupApi.list({ limit: "100" }),
       shiftApi.list({ limit: "100" }),
     ]).then(([cRes, dRes, secRes, desRes, lRes, gRes, sRes]) => {
-      setCompanies(cRes.data?.data || [])
+      const cList = cRes.data?.data || []
+      setCompanies(cList)
       setDepartments(dRes.data?.data || [])
       setSections(secRes.data?.data || [])
       setDesignations(desRes.data?.data || [])
       setLines(lRes.data?.data || [])
       setGroups(gRes.data?.data || [])
       setShifts(sRes.data?.data || [])
-    }).catch(() => {})
+
+      let initialCompany = ""
+      if (cList.length > 0) {
+        initialCompany = cList[0].id
+        setFilters((prev) => ({ ...prev, company_id: initialCompany }))
+      }
+      fetchData({ month: String(currentMonth), year: String(currentYear), company_id: initialCompany })
+    }).catch(() => {
+      fetchData()
+    })
   }, [])
 
   const filterDefs: FilterDef[] = React.useMemo(() => [
@@ -318,8 +328,8 @@ export default function OtEarlyExitPage() {
           <p className="text-2xl font-bold mt-1">{affectedEmployees}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
-          <p className="text-sm text-muted-foreground">Total Shortfall Hours</p>
-          <p className="text-2xl font-bold mt-1">{totalShortfall.toFixed(2)}</p>
+          <p className="text-sm text-muted-foreground">Total OT Shortfall Hours Deducted</p>
+          <p className="text-2xl font-bold mt-1">{Math.round(totalShortfall)} hrs</p>
         </div>
       </div>
 

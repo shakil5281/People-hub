@@ -106,3 +106,47 @@ func (r *DataLogRepository) ExistsByBadgeAndPunchTime(badgeNumber string, punchT
 	}
 	return count > 0
 }
+
+// GetPunchesByBadgeAndWindow returns all punches for a single badge number within
+// the 24-hour attendance window [windowStart, windowEnd], ordered by punch_time ASC.
+//
+// This is the primary query for the Daily Process engine. It uses a timestamp
+// range so that overnight shifts (punches crossing midnight) are handled correctly.
+//
+// Recommended index (run once via migration):
+//
+//	CREATE INDEX IF NOT EXISTS idx_data_logs_badge_punchtime
+//	  ON data_logs(badge_number, punch_time)
+//	  WHERE deleted_at IS NULL;
+func (r *DataLogRepository) GetPunchesByBadgeAndWindow(
+	badgeNumber string,
+	windowStart, windowEnd time.Time,
+) ([]models.DataLog, error) {
+	var logs []models.DataLog
+	err := r.db.
+		Where("badge_number = ? AND punch_time >= ? AND punch_time <= ? AND deleted_at IS NULL",
+			badgeNumber, windowStart, windowEnd).
+		Order("punch_time ASC").
+		Find(&logs).Error
+	return logs, err
+}
+
+// GetPunchesByBadgesAndWindow is a batch version of GetPunchesByBadgeAndWindow that
+// fetches punches for multiple badge numbers in a single query.
+// Results are returned ordered by badge_number, punch_time ASC.
+func (r *DataLogRepository) GetPunchesByBadgesAndWindow(
+	badgeNumbers []string,
+	windowStart, windowEnd time.Time,
+) ([]models.DataLog, error) {
+	if len(badgeNumbers) == 0 {
+		return nil, nil
+	}
+	var logs []models.DataLog
+	err := r.db.
+		Where("badge_number IN ? AND punch_time >= ? AND punch_time <= ? AND deleted_at IS NULL",
+			badgeNumbers, windowStart, windowEnd).
+		Order("badge_number ASC, punch_time ASC").
+		Find(&logs).Error
+	return logs, err
+}
+

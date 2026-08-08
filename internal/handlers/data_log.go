@@ -133,6 +133,9 @@ func (h *DataLogHandler) Process(c *gin.Context) {
 		"days":       result.Days,
 		"total_logs": result.TotalLogs,
 		"processed":  result.TotalProcessed,
+		"created":    result.TotalCreated,
+		"updated":    result.TotalUpdated,
+		"skipped":    result.TotalSkipped,
 		"details":    result.Details,
 	})
 }

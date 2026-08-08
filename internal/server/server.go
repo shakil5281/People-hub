@@ -89,7 +89,7 @@ func New(cfg *config.Config) *gin.Engine {
 	salaryRepo := repository.NewSalaryRepository(database.DB)
 	otEarlyExitRepo := repository.NewOtEarlyExitRepository(database.DB)
 	otEarlyExitService := service.NewOtEarlyExitService(otEarlyExitRepo, holidayRepo)
-	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo, groupRepo, otEarlyExitRepo)
+	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo, groupRepo, otEarlyExitRepo, otEarlyExitService)
 	salaryHandler := handlers.NewSalaryHandler(salaryService, salaryRepo)
 	otEarlyExitHandler := handlers.NewOtEarlyExitHandler(otEarlyExitRepo, otEarlyExitService)
 	salaryIncrementRepo := repository.NewSalaryIncrementRepository(database.DB)

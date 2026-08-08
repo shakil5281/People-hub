@@ -547,6 +547,17 @@ func (r *AttendanceRepository) Update(attendance *models.Attendance) error {
 	return r.db.Save(attendance).Error
 }
 
+// UpdateFields updates only the specified columns for the attendance record with
+// the given UUID. This uses db.Model().Updates() which does NOT trigger
+// BeforeSave hooks and does NOT overwrite unspecified columns, which is required
+// to preserve the processor-computed OverTime value.
+func (r *AttendanceRepository) UpdateFields(id string, fields map[string]interface{}) error {
+	return r.db.Model(&models.Attendance{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Updates(fields).Error
+}
+
+
 // BulkUpdateMissing updates many missing attendance records inside one
 // PostgreSQL transaction. The original attendance date of each record is read
 // from the database and combined with the entered In/Out times. Only the
@@ -908,24 +919,15 @@ func (r *AttendanceRepository) GetMonthlyOvertimeHours(companyID, startDate, end
 	err := r.db.Table("attendances a").
 		Select(`
 			a.employee_id,
-			FLOOR(COALESCE(SUM(
+			COALESCE(SUM(
 				CASE
 					WHEN e.over_time_status = false THEN 0
-					WHEN a.check_out IS NOT NULL AND s.end_time IS NOT NULL THEN
-						CASE
-					WHEN s.start_time < s.end_time AND a.check_out::time > s.end_time::time
-							THEN EXTRACT(EPOCH FROM (a.check_out::time - s.end_time::time)) / 3600
-						WHEN s.start_time > s.end_time AND a.check_out::time < s.start_time::time AND a.check_out::time > s.end_time::time
-								THEN EXTRACT(EPOCH FROM (a.check_out::time - s.end_time::time)) / 3600
-							ELSE 0
-						END
-					ELSE 0
+					ELSE COALESCE(NULLIF(a.over_time, '')::decimal, 0)
 				END
-			), 0)) as overtime_hours
+			), 0) as overtime_hours
 		`).
 		Joins("JOIN employees e ON e.employee_id = a.employee_id").
-		Joins("LEFT JOIN shifts s ON s.id = COALESCE(a.shift_id, e.shift_id)").
-		Where("a.company_id = ? AND a.date BETWEEN ? AND ? AND a.deleted_at IS NULL AND a.check_in IS NOT NULL AND a.check_out IS NOT NULL",
+		Where("a.company_id = ? AND a.date BETWEEN ? AND ? AND a.deleted_at IS NULL",
 			companyID, startDate, endDate).
 		Group("a.employee_id").
 		Find(&records).Error

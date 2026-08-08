@@ -426,7 +426,7 @@ export const holidayApi = {
 }
 
 export const salaryApi = {
-  process: (data: { company_id: string; month: number; year: number }) => api.post("/salary/process", data),
+  process: (data: { company_id: string; month: number; year: number; deduct_early_exit?: boolean }) => api.post("/salary/process", data),
   sheet: (params?: Record<string, string>) => api.get("/salary/sheet", { params }),
   sheetExport: (params: Record<string, string>) => api.get("/salary/sheet/export", { params, responseType: "blob" }),
   sheetExportPdf: (params: Record<string, string>) => api.get("/salary/sheet/export/pdf", { params, responseType: "blob" }),

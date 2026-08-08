@@ -32,9 +32,10 @@ func NewSalaryHandler(
 }
 
 type ProcessSalaryRequest struct {
-	CompanyID string `json:"company_id" binding:"required"`
-	Month     int    `json:"month" binding:"required"`
-	Year      int    `json:"year" binding:"required"`
+	CompanyID       string `json:"company_id" binding:"required"`
+	Month           int    `json:"month" binding:"required"`
+	Year            int    `json:"year" binding:"required"`
+	DeductEarlyExit *bool  `json:"deduct_early_exit"`
 }
 
 // ProcessSalary godoc
@@ -59,7 +60,12 @@ func (h *SalaryHandler) Process(c *gin.Context) {
 
 	userID := c.GetString("user_id")
 
-	result, err := h.salaryService.ProcessMonth(req.CompanyID, req.Month, req.Year, userID)
+	deductEarlyExit := true
+	if req.DeductEarlyExit != nil {
+		deductEarlyExit = *req.DeductEarlyExit
+	}
+
+	result, err := h.salaryService.ProcessMonth(req.CompanyID, req.Month, req.Year, userID, deductEarlyExit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -146,12 +146,12 @@ export default function DailyProcessPage() {
           </CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1.5">
+              <div className="flex flex-col gap-1.5 w-fit">
                 <label className="text-xs font-medium text-muted-foreground">Company</label>
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
-                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  className="flex h-10 w-fit min-w-[240px] rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="">Select company</option>
                   {companies.map((c) => (
