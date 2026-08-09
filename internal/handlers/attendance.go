@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -709,6 +710,8 @@ func (h *AttendanceHandler) ListJobCard(c *gin.Context) {
 	groupID := c.Query("group_id")
 	shiftID := c.Query("shift_id")
 	status := c.Query("status")
+	employeeType := c.Query("employee_type")
+	empStatus := c.Query("emp_status")
 	listMode := c.Query("list_mode")
 
 	if employeeID != "" {
@@ -726,7 +729,7 @@ func (h *AttendanceHandler) ListJobCard(c *gin.Context) {
 
 	// List mode: return only distinct employee IDs/names for navigation
 	if listMode == "true" {
-		employees, err := h.attendanceRepo.ListJobCardEmployees(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status)
+		employees, err := h.attendanceRepo.ListJobCardEmployees(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeType, empStatus)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -781,7 +784,7 @@ func (h *AttendanceHandler) ListJobCard(c *gin.Context) {
 		}
 	}
 
-	attendances, total, err := h.attendanceRepo.ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, page, limit)
+	attendances, total, err := h.attendanceRepo.ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeType, empStatus, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -1350,6 +1353,145 @@ func (h *AttendanceHandler) MonthlyReport(c *gin.Context) {
 	})
 }
 
+type absentSummaryRow struct {
+	ID           string           `json:"id"`
+	EmployeeID   string           `json:"employee_id"`
+	EmployeeName string           `json:"employee_name"`
+	Designation  string           `json:"designation"`
+	Department   string           `json:"department"`
+	Section      string           `json:"section"`
+	TotalAbsent  int              `json:"total_absent"`
+	AbsentDates  string           `json:"absent_dates"`
+	Employee     *models.Employee `json:"employee,omitempty"`
+}
+
+func formatDateDDMMYYYY(dateStr string) string {
+	if dateStr == "" {
+		return ""
+	}
+	if idx := strings.Index(dateStr, "T"); idx != -1 {
+		dateStr = dateStr[:idx]
+	}
+	if idx := strings.Index(dateStr, " "); idx != -1 {
+		dateStr = dateStr[:idx]
+	}
+	dateStr = strings.TrimSpace(dateStr)
+
+	t, err := time.Parse("2006-01-02", dateStr)
+	if err == nil {
+		return t.Format("02/01/2006")
+	}
+	t, err = time.Parse("02/01/2006", dateStr)
+	if err == nil {
+		return t.Format("02/01/2006")
+	}
+	return dateStr
+}
+
+func (h *AttendanceHandler) buildAbsentSummaryRows(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID string, minAbsent int) ([]absentSummaryRow, error) {
+	query := database.DB.Model(&models.Attendance{}).
+		Preload("Employee.DesignationRef").
+		Preload("Employee.Department").
+		Preload("Employee.SectionRef").
+		Preload("Employee.LineRef").
+		Preload("Employee").
+		Where("attendances.date BETWEEN ? AND ? AND attendances.status = ? AND attendances.deleted_at IS NULL", startDate, endDate, "absent")
+
+	if companyID != "" {
+		query = query.Where("attendances.company_id = ?", companyID)
+	}
+	if departmentID != "" {
+		query = query.Joins("JOIN employees emp_dept ON emp_dept.employee_id = attendances.employee_id").
+			Where("emp_dept.department_id = ?", departmentID)
+	}
+	if sectionID != "" {
+		query = query.Joins("JOIN employees emp_sec ON emp_sec.employee_id = attendances.employee_id").
+			Where("emp_sec.section_id = ?", sectionID)
+	}
+	if designationID != "" {
+		query = query.Joins("JOIN employees emp_desig ON emp_desig.employee_id = attendances.employee_id").
+			Where("emp_desig.designation_id = ?", designationID)
+	}
+	if lineID != "" {
+		query = query.Joins("JOIN employees emp_line ON emp_line.employee_id = attendances.employee_id").
+			Where("emp_line.line_id = ?", lineID)
+	}
+	if groupID != "" {
+		query = query.Joins("JOIN employees emp_grp ON emp_grp.employee_id = attendances.employee_id").
+			Where("emp_grp.group_id = ?", groupID)
+	}
+	if shiftID != "" {
+		query = query.Joins("JOIN employees emp_shf ON emp_shf.employee_id = attendances.employee_id").
+			Where("emp_shf.shift_id = ?", shiftID)
+	}
+	if employeeID != "" {
+		query = query.Where("attendances.employee_id LIKE ?", "%"+employeeID+"%")
+	}
+
+	var rawAttendances []models.Attendance
+	err := query.Order("LENGTH(attendances.employee_id) ASC, attendances.employee_id ASC, attendances.date ASC").Find(&rawAttendances).Error
+	if err != nil {
+		return nil, err
+	}
+
+	empOrder := make([]string, 0)
+	empMap := make(map[string]*models.Employee)
+	dateMap := make(map[string][]string)
+
+	for i := range rawAttendances {
+		a := &rawAttendances[i]
+		empID := a.EmployeeID
+		if _, exists := dateMap[empID]; !exists {
+			empOrder = append(empOrder, empID)
+			empMap[empID] = &a.Employee
+			dateMap[empID] = make([]string, 0)
+		}
+		formattedDate := formatDateDDMMYYYY(a.Date)
+		dateMap[empID] = append(dateMap[empID], formattedDate)
+	}
+
+	summaryRows := make([]absentSummaryRow, 0, len(empOrder))
+	for _, empID := range empOrder {
+		emp := empMap[empID]
+		dates := dateMap[empID]
+
+		if minAbsent > 0 && len(dates) < minAbsent {
+			continue
+		}
+
+		desig := ""
+		if emp != nil && emp.DesignationRef != nil {
+			desig = emp.DesignationRef.Name
+		}
+		dept := ""
+		if emp != nil && emp.Department != nil {
+			dept = emp.Department.Name
+		}
+		sec := ""
+		if emp != nil && emp.SectionRef != nil {
+			sec = emp.SectionRef.Name
+		}
+		name := ""
+		if emp != nil {
+			name = emp.NameEn
+		}
+
+		summaryRows = append(summaryRows, absentSummaryRow{
+			ID:           empID,
+			EmployeeID:   empID,
+			EmployeeName: name,
+			Designation:  desig,
+			Department:   dept,
+			Section:      sec,
+			TotalAbsent:  len(dates),
+			AbsentDates:  strings.Join(dates, ", "),
+			Employee:     emp,
+		})
+	}
+
+	return summaryRows, nil
+}
+
 // AbsentAttendance godoc
 //
 // @Summary      Absent attendance
@@ -1377,31 +1519,27 @@ func (h *AttendanceHandler) AbsentAttendance(c *gin.Context) {
 	groupID := c.Query("group_id")
 	shiftID := c.Query("shift_id")
 	employeeID := c.Query("employee_id")
+	minAbsentStr := c.Query("min_absent")
+	minAbsent, _ := strconv.Atoi(minAbsentStr)
 
 	p := utils.ParsePagination(c)
-	attendances, total, err := h.attendanceRepo.ListByStatus(startDate, endDate, "absent", companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID, p.Page, p.Limit)
+	rows, err := h.buildAbsentSummaryRows(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID, minAbsent)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Enrich each row with how many total absent days that employee has in the range.
-	absentCounts, _ := h.attendanceRepo.CountAbsencesByEmployee(startDate, endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID)
-	rows := make([]gin.H, 0, len(attendances))
-	for _, a := range attendances {
-		rows = append(rows, gin.H{
-			"id":            a.ID,
-			"employee_id":   a.EmployeeID,
-			"date":          a.Date,
-			"status":        a.Status,
-			"check_in":      a.CheckIn,
-			"check_out":     a.CheckOut,
-			"total_absent":  absentCounts[a.EmployeeID],
-			"employee":      a.Employee,
-		})
+	total := len(rows)
+	start := (p.Page - 1) * p.Limit
+	if start > total {
+		start = total
+	}
+	end := start + p.Limit
+	if end > total {
+		end = total
 	}
 
-	c.JSON(http.StatusOK, utils.NewPaginatedResponse(rows, total, p))
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(rows[start:end], int64(total), p))
 }
 
 func colNameAttendance(n int) string {
@@ -1990,52 +2128,19 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	designationFilter := c.Query("designation_id")
 	lineFilter := c.Query("line_id")
 	groupFilter := c.Query("group_id")
+	shiftFilter := c.Query("shift_id")
+	employeeFilter := c.Query("employee_id")
+	minAbsentStr := c.Query("min_absent")
+	minAbsent, _ := strconv.Atoi(minAbsentStr)
 
 	var company models.Company
 	database.DB.First(&company)
 
-	baseQuery := database.DB.Model(&models.Attendance{}).
-		Preload("Employee.DesignationRef").
-		Preload("Employee.Department").
-		Preload("Employee.SectionRef").
-		Preload("Employee.LineRef").
-		Preload("Employee").
-		Where("attendances.date BETWEEN ? AND ? AND attendances.status = ? AND attendances.deleted_at IS NULL", startDate, endDate, "absent")
-
-	if companyFilter != "" {
-		baseQuery = baseQuery.Where("attendances.company_id = ?", companyFilter)
-	}
-	if departmentFilter != "" {
-		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
-			Where("employees.department_id = ?", departmentFilter)
-	}
-	if sectionFilter != "" {
-		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
-			Where("employees.section_id = ?", sectionFilter)
-	}
-	if designationFilter != "" {
-		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
-			Where("employees.designation_id = ?", designationFilter)
-	}
-	if lineFilter != "" {
-		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
-			Where("employees.line_id = ?", lineFilter)
-	}
-	if groupFilter != "" {
-		baseQuery = baseQuery.Joins("JOIN employees ON employees.employee_id = attendances.employee_id").
-			Where("employees.group_id = ?", groupFilter)
-	}
-
-	var attendances []models.Attendance
-	if err := baseQuery.Order("LENGTH(attendances.employee_id) ASC, attendances.employee_id ASC, attendances.date ASC").
-		Find(&attendances).Error; err != nil {
+	rows, err := h.buildAbsentSummaryRows(startDate, endDate, companyFilter, departmentFilter, sectionFilter, designationFilter, lineFilter, groupFilter, shiftFilter, employeeFilter, minAbsent)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	// Build last continuous absent count per employee:
-	// Starting from the latest date in the range, count consecutive absent days backwards.
-	lastContAbsentMap := h.buildLastContinuousAbsentMap(startDate, endDate, companyFilter)
 
 	f := excelize.NewFile()
 	sheet := "Absent Report"
@@ -2043,16 +2148,19 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	f.SetActiveSheet(index)
 	f.SetSheetName("Sheet1", sheet)
 
-	nCols := 5
+	nCols := 8
 	cols := []struct {
 		header string
 		width  float64
 	}{
+		{"Sl", 8},
 		{"Employee ID", 15},
 		{"Name", 28},
 		{"Designation", 20},
-		{"Last Cont. Absent", 11},
-		{"Status", 11},
+		{"Department", 20},
+		{"Section", 20},
+		{"Total Absent Days", 18},
+		{"Absent Dates", 40},
 	}
 
 	borderColor := "808080"
@@ -2101,8 +2209,10 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 		companyAddress = "Company Address"
 	}
 
-	parsedDate, _ := time.Parse("2006-01-02", startDate)
-	dateDisplay := parsedDate.Format("02 Jan 2006")
+	dateDisplay := formatDateDDMMYYYY(startDate)
+	if startDate != endDate {
+		dateDisplay = formatDateDDMMYYYY(startDate) + " to " + formatDateDDMMYYYY(endDate)
+	}
 
 	endCol := colNameAttendance(nCols)
 
@@ -2140,7 +2250,7 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	f.SetRowHeight(sheet, 5, 36)
 
 	// Data rows
-	for rowIdx, a := range attendances {
+	for rowIdx, sr := range rows {
 		row := rowIdx + 6
 		svc := func(c int, v string) {
 			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
@@ -2151,65 +2261,54 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
 		}
 
-		svc(1, a.EmployeeID)
-		svl(2, a.Employee.NameEn)
-
-		designation := ""
-		if a.Employee.DesignationRef != nil {
-			designation = a.Employee.DesignationRef.Name
-		}
-		svl(3, designation)
-
-		svc(4, fmt.Sprintf("%d", lastContAbsentMap[a.EmployeeID]))
-
-		f.SetCellValue(sheet, colNameAttendance(5)+strconv.Itoa(row), "A")
-		f.SetCellStyle(sheet, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyle)
+		svc(1, fmt.Sprintf("%d", rowIdx+1))
+		svc(2, sr.EmployeeID)
+		svl(3, sr.EmployeeName)
+		svl(4, sr.Designation)
+		svl(5, sr.Department)
+		svl(6, sr.Section)
+		f.SetCellValue(sheet, colNameAttendance(7)+strconv.Itoa(row), sr.TotalAbsent)
+		f.SetCellStyle(sheet, colNameAttendance(7)+strconv.Itoa(row), colNameAttendance(7)+strconv.Itoa(row), redStyle)
+		svl(8, sr.AbsentDates)
 
 		f.SetRowHeight(sheet, row, 25)
 	}
 
 	// Footer
-	lastRow := len(attendances) + 5
+	lastRow := len(rows) + 5
 	footerRow := lastRow + 2
 	footerStyle, _ := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	})
-	uniqueCount := len(lastContAbsentMap)
-	f.SetCellValue(sheet, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Absent: %d Employees", uniqueCount))
+	f.SetCellValue(sheet, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Absent Employees: %d", len(rows)))
 	f.MergeCell(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
 	f.SetCellStyle(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
 	f.SetRowHeight(sheet, footerRow, 22)
 
 	// --- Grouped Sheets ---
-	addGroupedAbsentSheet(f, "Department Wise", companyName, companyAddress, dateDisplay, attendances, lastContAbsentMap, func(a models.Attendance) string {
-		if a.Employee.Department != nil {
-			return a.Employee.Department.Name
+	addGroupedAbsentSheet(f, "Department Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+		if sr.Department != "" {
+			return sr.Department
 		}
 		return "-"
 	})
-	addGroupedAbsentSheet(f, "Section Wise", companyName, companyAddress, dateDisplay, attendances, lastContAbsentMap, func(a models.Attendance) string {
-		if a.Employee.SectionRef != nil {
-			return a.Employee.SectionRef.Name
+	addGroupedAbsentSheet(f, "Section Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+		if sr.Section != "" {
+			return sr.Section
 		}
 		return "-"
 	})
-	addGroupedAbsentSheet(f, "Designation Wise", companyName, companyAddress, dateDisplay, attendances, lastContAbsentMap, func(a models.Attendance) string {
-		if a.Employee.DesignationRef != nil {
-			return a.Employee.DesignationRef.Name
-		}
-		return "-"
-	})
-	addGroupedAbsentSheet(f, "Line Wise", companyName, companyAddress, dateDisplay, attendances, lastContAbsentMap, func(a models.Attendance) string {
-		if a.Employee.LineRef != nil {
-			return a.Employee.LineRef.Name
+	addGroupedAbsentSheet(f, "Designation Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+		if sr.Designation != "" {
+			return sr.Designation
 		}
 		return "-"
 	})
 
-	// --- Page Setup: A4 Portrait + No Gridlines for all sheets ---
+	// --- Page Setup ---
 	for _, s := range f.GetSheetList() {
-		orientation := "portrait"
+		orientation := "landscape"
 		paperSize := 9
 		fitWidth := 1
 		fitHeight := 0
@@ -2965,19 +3064,22 @@ func (h *AttendanceHandler) buildLastContinuousAbsentMap(startDate, endDate, com
 	return result
 }
 
-func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddress, dateDisplay string, attendances []models.Attendance, lastContAbsentMap map[string]int, groupFn func(models.Attendance) string) {
+func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddress, dateDisplay string, rows []absentSummaryRow, groupFn func(absentSummaryRow) string) {
 	f.NewSheet(sheetName)
 
-	nCols := 5
+	nCols := 8
 	cols := []struct {
 		header string
 		width  float64
 	}{
+		{"Sl", 8},
 		{"Employee ID", 15},
 		{"Name", 28},
 		{"Designation", 20},
-		{"Last Cont. Absent", 11},
-		{"Status", 11},
+		{"Department", 20},
+		{"Section", 20},
+		{"Total Absent Days", 18},
+		{"Absent Dates", 40},
 	}
 
 	thinBorder := []excelize.Border{
@@ -3028,21 +3130,21 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 	f.SetRowHeight(sheetName, 5, 36)
 
 	// Group data
-	grouped := make(map[string][]models.Attendance)
+	grouped := make(map[string][]absentSummaryRow)
 	var groupOrder []string
-	for _, a := range attendances {
-		name := groupFn(a)
+	for _, r := range rows {
+		name := groupFn(r)
 		if name == "" {
 			name = "-"
 		}
 		if _, ok := grouped[name]; !ok {
 			groupOrder = append(groupOrder, name)
 		}
-		grouped[name] = append(grouped[name], a)
+		grouped[name] = append(grouped[name], r)
 	}
 
 	row := 6
-	totalAbsent := 0
+	sl := 1
 	for _, groupName := range groupOrder {
 		list := grouped[groupName]
 
@@ -3052,7 +3154,7 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 		f.SetRowHeight(sheetName, row, 22)
 		row++
 
-		for _, a := range list {
+		for _, sr := range list {
 			svc := func(c int, v string) {
 				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
 				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
@@ -3062,18 +3164,17 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
 			}
 
-			svc(1, a.EmployeeID)
-			svl(2, a.Employee.NameEn)
-			d := ""
-			if a.Employee.DesignationRef != nil {
-				d = a.Employee.DesignationRef.Name
-			}
-			svl(3, d)
-			svc(4, fmt.Sprintf("%d", lastContAbsentMap[a.EmployeeID]))
-			f.SetCellValue(sheetName, colNameAttendance(5)+strconv.Itoa(row), "A")
-			f.SetCellStyle(sheetName, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyleG)
+			svc(1, fmt.Sprintf("%d", sl))
+			svc(2, sr.EmployeeID)
+			svl(3, sr.EmployeeName)
+			svl(4, sr.Designation)
+			svl(5, sr.Department)
+			svl(6, sr.Section)
+			f.SetCellValue(sheetName, colNameAttendance(7)+strconv.Itoa(row), sr.TotalAbsent)
+			f.SetCellStyle(sheetName, colNameAttendance(7)+strconv.Itoa(row), colNameAttendance(7)+strconv.Itoa(row), redStyleG)
+			svl(8, sr.AbsentDates)
 
-			totalAbsent++
+			sl++
 			f.SetRowHeight(sheetName, row, 25)
 			row++
 		}
@@ -3081,7 +3182,7 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 
 	footerRow := row + 1
 	footerStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
-	f.SetCellValue(sheetName, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Absent: %d", totalAbsent))
+	f.SetCellValue(sheetName, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Absent Employees: %d", len(rows)))
 	f.MergeCell(sheetName, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
 	f.SetCellStyle(sheetName, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
 	f.SetRowHeight(sheetName, footerRow, 22)

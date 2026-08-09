@@ -129,6 +129,11 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		}
 		salary := s.calculateEmployeeSalary(emp, groupName, attMap[emp.EmployeeID], netOt, month, year, daysInMonth, userID)
 
+		if salary.NetSalary <= 1000 {
+			_ = s.salaryRepo.DeleteByEmployeeMonth(emp.EmployeeID, month, year)
+			continue
+		}
+
 		if err := s.salaryRepo.Upsert(salary); err != nil {
 			continue
 		}

@@ -740,7 +740,7 @@ func (r *AttendanceRepository) CountByDateOnly(date string) (int64, error) {
 	return count, err
 }
 
-func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status string, page, limit int) ([]models.Attendance, int64, error) {
+func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeType, empStatus string, page, limit int) ([]models.Attendance, int64, error) {
 	base := r.db.Model(&models.Attendance{}).Where("date BETWEEN ? AND ? AND deleted_at IS NULL", startDate, endDate)
 	if companyID != "" {
 		base = base.Where("company_id = ?", companyID)
@@ -769,6 +769,12 @@ func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employ
 	if status != "" {
 		base = base.Where("status = ?", status)
 	}
+	if employeeType != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE LOWER(employee_type) = LOWER(?))", employeeType)
+	}
+	if empStatus != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE LOWER(status) = LOWER(?))", empStatus)
+	}
 	var total int64
 	if err := base.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -778,7 +784,7 @@ func (r *AttendanceRepository) ListJobCard(startDate, endDate, companyID, employ
 	return attendances, total, err
 }
 
-func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status string) ([]models.Employee, error) {
+func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeType, empStatus string) ([]models.Employee, error) {
 	subQuery := r.db.Table("attendances a").
 		Select("DISTINCT a.employee_id").
 		Where("a.date BETWEEN ? AND ? AND a.deleted_at IS NULL", startDate, endDate)
@@ -809,6 +815,12 @@ func (r *AttendanceRepository) ListJobCardEmployees(startDate, endDate, companyI
 	}
 	if status != "" {
 		subQuery = subQuery.Where("a.status = ?", status)
+	}
+	if employeeType != "" {
+		subQuery = subQuery.Where("a.employee_id IN (SELECT employee_id FROM employees WHERE LOWER(employee_type) = LOWER(?))", employeeType)
+	}
+	if empStatus != "" {
+		subQuery = subQuery.Where("a.employee_id IN (SELECT employee_id FROM employees WHERE LOWER(status) = LOWER(?))", empStatus)
 	}
 
 	var employees []models.Employee
@@ -1140,4 +1152,13 @@ func prefixName(results []map[string]interface{}) []map[string]interface{} {
 		r["name"] = "Total"
 	}
 	return results
+}
+
+func (r *AttendanceRepository) FindSeparationByEmployeeID(employeeID string) (*models.Separation, error) {
+	var sep models.Separation
+	err := r.db.Where("employee_id = ? AND deleted_at IS NULL", employeeID).Order("date DESC").First(&sep).Error
+	if err != nil {
+		return nil, err
+	}
+	return &sep, nil
 }

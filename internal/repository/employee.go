@@ -128,10 +128,11 @@ func (r *EmployeeRepository) ListActive(companyID string, page, limit int) ([]mo
 	return employees, total, err
 }
 
-// ListActiveAll returns all active employees without pagination (for batch operations like salary processing)
+// ListActiveAll returns active employees plus separated employees (Resign, Close, Lefty) for salary processing.
 func (r *EmployeeRepository) ListActiveAll(companyID string) ([]models.Employee, error) {
 	var employees []models.Employee
-	query := r.db.Preload("GroupRef").Where("status = ?", "active")
+	query := r.db.Preload("GroupRef").
+		Where("(status = 'active') OR (employee_id IN (SELECT employee_id FROM attendances)) OR (employee_id IN (SELECT employee_id FROM separations WHERE deleted_at IS NULL)) OR (LOWER(employee_type) IN ('resign', 'close', 'lefty', 'dismiss', 'termination', 'retirement'))")
 	if companyID != "" {
 		query = query.Where("company_id = ?", companyID)
 	}
@@ -139,10 +140,10 @@ func (r *EmployeeRepository) ListActiveAll(companyID string) ([]models.Employee,
 	return employees, err
 }
 
-// ListActiveRegularAll returns active Regular employees for daily attendance processing.
+// ListActiveRegularAll returns active and separated employees for daily attendance processing.
 func (r *EmployeeRepository) ListActiveRegularAll(companyID string) ([]models.Employee, error) {
 	var employees []models.Employee
-	query := r.db.Where("status = ? AND LOWER(employee_type) = ?", "active", "regular")
+	query := r.db.Where("(status = 'active') OR (employee_id IN (SELECT employee_id FROM separations WHERE deleted_at IS NULL)) OR (LOWER(employee_type) IN ('resign', 'close', 'lefty', 'dismiss', 'termination', 'retirement'))")
 	if companyID != "" {
 		query = query.Where("company_id = ?", companyID)
 	}

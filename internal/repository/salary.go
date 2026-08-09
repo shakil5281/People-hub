@@ -48,13 +48,13 @@ func (r *SalaryRepository) Upsert(salary *models.Salary) error {
 
 func (r *SalaryRepository) FindByEmployeeMonth(employeeID string, month, year int) (*models.Salary, error) {
 	var s models.Salary
-	err := r.db.Preload("Company").Preload("Employee.Department").Preload("Employee.DesignationRef").Preload("Employee.SectionRef").Preload("Employee.Shift").Where("employee_id = ? AND month = ? AND year = ? AND deleted_at IS NULL",
+	err := r.db.Preload("Company").Preload("Employee.Department").Preload("Employee.DesignationRef").Preload("Employee.SectionRef").Preload("Employee.Shift").Where("employee_id = ? AND month = ? AND year = ? AND net_salary > 1000 AND deleted_at IS NULL",
 		employeeID, month, year).First(&s).Error
 	return &s, err
 }
 
 func (r *SalaryRepository) ListByMonth(companyID string, month, year int, departmentID string, page, limit int) ([]models.Salary, int64, error) {
-	base := r.db.Model(&models.Salary{}).Where("company_id = ? AND month = ? AND year = ? AND deleted_at IS NULL", companyID, month, year)
+	base := r.db.Model(&models.Salary{}).Where("company_id = ? AND month = ? AND year = ? AND net_salary > 1000 AND deleted_at IS NULL", companyID, month, year)
 	if departmentID != "" {
 		base = base.Where("employee_id IN (SELECT id FROM employees WHERE department_id = ?)", departmentID)
 	}
@@ -97,7 +97,7 @@ func (r *SalaryRepository) ListAllByMonthFiltered(f SalaryFilter) ([]models.Sala
 		Preload("Employee.LineRef").
 		Preload("Employee.GroupRef").
 		Preload("Employee.Shift").
-		Where("company_id = ? AND month = ? AND year = ? AND deleted_at IS NULL", f.CompanyID, f.Month, f.Year)
+		Where("company_id = ? AND month = ? AND year = ? AND net_salary > 1000 AND deleted_at IS NULL", f.CompanyID, f.Month, f.Year)
 	if f.DepartmentID != "" {
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", f.DepartmentID)
 	}
@@ -135,7 +135,7 @@ func (r *SalaryRepository) ListPayslips(f SalaryFilter, page, limit int) ([]mode
 		Preload("Employee.LineRef").
 		Preload("Employee.GroupRef").
 		Preload("Employee.Shift").
-		Where("company_id = ? AND month = ? AND year = ? AND deleted_at IS NULL", f.CompanyID, f.Month, f.Year)
+		Where("company_id = ? AND month = ? AND year = ? AND net_salary > 1000 AND deleted_at IS NULL", f.CompanyID, f.Month, f.Year)
 	if f.DepartmentID != "" {
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", f.DepartmentID)
 	}
@@ -168,6 +168,11 @@ func (r *SalaryRepository) ListPayslips(f SalaryFilter, page, limit int) ([]mode
 
 func (r *SalaryRepository) DeleteByMonth(companyID string, month, year int) error {
 	return r.db.Unscoped().Where("company_id = ? AND month = ? AND year = ?", companyID, month, year).
+		Delete(&models.Salary{}).Error
+}
+
+func (r *SalaryRepository) DeleteByEmployeeMonth(employeeID string, month, year int) error {
+	return r.db.Unscoped().Where("employee_id = ? AND month = ? AND year = ?", employeeID, month, year).
 		Delete(&models.Salary{}).Error
 }
 

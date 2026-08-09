@@ -108,9 +108,30 @@ export default function JobCardPage() {
     { key: "line_id", label: "Line", type: "select", options: lines.map((l) => ({ value: l.id, label: l.name })), disabled: !filters.section_id },
     { key: "group_id", label: "Group", type: "select", options: groups.map((g) => ({ value: g.id, label: g.name })) },
     { key: "shift_id", label: "Shift", type: "select", options: shifts.map((s) => ({ value: s.id, label: s.name })) },
-    { key: "status", label: "Status", type: "select", options: [
-      { value: "present", label: "Present" }, { value: "late", label: "Late" },
-      { value: "absent", label: "Absent" }, { value: "half_day", label: "Half Day" },
+    { key: "employee_type", label: "Employee Type", type: "select", options: [
+      { value: "Regular", label: "Regular" },
+      { value: "Lefty", label: "Lefty" },
+      { value: "Close", label: "Close" },
+      { value: "Resign", label: "Resign" },
+      { value: "Probationary", label: "Probationary" },
+      { value: "Contractual", label: "Contractual" },
+      { value: "Casual", label: "Casual" },
+      { value: "Temporary", label: "Temporary" },
+      { value: "Dismiss", label: "Dismiss" },
+      { value: "Termination", label: "Termination" },
+    ] },
+    { key: "emp_status", label: "Status", type: "select", options: [
+      { value: "active", label: "Active" },
+      { value: "inactive", label: "Inactive" },
+    ] },
+    { key: "status", label: "Attendance Status", type: "select", options: [
+      { value: "present", label: "Present" },
+      { value: "late", label: "Late" },
+      { value: "absent", label: "Absent" },
+      { value: "half_day", label: "Half Day" },
+      { value: "on_leave", label: "On Leave" },
+      { value: "weekend", label: "Weekend" },
+      { value: "holiday", label: "Holiday" },
     ] },
     { key: "employee_id", label: "Employee ID", type: "text", placeholder: "Enter employee code..." },
   ], [companies, departments, sections, designations, lines, groups, shifts, filters.department_id, filters.section_id])
@@ -128,6 +149,8 @@ export default function JobCardPage() {
     if (params.line_id) active.line_id = params.line_id
     if (params.group_id) active.group_id = params.group_id
     if (params.shift_id) active.shift_id = params.shift_id
+    if (params.employee_type) active.employee_type = params.employee_type
+    if (params.emp_status) active.emp_status = params.emp_status
     if (params.status) active.status = params.status
     if (params.employee_id) active.employee_id = params.employee_id
     return active
@@ -249,6 +272,14 @@ export default function JobCardPage() {
   }, {})
   const totalLateMinutes = data.reduce((sum, r) => sum + (r.late_minutes || 0), 0)
   const totalOT = data.reduce((sum, r) => sum + (Number(r.over_time) || 0), 0)
+
+  const totalPresent = totalByStatus["present"] || 0
+  const totalAbsent = totalByStatus["absent"] || 0
+  const totalLate = totalByStatus["late"] || 0
+  const totalWeekend = totalByStatus["weekend"] || 0
+  const totalHoliday = totalByStatus["holiday"] || 0
+  const totalLeave = (totalByStatus["on_leave"] || 0) + (totalByStatus["leave"] || 0)
+  const totalHalfDay = totalByStatus["half_day"] || 0
 
   const activeStatusMap = lang === "bn" ? statusMapBn : statusMapEn
 
@@ -431,16 +462,28 @@ export default function JobCardPage() {
           </div>
 
           {data.length > 0 && (
-            <div className="border-t px-4 py-3">
-              <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                <span className="text-muted-foreground">{lang === "bn" ? "মোট কার্যদিবস" : "Total Days"}: <b>{data.length}</b></span>
-                {Object.entries(totalByStatus).map(([s, c]) => (
-                  <span key={s} className="text-muted-foreground">
-                    {(lang === "bn" ? statusMapBn[s] : s === "on_leave" ? "Leave" : s.charAt(0).toUpperCase() + s.slice(1)) || s}: <b>{c}</b>
-                  </span>
-                ))}
-                <span className="text-muted-foreground">{lang === "bn" ? "মোট বিলম্ব" : "Late Minutes"}: <b>{totalLateMinutes} {lang === "bn" ? "মিনিট" : "min"}</b></span>
-                <span className="text-muted-foreground">{lang === "bn" ? "মোট ওভারটাইম" : "Total OT"}: <b>{totalOT ? totalOT.toFixed(2) : 0} {lang === "bn" ? "ঘণ্টা" : "hrs"}</b></span>
+            <div className="border-t px-4 py-3 bg-muted/20">
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-sm">
+                <span className="text-muted-foreground">{lang === "bn" ? "মোট কার্যদিবস" : "Total Days"}: <b className="text-foreground">{data.length}</b></span>
+                <span className="text-muted-foreground">{lang === "bn" ? "উপস্থিত" : "Present"}: <b className="text-green-700 dark:text-green-400">{totalPresent}</b></span>
+                <span className="text-muted-foreground">{lang === "bn" ? "অনুপস্থিত" : "Absent"}: <b className="text-red-600 dark:text-red-400">{totalAbsent}</b></span>
+                {totalLate > 0 && (
+                  <span className="text-muted-foreground">{lang === "bn" ? "বিলম্বে" : "Late"}: <b className="text-amber-700 dark:text-amber-400">{totalLate}</b></span>
+                )}
+                {totalHalfDay > 0 && (
+                  <span className="text-muted-foreground">{lang === "bn" ? "অর্ধদিবস" : "Half Day"}: <b className="text-amber-600">{totalHalfDay}</b></span>
+                )}
+                {totalWeekend > 0 && (
+                  <span className="text-muted-foreground">{lang === "bn" ? "সাপ্তাহিক ছুটি" : "Weekend"}: <b className="text-foreground">{totalWeekend}</b></span>
+                )}
+                {totalHoliday > 0 && (
+                  <span className="text-muted-foreground">{lang === "bn" ? "সরকারি ছুটি" : "Holiday"}: <b className="text-foreground">{totalHoliday}</b></span>
+                )}
+                {totalLeave > 0 && (
+                  <span className="text-muted-foreground">{lang === "bn" ? "ছুটি" : "Leave"}: <b className="text-indigo-600">{totalLeave}</b></span>
+                )}
+                <span className="text-muted-foreground">{lang === "bn" ? "মোট বিলম্ব" : "Late Minutes"}: <b className="text-foreground">{totalLateMinutes} {lang === "bn" ? "মিনিট" : "min"}</b></span>
+                <span className="text-muted-foreground">{lang === "bn" ? "মোট ওভারটাইম" : "Total OT"}: <b className="text-foreground">{totalOT ? totalOT.toFixed(2) : 0} {lang === "bn" ? "ঘণ্টা" : "hrs"}</b></span>
               </div>
             </div>
           )}

@@ -719,30 +719,48 @@ func (p *AttendanceProcessor) resolveShift(
 	return nil
 }
 
-// isEligibleForDate returns true when the employee should be processed.
+// isEligibleForDate returns true when the employee should be processed for the given date.
+// Active regular employees are eligible.
+// Resigned, Close, Lefty, and other separated employees are maintained up to and including their separation date.
 func (p *AttendanceProcessor) isEligibleForDate(emp *models.Employee, date string) bool {
 	if emp == nil {
-		return false
-	}
-	if !strings.EqualFold(emp.Status, "active") {
-		return false
-	}
-	if !strings.EqualFold(strings.TrimSpace(emp.EmployeeType), "regular") {
 		return false
 	}
 	if strings.TrimSpace(emp.PunchNumber) == "" {
 		return false
 	}
+	processDate, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return false
+	}
+
+	// Joining date check: cannot be processed before joining date
 	if !emp.JoiningDate.IsZero() {
-		processDate, err := time.Parse("2006-01-02", date)
-		if err == nil {
-			joinDay := time.Date(emp.JoiningDate.Year(), emp.JoiningDate.Month(), emp.JoiningDate.Day(), 0, 0, 0, 0, time.UTC)
-			if processDate.Before(joinDay) {
-				return false
-			}
+		joinDay := time.Date(emp.JoiningDate.Year(), emp.JoiningDate.Month(), emp.JoiningDate.Day(), 0, 0, 0, 0, time.UTC)
+		if processDate.Before(joinDay) {
+			return false
 		}
 	}
-	return true
+
+	// Active regular employees are eligible
+	if strings.EqualFold(emp.Status, "active") && strings.EqualFold(strings.TrimSpace(emp.EmployeeType), "regular") {
+		return true
+	}
+
+	// Check if employee has a processed separation (Resign, Close, Lefty, etc.)
+	if sep, sErr := p.attendanceRepo.FindSeparationByEmployeeID(emp.EmployeeID); sErr == nil && sep != nil && sep.Date != "" {
+		sepDay, parseErr := time.Parse("2006-01-02", sep.Date)
+		if parseErr == nil {
+			// Process up to and including separation date
+			if !processDate.After(sepDay) {
+				return true
+			}
+		}
+	} else if strings.EqualFold(emp.Status, "active") {
+		return true
+	}
+
+	return false
 }
 
 // getShift fetches a shift by ID using an in-memory cache.

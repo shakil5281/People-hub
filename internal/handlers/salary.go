@@ -1463,11 +1463,7 @@ func (h *SalaryHandler) Summary(c *gin.Context) {
 			}
 		case "line":
 			if s.Employee.LineRef != nil {
-				lName := s.Employee.LineRef.Name
-				if strings.EqualFold(strings.TrimSpace(lName), "admin") {
-					lName = "Loader & Cleaner"
-				}
-				key = groupKey{Name: lName, ID: s.Employee.LineRef.ID}
+				key = groupKey{Name: s.Employee.LineRef.Name, ID: s.Employee.LineRef.ID}
 			} else {
 				key = groupKey{Name: "Unknown", ID: ""}
 			}

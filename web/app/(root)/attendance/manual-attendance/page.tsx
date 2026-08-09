@@ -161,12 +161,6 @@ export default function ManualAttendancePage() {
 
     if (successCount > 0) {
       toast.success(`Attendance saved for ${successCount} employee(s)` + (failCount > 0 ? `, ${failCount} failed` : ""))
-      setSelectedRows([])
-      const today = new Date()
-      setEntryDate(today)
-      setCheckIn(withDate(today, "", "07:55"))
-      setCheckOut(withDate(today, "", "17:00"))
-      setEntryStatus("present")
     } else {
       toast.error("Failed to save attendance")
     }

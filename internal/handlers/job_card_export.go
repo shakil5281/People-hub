@@ -340,6 +340,8 @@ func (h *AttendanceHandler) ExportJobCard(c *gin.Context) {
 	groupID := c.Query("group_id")
 	shiftID := c.Query("shift_id")
 	status := c.Query("status")
+	employeeType := c.Query("employee_type")
+	empStatus := c.Query("emp_status")
 
 	if employeeID != "" {
 		emp, err := h.employeeRepo.FindByEmployeeID(employeeID)
@@ -353,7 +355,7 @@ func (h *AttendanceHandler) ExportJobCard(c *gin.Context) {
 
 	endDate = capEndDateToSeparation(h, employeeID, endDate)
 
-	attendances, _, err := h.attendanceRepo.ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, 1, 100000)
+	attendances, _, err := h.attendanceRepo.ListJobCard(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeType, empStatus, 1, 100000)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -378,9 +380,8 @@ func capEndDateToSeparation(h *AttendanceHandler, employeeID, endDate string) st
 		sepDate, parseErr := time.Parse("2006-01-02", sep.Date)
 		endDateParsed, endParseErr := time.Parse("2006-01-02", endDate)
 		if parseErr == nil && endParseErr == nil {
-			dayBeforeSep := sepDate.AddDate(0, 0, -1)
-			if dayBeforeSep.Before(endDateParsed) {
-				return dayBeforeSep.Format("2006-01-02")
+			if sepDate.Before(endDateParsed) {
+				return sepDate.Format("2006-01-02")
 			}
 		}
 	}

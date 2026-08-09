@@ -22,11 +22,19 @@ interface Group { id: string; name: string }
 interface AbsentRecord {
   id: string
   employee_id: string
-  date: string
-  status: string
-  check_in: string | null
-  total_absent?: number | string
-  employee?: { employee_id: string; name_en: string; designation_ref?: { name: string }; department?: { name: string }; section_ref?: { name: string } }
+  employee_name?: string
+  designation?: string
+  department?: string
+  section?: string
+  total_absent: number
+  absent_dates: string
+  employee?: {
+    employee_id: string
+    name_en: string
+    designation_ref?: { name: string }
+    department?: { name: string }
+    section_ref?: { name: string }
+  }
 }
 
 const columns: ColumnDef<AbsentRecord>[] = [
@@ -35,48 +43,44 @@ const columns: ColumnDef<AbsentRecord>[] = [
     cell: ({ row }) => row.index + 1,
   },
   {
-    accessorKey: "date",
-    header: "Date",
-    cell: ({ row }) => row.original.date,
-  },
-  {
     accessorKey: "employee_id",
     header: "Employee ID",
-    cell: ({ row }) => row.original.employee?.employee_id || row.original.employee_id,
+    cell: ({ row }) => row.original.employee_id || row.original.employee?.employee_id || "-",
   },
   {
-    accessorKey: "name",
+    accessorKey: "employee_name",
     header: "Name",
-    cell: ({ row }) => row.original.employee?.name_en || "-",
+    cell: ({ row }) => row.original.employee_name || row.original.employee?.name_en || "-",
   },
   {
     accessorKey: "designation",
     header: "Designation",
-    cell: ({ row }) => row.original.employee?.designation_ref?.name || "-",
+    cell: ({ row }) => row.original.designation || row.original.employee?.designation_ref?.name || "-",
   },
   {
     id: "department",
     header: "Department",
-    cell: ({ row }) => row.original.employee?.department?.name || "-",
+    cell: ({ row }) => row.original.department || row.original.employee?.department?.name || "-",
   },
   {
     id: "section",
     header: "Section",
-    cell: ({ row }) => row.original.employee?.section_ref?.name || "-",
-  },
-  {
-    accessorKey: "status",
-    header: "Status",
-    cell: () => <span className="text-red-600 font-bold">A</span>,
+    cell: ({ row }) => row.original.section || row.original.employee?.section_ref?.name || "-",
   },
   {
     id: "total_absent",
-    header: "Total Absent Count",
-    cell: ({ row }) => <span className="font-semibold">{row.original.total_absent ?? "-"}</span>,
+    header: "Total Absent Days",
+    cell: ({ row }) => <span className="font-bold text-red-600">{row.original.total_absent ?? 0}</span>,
+  },
+  {
+    id: "absent_dates",
+    header: "Absent Dates (dd/mm/yyyy)",
+    cell: ({ row }) => <span className="font-medium text-slate-700">{row.original.absent_dates || "-"}</span>,
   },
 ]
 
 const selectClass = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+const inputClass = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 
 const today = new Date().toISOString().split("T")[0]
 
@@ -319,6 +323,14 @@ export default function AbsentStatusPage() {
                       {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
                     </select>
                   </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
+                    <input type="text" value={filters.employee_id || ""} onChange={(e) => setFilter("employee_id", e.target.value)} placeholder="Enter employee code..." className={inputClass} />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Min. Absent Days</label>
+                    <input type="number" min="1" value={filters.min_absent || ""} onChange={(e) => setFilter("min_absent", e.target.value)} placeholder="e.g. 3" className={inputClass} />
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 mt-4">
                   <Button onClick={() => { handleApply(); setMobileFilterOpen(false) }}>Apply</Button>
@@ -401,6 +413,16 @@ export default function AbsentStatusPage() {
                 <option value="">— All —</option>
                 {groups.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
               </select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
+              <input type="text" value={filters.employee_id || ""} onChange={(e) => setFilter("employee_id", e.target.value)} placeholder="Enter employee code..." className={inputClass} />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Min. Absent Days</label>
+              <input type="number" min="1" value={filters.min_absent || ""} onChange={(e) => setFilter("min_absent", e.target.value)} placeholder="e.g. 3" className={inputClass} />
             </div>
           </div>
 
