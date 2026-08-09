@@ -194,6 +194,18 @@ func (s *SalaryService) calculateEmployeeSalary(
 		absentDeduction = perDaySalary * float64(absentDays)
 	}
 
+	// Late attendance salary deduction:
+	// - Every 3 late days = 1 day salary deduction (e.g. 3 late = 1 day, 6 late = 2 days)
+	// - 4 or more late days = 1 day salary deduction + Attendance Bonus = 0
+	// - Deduction is stored in OtherDeduction (absent_days / absent_deduction remain unchanged)
+	lateDeductionDays := lateDays / 3
+	lateDeductionAmount := float64(0)
+	if totalDays > 0 && lateDeductionDays > 0 {
+		perDaySalary := gross / float64(totalDays)
+		lateDeductionAmount = perDaySalary * float64(lateDeductionDays)
+	}
+	otherDeduction := lateDeductionAmount
+
 	// Overtime — only when employee over_time_status is enabled
 	otRate := float64(0)
 	if emp.OverTimeStatus && daysInMonth > 0 {
@@ -202,8 +214,9 @@ func (s *SalaryService) calculateEmployeeSalary(
 	otAmount := otHours * otRate
 
 	// Attendance bonus by employee group
+	// Disqualified if absentDays > 0 OR lateDays >= 4
 	attBonus := float64(0)
-	if absentDays == 0 && presentDays > 0 {
+	if absentDays == 0 && lateDays < 4 && presentDays > 0 {
 		switch {
 		case strings.EqualFold(groupName, "worker"):
 			attBonus = 725
@@ -214,7 +227,7 @@ func (s *SalaryService) calculateEmployeeSalary(
 		}
 	}
 
-	totalDeductions := absentDeduction
+	totalDeductions := absentDeduction + otherDeduction
 	netSalary := gross - totalDeductions + otAmount + attBonus
 	if netSalary < 0 {
 		netSalary = 0
@@ -235,6 +248,7 @@ func (s *SalaryService) calculateEmployeeSalary(
 		ProvidentFund:      0,
 		Tax:                0,
 		AbsentDeduction:    absentDeduction,
+		OtherDeduction:     otherDeduction,
 		TotalDeductions:    totalDeductions,
 		OvertimeHours:      otHours,
 		OvertimeRate:       otRate,
