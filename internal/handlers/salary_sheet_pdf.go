@@ -436,14 +436,17 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 
 	type groupKey struct{ Name, ID string }
 	type groupData struct {
-		Employees   int
-		BasicSalary float64
-		HouseRent   float64
-		Medical     float64
-		Transport   float64
-		GrossSalary float64
-		Deductions  float64
-		NetSalary   float64
+		Employees       int
+		BasicSalary     float64
+		HouseRent       float64
+		Medical         float64
+		Transport       float64
+		GrossSalary     float64
+		OTHours         float64
+		OTAmount        float64
+		AttendanceBonus float64
+		Deductions      float64
+		NetSalary       float64
 	}
 
 	buildGroupData := func(groupMode string) ([]groupKey, map[groupKey]*groupData) {
@@ -490,6 +493,9 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 			d.Medical += s.MedicalAllowance
 			d.Transport += s.TransportAllowance
 			d.GrossSalary += s.GrossSalary
+			d.OTHours += s.OvertimeHours
+			d.OTAmount += s.OvertimeAmount
+			d.AttendanceBonus += s.AttendanceBonus
 			d.Deductions += s.TotalDeductions
 			d.NetSalary += s.NetSalary
 		}
@@ -522,6 +528,9 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 			d.Medical += s.MedicalAllowance
 			d.Transport += s.TransportAllowance
 			d.GrossSalary += s.GrossSalary
+			d.OTHours += s.OvertimeHours
+			d.OTAmount += s.OvertimeAmount
+			d.AttendanceBonus += s.AttendanceBonus
 			d.Deductions += s.TotalDeductions
 			d.NetSalary += s.NetSalary
 		}
@@ -645,17 +654,29 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 		pdf.Cell(0, 5, reportTitle)
 		pdf.Ln(7)
 
+		otHourH := "OT Hour"
+		otPayableH := "OT Payable"
+		attBonusH := "Att Bonus"
+		if lang == "bn" {
+			otHourH = utils.UnicodeToBijoy("ওটি ঘণ্টা")
+			otPayableH = utils.UnicodeToBijoy("ওটি প্রদান")
+			attBonusH = utils.UnicodeToBijoy("হাজিরা বোনাস")
+		}
+
 		sCols := []summaryCol{
-			{labels.Sl, 8, "C"},
-			{tab.groupLabel, 50, "L"},
-			{labels.Employees, 18, "C"},
-			{labels.BasicTotal, 30, "C"},
-			{labels.HouseRentH, 30, "C"},
-			{labels.MedicalH, 25, "C"},
-			{labels.TransportH, 25, "C"},
-			{labels.GrossTotal, 34, "C"},
-			{labels.Deductions, 30, "C"},
-			{labels.NetTotal, 37, "C"},
+			{labels.Sl, 7, "C"},
+			{tab.groupLabel, 40, "L"},
+			{labels.Employees, 13, "C"},
+			{labels.BasicTotal, 22, "C"},
+			{labels.HouseRentH, 22, "C"},
+			{labels.MedicalH, 18, "C"},
+			{labels.TransportH, 18, "C"},
+			{labels.GrossTotal, 22, "C"},
+			{otHourH, 16, "C"},
+			{otPayableH, 22, "C"},
+			{attBonusH, 20, "C"},
+			{labels.Deductions, 22, "C"},
+			{labels.NetTotal, 24, "C"},
 		}
 
 		headerH := 8.0
@@ -703,6 +724,9 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 				{fmt.Sprintf("%.0f", d.Medical), "C"},
 				{fmt.Sprintf("%.0f", d.Transport), "C"},
 				{fmt.Sprintf("%.0f", d.GrossSalary), "C"},
+				{fmt.Sprintf("%.1f", d.OTHours), "C"},
+				{fmt.Sprintf("%.0f", d.OTAmount), "C"},
+				{fmt.Sprintf("%.0f", d.AttendanceBonus), "C"},
 				{fmt.Sprintf("%.0f", d.Deductions), "C"},
 				{fmt.Sprintf("%.0f", d.NetSalary), "C"},
 			}
@@ -717,6 +741,9 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 			grand.Medical += d.Medical
 			grand.Transport += d.Transport
 			grand.GrossSalary += d.GrossSalary
+			grand.OTHours += d.OTHours
+			grand.OTAmount += d.OTAmount
+			grand.AttendanceBonus += d.AttendanceBonus
 			grand.Deductions += d.Deductions
 			grand.NetSalary += d.NetSalary
 		}
@@ -739,6 +766,9 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 			{fmt.Sprintf("%.0f", grand.Medical), "C"},
 			{fmt.Sprintf("%.0f", grand.Transport), "C"},
 			{fmt.Sprintf("%.0f", grand.GrossSalary), "C"},
+			{fmt.Sprintf("%.1f", grand.OTHours), "C"},
+			{fmt.Sprintf("%.0f", grand.OTAmount), "C"},
+			{fmt.Sprintf("%.0f", grand.AttendanceBonus), "C"},
 			{fmt.Sprintf("%.0f", grand.Deductions), "C"},
 			{fmt.Sprintf("%.0f", grand.NetSalary), "C"},
 		}

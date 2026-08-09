@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"github.com/shakil5281/peoplehub-api/internal/repository"
 	"github.com/shakil5281/peoplehub-api/internal/utils"
 	"github.com/xuri/excelize/v2"
+	"gorm.io/gorm"
 )
 
 type AttendanceHandler struct {
@@ -323,20 +325,30 @@ func (h *AttendanceHandler) Create(c *gin.Context) {
 			existing.ShiftID = &req.ShiftID
 		}
 		existing.UpdatedBy = &userID
+		var emp models.Employee
+		if err := database.DB.Where("employee_id = ? AND deleted_at IS NULL", existing.EmployeeID).First(&emp).Error; err == nil {
+			existing.OverTime = h.calculateAttendanceOT(&emp, existing.CheckIn, existing.CheckOut, existing.Date, existing.ShiftID)
+		}
 		existing.CalculateHours()
 		if err := h.attendanceRepo.Update(existing); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
+		_ = saveToMissingAttendance(existing, userID)
 		c.JSON(http.StatusOK, existing)
 		return
 	}
 
+	var emp models.Employee
+	if err := database.DB.Where("employee_id = ? AND deleted_at IS NULL", attendance.EmployeeID).First(&emp).Error; err == nil {
+		attendance.OverTime = h.calculateAttendanceOT(&emp, attendance.CheckIn, attendance.CheckOut, attendance.Date, attendance.ShiftID)
+	}
 	attendance.CalculateHours()
 	if err := h.attendanceRepo.Create(attendance); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	_ = saveToMissingAttendance(attendance, userID)
 
 	c.JSON(http.StatusCreated, attendance)
 }
@@ -391,13 +403,252 @@ func (h *AttendanceHandler) Update(c *gin.Context) {
 		attendance.ShiftID = &req.ShiftID
 	}
 
+	var emp models.Employee
+	if err := database.DB.Where("employee_id = ? AND deleted_at IS NULL", attendance.EmployeeID).First(&emp).Error; err == nil {
+		attendance.OverTime = h.calculateAttendanceOT(&emp, attendance.CheckIn, attendance.CheckOut, attendance.Date, attendance.ShiftID)
+	}
 	attendance.CalculateHours()
 	if err := h.attendanceRepo.Update(attendance); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
+	_ = saveToMissingAttendance(attendance, userID)
 	c.JSON(http.StatusOK, attendance)
+}
+
+func (h *AttendanceHandler) calculateAttendanceOT(emp *models.Employee, checkIn, checkOut *time.Time, dateStr string, shiftID *string) *string {
+	zero := "0"
+	if emp == nil || !emp.OverTimeStatus || checkOut == nil {
+		return &zero
+	}
+	var shift models.Shift
+	if shiftID != nil && *shiftID != "" {
+		database.DB.Where("id = ? AND deleted_at IS NULL", *shiftID).First(&shift)
+	} else if emp.ShiftID != nil {
+		database.DB.Where("id = ? AND deleted_at IS NULL", *emp.ShiftID).First(&shift)
+	}
+
+	attDate, err := time.Parse("2006-01-02", dateStr)
+	if err != nil {
+		attDate = time.Now()
+	}
+
+	if shift.StartTime != "" && shift.EndTime != "" {
+		shiftEnd := utils.BuildShiftEndDatetime(attDate, shift.StartTime, shift.EndTime)
+		if !shiftEnd.IsZero() {
+			otHours := utils.CalculateOvertime(*checkOut, shiftEnd, true)
+			otStr := strconv.Itoa(otHours)
+			return &otStr
+		}
+	}
+	return &zero
+}
+
+func saveToMissingAttendance(att *models.Attendance, userID string) error {
+	dateStr := att.Date
+	if dateStr == "" && att.CheckIn != nil {
+		dateStr = att.CheckIn.Format("2006-01-02")
+	}
+	if dateStr == "" {
+		return nil
+	}
+	var ma models.MissingAttendance
+	res := database.DB.Where("employee_id = ? AND date = ? AND deleted_at IS NULL", att.EmployeeID, dateStr).First(&ma)
+	isNew := errors.Is(res.Error, gorm.ErrRecordNotFound)
+	if res.Error != nil && !isNew {
+		return res.Error
+	}
+
+	ma.EmployeeID = att.EmployeeID
+	ma.CompanyID = att.CompanyID
+	ma.Date = dateStr
+	ma.CheckIn = att.CheckIn
+	ma.CheckOut = att.CheckOut
+	ma.TotalHours = att.TotalHours
+	ma.OverTime = att.OverTime
+	ma.Status = att.Status
+	ma.Notes = "Saved from Custom Attendance update"
+	if userID != "" {
+		ma.CreatedBy = &userID
+	}
+
+	if isNew {
+		return database.DB.Create(&ma).Error
+	}
+	return database.DB.Save(&ma).Error
+}
+
+func (h *AttendanceHandler) ListLateAttendance(c *gin.Context) {
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	companyID := c.Query("company_id")
+	employeeID := c.Query("employee_id")
+	departmentID := c.Query("department_id")
+	sectionID := c.Query("section_id")
+	designationID := c.Query("designation_id")
+	lineID := c.Query("line_id")
+	groupID := c.Query("group_id")
+	shiftID := c.Query("shift_id")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+
+	list, total, err := h.attendanceRepo.ListLateAttendance(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID, page, limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	rows := make([]map[string]interface{}, 0, len(list))
+	for _, a := range list {
+		shiftName := ""
+		if a.Shift != nil {
+			shiftName = a.Shift.Name
+		}
+		desigName := ""
+		if a.Employee.DesignationRef != nil {
+			desigName = a.Employee.DesignationRef.Name
+		}
+
+		rows = append(rows, map[string]interface{}{
+			"id":            a.ID,
+			"employee_id":   a.EmployeeID,
+			"employee_name": a.Employee.NameEn,
+			"designation":   desigName,
+			"shift_name":    shiftName,
+			"check_in":      a.CheckIn,
+			"check_out":     a.CheckOut,
+			"status":        a.Status,
+			"late_minutes":  a.LateMinutes,
+			"date":          a.Date,
+			"company_id":    a.CompanyID,
+		})
+	}
+
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(rows, total, utils.Pagination{Page: page, Limit: limit}))
+}
+
+type FixSingleLateRequest struct {
+	AttendanceID string `json:"attendance_id" binding:"required"`
+	EmployeeID   string `json:"employee_id" binding:"required"`
+	CompanyID    string `json:"company_id" binding:"required"`
+	Date         string `json:"date" binding:"required"`
+	CheckIn      string `json:"check_in"`
+	CheckOut     string `json:"check_out"`
+	Status       string `json:"status"`
+}
+
+func (h *AttendanceHandler) FixSingleLate(c *gin.Context) {
+	var req FixSingleLateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID := c.GetString("user_id")
+	att, err := h.attendanceRepo.FindByID(req.AttendanceID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "attendance record not found"})
+		return
+	}
+
+	if req.CheckIn != "" {
+		if t, err := utils.ParseDateTime(req.CheckIn, req.Date); err == nil {
+			att.CheckIn = &t
+		}
+	}
+	if req.CheckOut != "" {
+		if t, err := utils.ParseDateTime(req.CheckOut, req.Date); err == nil {
+			att.CheckOut = &t
+		}
+	}
+	if req.Status != "" {
+		att.Status = req.Status
+	} else {
+		att.Status = "present"
+	}
+	att.LateMinutes = 0
+	att.UpdatedBy = &userID
+	att.CalculateHours()
+
+	var emp models.Employee
+	if err := database.DB.Where("employee_id = ? AND deleted_at IS NULL", att.EmployeeID).First(&emp).Error; err == nil {
+		att.OverTime = h.calculateAttendanceOT(&emp, att.CheckIn, att.CheckOut, att.Date, att.ShiftID)
+	}
+
+	if err := h.attendanceRepo.Update(att); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := saveToMissingAttendance(att, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to save missing attendance: %v", err)})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "late attendance fixed", "data": att})
+}
+
+type FixBulkLateItem struct {
+	AttendanceID string `json:"attendance_id" binding:"required"`
+	EmployeeID   string `json:"employee_id" binding:"required"`
+	CompanyID    string `json:"company_id" binding:"required"`
+	Date         string `json:"date" binding:"required"`
+	CheckIn      string `json:"check_in"`
+	CheckOut     string `json:"check_out"`
+	Status       string `json:"status"`
+}
+
+type FixBulkLateRequest struct {
+	Items []FixBulkLateItem `json:"items" binding:"required"`
+}
+
+func (h *AttendanceHandler) FixBulkLate(c *gin.Context) {
+	var req FixBulkLateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userID := c.GetString("user_id")
+	count := 0
+
+	for _, item := range req.Items {
+		att, err := h.attendanceRepo.FindByID(item.AttendanceID)
+		if err != nil {
+			continue
+		}
+		if item.CheckIn != "" {
+			if t, err := utils.ParseDateTime(item.CheckIn, item.Date); err == nil {
+				att.CheckIn = &t
+			}
+		}
+		if item.CheckOut != "" {
+			if t, err := utils.ParseDateTime(item.CheckOut, item.Date); err == nil {
+				att.CheckOut = &t
+			}
+		}
+		if item.Status != "" {
+			att.Status = item.Status
+		} else {
+			att.Status = "present"
+		}
+		att.LateMinutes = 0
+		att.UpdatedBy = &userID
+		att.CalculateHours()
+
+		var emp models.Employee
+		if err := database.DB.Where("employee_id = ? AND deleted_at IS NULL", att.EmployeeID).First(&emp).Error; err == nil {
+			att.OverTime = h.calculateAttendanceOT(&emp, att.CheckIn, att.CheckOut, att.Date, att.ShiftID)
+		}
+
+		if err := h.attendanceRepo.Update(att); err == nil {
+			_ = saveToMissingAttendance(att, userID)
+			count++
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%d late records fixed", count), "fixed": count})
 }
 
 // DeleteAttendance godoc

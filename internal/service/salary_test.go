@@ -88,3 +88,34 @@ func TestCalculateEmployeeSalary_LateDeductions(t *testing.T) {
 		})
 	}
 }
+
+func TestCalculateEmployeeSalary_PartialMonthPaidDays(t *testing.T) {
+	s := &SalaryService{}
+	emp := models.Employee{
+		CompanyID:      "comp-1",
+		EmployeeID:     "1001",
+		GrossSalary:    9875,
+		OverTimeStatus: true,
+	}
+
+	daysInMonth := 31 // July 2026
+
+	att := map[string]interface{}{
+		"present": 12,
+		"late":    1,
+		"weekend": 1,
+	}
+
+	res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 7, 2026, daysInMonth, "user-1")
+
+	expectedAbsentDays := 17 // 31 - (12 + 1 + 1)
+	if res.AbsentDays != expectedAbsentDays {
+		t.Errorf("AbsentDays got = %v, want = %v", res.AbsentDays, expectedAbsentDays)
+	}
+
+	expectedNetSalary := (9875.0 / 31.0) * 14.0 // (Gross / 31) * (Weekend + Late + Present)
+	diff := res.NetSalary - expectedNetSalary
+	if diff < -0.01 || diff > 0.01 {
+		t.Errorf("NetSalary got = %v, want = %v", res.NetSalary, expectedNetSalary)
+	}
+}

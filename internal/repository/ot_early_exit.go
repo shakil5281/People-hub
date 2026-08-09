@@ -77,7 +77,7 @@ func (r *OtEarlyExitRepository) ListShortfallRows(companyID, startDate, endDate 
 			AND a.date BETWEEN ? AND ?
 			AND a.deleted_at IS NULL
 			AND a.check_in IS NOT NULL AND a.check_out IS NOT NULL
-			AND a.status <> 'on_leave'
+			AND a.status NOT IN ('on_leave', 'absent')
 			AND e.over_time_status = true
 		ORDER BY a.employee_id, a.date
 	`, companyID, startDate, endDate).Scan(&rows).Error
@@ -88,7 +88,7 @@ func (r *OtEarlyExitRepository) ListShortfallRows(companyID, startDate, endDate 
 	result := make([]ShortfallRow, 0, len(rows))
 	for i := range rows {
 		rw := rows[i]
-		if rw.CheckIn == nil || rw.CheckOut == nil {
+		if rw.CheckIn == nil || rw.CheckOut == nil || rw.Status == "absent" || rw.Status == "on_leave" {
 			continue
 		}
 

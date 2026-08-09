@@ -21,6 +21,12 @@ func (r *MissingAttendanceRepository) Update(ma *models.MissingAttendance) error
 	return r.db.Save(ma).Error
 }
 
+func (r *MissingAttendanceRepository) UpdateFields(id string, fields map[string]interface{}) error {
+	return r.db.Model(&models.MissingAttendance{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Updates(fields).Error
+}
+
 func (r *MissingAttendanceRepository) Delete(id string) error {
 	return r.db.Delete(&models.MissingAttendance{}, "id = ?", id).Error
 }

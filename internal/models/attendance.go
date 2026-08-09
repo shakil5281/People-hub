@@ -1,9 +1,9 @@
 package models
 
 import (
-	"fmt"
 	"time"
 
+	"github.com/shakil5281/peoplehub-api/internal/utils"
 	"gorm.io/gorm"
 )
 
@@ -31,22 +31,9 @@ type Attendance struct {
 	Shift    *Shift   `json:"shift,omitempty" gorm:"foreignKey:ShiftID"`
 }
 
-// CalculateHours sets TotalHours from check_in and check_out.
-// It does NOT touch OverTime — that is exclusively set by the attendance processor.
+// CalculateHours sets TotalHours from check_in and check_out using net working hours (deducting lunch break).
 func (a *Attendance) CalculateHours() {
-	if a.CheckIn == nil || a.CheckOut == nil {
-		a.TotalHours = nil
-		return
-	}
-	duration := a.CheckOut.Sub(*a.CheckIn)
-	if duration <= 0 {
-		a.TotalHours = nil
-		return
-	}
-	hours := int(duration.Hours())
-	minutes := int(duration.Minutes()) % 60
-	th := fmt.Sprintf("%02d:%02d", hours, minutes)
-	a.TotalHours = &th
+	a.TotalHours = utils.CalcTotalHoursStr(a.CheckIn, a.CheckOut)
 }
 
 // BeforeSave recalculates TotalHours before every DB write.

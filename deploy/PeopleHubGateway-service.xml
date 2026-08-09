@@ -2,8 +2,8 @@
   <id>PeopleHubGateway</id>
   <name>PeopleHub Gateway (Reverse Proxy)</name>
   <description>Reverse proxy routing PeopleHub traffic on port 8081</description>
-  <executable>C:\Users\shaki\Desktop\SHAKIL\Sotware\hrhub\peoplehub-gateway.exe</executable>
-  <workingdirectory>C:\Users\shaki\Desktop\SHAKIL\Sotware\hrhub</workingdirectory>
+  <executable>G:\softwer\People-hub\peoplehub-gateway.exe</executable>
+  <workingdirectory>G:\softwer\People-hub</workingdirectory>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>8</keepFiles>

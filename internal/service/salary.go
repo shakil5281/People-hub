@@ -187,6 +187,17 @@ func (s *SalaryService) calculateEmployeeSalary(
 		weekendDays = toInt(att["weekend"])
 	}
 
+	// Paid days in month = Present + Late + Weekend + Leave + Holiday.
+	// Any unexcused/unrecorded days in the month are treated as absent days so base salary is
+	// (Gross / totalDays) * paidDays = Gross - AbsentDeduction.
+	paidDays := presentDays + lateDays + weekendDays + leaveDays + holidayDays
+	if totalDays > 0 && paidDays < totalDays {
+		calcAbsent := totalDays - paidDays
+		if calcAbsent > absentDays {
+			absentDays = calcAbsent
+		}
+	}
+
 	// Absent deduction
 	absentDeduction := float64(0)
 	if totalDays > 0 {

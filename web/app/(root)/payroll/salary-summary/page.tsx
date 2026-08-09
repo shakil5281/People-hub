@@ -26,6 +26,9 @@ interface SummaryRow {
   medical: number
   transport: number
   gross_salary: number
+  ot_hours: number
+  ot_amount: number
+  attendance_bonus: number
   deductions: number
   net_salary: number
 }
@@ -128,13 +131,16 @@ export default function SalarySummaryPage() {
     return [
       { accessorKey: "group_key", header: labelMap[tab] || "Group" },
       { accessorKey: "employees", header: "Employees" },
-      { accessorKey: "gross_salary", header: "Gross Total", cell: ({ row }) => fmt(row.original.gross_salary) },
       { accessorKey: "basic_salary", header: "Basic Total", cell: ({ row }) => fmt(row.original.basic_salary) },
       { accessorKey: "house_rent", header: "House Rent", cell: ({ row }) => fmt(row.original.house_rent) },
       { accessorKey: "medical", header: "Medical", cell: ({ row }) => fmt(row.original.medical) },
       { accessorKey: "transport", header: "Transport", cell: ({ row }) => fmt(row.original.transport) },
-      { accessorKey: "deductions", header: "Deductions", cell: ({ row }) => fmt(row.original.deductions) },
-      { accessorKey: "net_salary", header: "Net Total", cell: ({ row }) => fmt(row.original.net_salary) },
+      { accessorKey: "gross_salary", header: "Gross Total", cell: ({ row }) => fmt(row.original.gross_salary) },
+      { accessorKey: "ot_hours", header: "Total OT Hour", cell: ({ row }) => (row.original.ot_hours || 0).toFixed(1) },
+      { accessorKey: "ot_amount", header: "Total OT Payable", cell: ({ row }) => fmt(row.original.ot_amount) },
+      { accessorKey: "attendance_bonus", header: "Total Attendance Bonus", cell: ({ row }) => fmt(row.original.attendance_bonus) },
+      { accessorKey: "deductions", header: "Total Deduction", cell: ({ row }) => fmt(row.original.deductions) },
+      { accessorKey: "net_salary", header: "Net Payable", cell: ({ row }) => fmt(row.original.net_salary) },
     ]
   }, [tab])
 
@@ -303,14 +309,17 @@ export default function SalarySummaryPage() {
           </Tabs>
 
           <div className="mt-4 rounded-md border bg-muted/30 p-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4 text-sm">
-              <div><span className="text-muted-foreground">Gross Total</span><p className="font-semibold">{fmt(data.grand_totals.gross_salary)}</p></div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 md:grid-cols-5 lg:grid-cols-10 gap-3 text-sm">
               <div><span className="text-muted-foreground">Basic Total</span><p className="font-semibold">{fmt(data.grand_totals.basic_salary)}</p></div>
               <div><span className="text-muted-foreground">House Rent</span><p className="font-semibold">{fmt(data.grand_totals.house_rent)}</p></div>
               <div><span className="text-muted-foreground">Medical</span><p className="font-semibold">{fmt(data.grand_totals.medical)}</p></div>
               <div><span className="text-muted-foreground">Transport</span><p className="font-semibold">{fmt(data.grand_totals.transport)}</p></div>
-              <div><span className="text-muted-foreground">Deductions</span><p className="font-semibold">{fmt(data.grand_totals.deductions)}</p></div>
-              <div><span className="text-muted-foreground">Net Total</span><p className="font-semibold">{fmt(data.grand_totals.net_salary)}</p></div>
+              <div><span className="text-muted-foreground">Gross Total</span><p className="font-semibold">{fmt(data.grand_totals.gross_salary)}</p></div>
+              <div><span className="text-muted-foreground">Total OT Hour</span><p className="font-semibold">{(data.grand_totals.ot_hours || 0).toFixed(1)}</p></div>
+              <div><span className="text-muted-foreground">Total OT Payable</span><p className="font-semibold">{fmt(data.grand_totals.ot_amount)}</p></div>
+              <div><span className="text-muted-foreground">Att. Bonus</span><p className="font-semibold">{fmt(data.grand_totals.attendance_bonus)}</p></div>
+              <div><span className="text-muted-foreground">Total Deduction</span><p className="font-semibold">{fmt(data.grand_totals.deductions)}</p></div>
+              <div><span className="text-muted-foreground">Net Payable</span><p className="font-semibold">{fmt(data.grand_totals.net_salary)}</p></div>
             </div>
           </div>
         </div>

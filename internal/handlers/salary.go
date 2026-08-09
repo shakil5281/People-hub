@@ -913,14 +913,17 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 
 	type groupKey struct{ Name, ID string }
 	type groupData struct {
-		Employees   int
-		BasicSalary float64
-		HouseRent   float64
-		Medical     float64
-		Transport   float64
-		GrossSalary float64
-		Deductions  float64
-		NetSalary   float64
+		Employees       int
+		BasicSalary     float64
+		HouseRent       float64
+		Medical         float64
+		Transport       float64
+		GrossSalary     float64
+		OTHours         float64
+		OTAmount        float64
+		AttendanceBonus float64
+		Deductions      float64
+		NetSalary       float64
 	}
 
 	buildGroupData := func(groupMode string) ([]groupKey, map[groupKey]*groupData) {
@@ -971,6 +974,9 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 			d.Medical += s.MedicalAllowance
 			d.Transport += s.TransportAllowance
 			d.GrossSalary += s.GrossSalary
+			d.OTHours += s.OvertimeHours
+			d.OTAmount += s.OvertimeAmount
+			d.AttendanceBonus += s.AttendanceBonus
 			d.Deductions += s.TotalDeductions
 			d.NetSalary += s.NetSalary
 		}
@@ -1004,6 +1010,9 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 			d.Medical += s.MedicalAllowance
 			d.Transport += s.TransportAllowance
 			d.GrossSalary += s.GrossSalary
+			d.OTHours += s.OvertimeHours
+			d.OTAmount += s.OvertimeAmount
+			d.AttendanceBonus += s.AttendanceBonus
 			d.Deductions += s.TotalDeductions
 			d.NetSalary += s.NetSalary
 		}
@@ -1102,15 +1111,15 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 		})
 
 		// Row 1: Company Name
-		_ = f.MergeCell(sheetName, "A1", "J1")
+		_ = f.MergeCell(sheetName, "A1", "M1")
 		f.SetCellValue(sheetName, "A1", compName)
-		f.SetCellStyle(sheetName, "A1", "J1", compNameStyle)
+		f.SetCellStyle(sheetName, "A1", "M1", compNameStyle)
 		f.SetRowHeight(sheetName, 1, 26)
 
 		// Row 2: Company Address
-		_ = f.MergeCell(sheetName, "A2", "J2")
+		_ = f.MergeCell(sheetName, "A2", "M2")
 		f.SetCellValue(sheetName, "A2", compAddr)
-		f.SetCellStyle(sheetName, "A2", "J2", compAddrStyle)
+		f.SetCellStyle(sheetName, "A2", "M2", compAddrStyle)
 		f.SetRowHeight(sheetName, 2, 20)
 
 		// Row 3: Report Name
@@ -1118,13 +1127,22 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 		if lang == "bn" {
 			reportNameText = toBijoy(reportNameText)
 		}
-		_ = f.MergeCell(sheetName, "A3", "J3")
+		_ = f.MergeCell(sheetName, "A3", "M3")
 		f.SetCellValue(sheetName, "A3", reportNameText)
-		f.SetCellStyle(sheetName, "A3", "J3", reportTitleStyle)
+		f.SetCellStyle(sheetName, "A3", "M3", reportTitleStyle)
 		f.SetRowHeight(sheetName, 3, 22)
 
 		// Row 4: Column Headers
-		headers := []string{labels.Sl, tab.groupLabel, labels.Employees, labels.BasicTotal, labels.HouseRentH, labels.MedicalH, labels.TransportH, labels.GrossTotal, labels.Deductions, labels.NetTotal}
+		otHourH := "Total OT Hour"
+		otPayableH := "Total OT Payable"
+		attBonusH := "Total Attendance Bonus"
+		if lang == "bn" {
+			otHourH = toBijoy("মোট ওটি ঘণ্টা")
+			otPayableH = toBijoy("মোট ওটি প্রদান")
+			attBonusH = toBijoy("মোট হাজিরা বোনাস")
+		}
+
+		headers := []string{labels.Sl, tab.groupLabel, labels.Employees, labels.BasicTotal, labels.HouseRentH, labels.MedicalH, labels.TransportH, labels.GrossTotal, otHourH, otPayableH, attBonusH, labels.Deductions, labels.NetTotal}
 		for i, h := range headers {
 			col, _ := excelize.ColumnNumberToName(i + 1)
 			f.SetCellValue(sheetName, fmt.Sprintf("%s4", col), h)
@@ -1142,7 +1160,7 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 
 		// Row 5 onwards: Data Rows
 		var grandEmployees int
-		var grandBasic, grandHouse, grandMedical, grandTransport, grandGross, grandDeductions, grandNet float64
+		var grandBasic, grandHouse, grandMedical, grandTransport, grandGross, grandOTHours, grandOTAmount, grandAttBonus, grandDeductions, grandNet float64
 
 		for i, key := range keys {
 			row := i + 5
@@ -1150,7 +1168,7 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 
 			vals := []interface{}{
 				i + 1, bijoyText(key.Name, lang), d.Employees,
-				d.BasicSalary, d.HouseRent, d.Medical, d.Transport, d.GrossSalary, d.Deductions, d.NetSalary,
+				d.BasicSalary, d.HouseRent, d.Medical, d.Transport, d.GrossSalary, d.OTHours, d.OTAmount, d.AttendanceBonus, d.Deductions, d.NetSalary,
 			}
 
 			for j, v := range vals {
@@ -1173,6 +1191,9 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 			grandMedical += d.Medical
 			grandTransport += d.Transport
 			grandGross += d.GrossSalary
+			grandOTHours += d.OTHours
+			grandOTAmount += d.OTAmount
+			grandAttBonus += d.AttendanceBonus
 			grandDeductions += d.Deductions
 			grandNet += d.NetSalary
 		}
@@ -1181,7 +1202,7 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 		if len(keys) > 0 {
 			totalVals := []interface{}{
 				"", labels.GrandTotal, grandEmployees,
-				grandBasic, grandHouse, grandMedical, grandTransport, grandGross, grandDeductions, grandNet,
+				grandBasic, grandHouse, grandMedical, grandTransport, grandGross, grandOTHours, grandOTAmount, grandAttBonus, grandDeductions, grandNet,
 			}
 			for j, v := range totalVals {
 				col, _ := excelize.ColumnNumberToName(j + 1)
@@ -1215,7 +1236,7 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 				d := gMap[key]
 				vals := []interface{}{
 					0, bijoyText(key.Name, lang), d.Employees,
-					d.BasicSalary, d.HouseRent, d.Medical, d.Transport, d.GrossSalary, d.Deductions, d.NetSalary,
+					d.BasicSalary, d.HouseRent, d.Medical, d.Transport, d.GrossSalary, d.OTHours, d.OTAmount, d.AttendanceBonus, d.Deductions, d.NetSalary,
 				}
 				sVal := fmt.Sprintf("%v", vals[j])
 				if j >= 3 && vals[j] != "" {
@@ -1404,21 +1425,25 @@ func (h *SalaryHandler) Summary(c *gin.Context) {
 		ID   string
 	}
 	type groupData struct {
-		Employees   int
-		BasicSalary float64
-		HouseRent   float64
-		Medical     float64
-		Transport   float64
-		GrossSalary float64
-		Deductions  float64
-		NetSalary   float64
+		Employees       int
+		BasicSalary     float64
+		HouseRent       float64
+		Medical         float64
+		Transport       float64
+		GrossSalary     float64
+		OTHours         float64
+		OTAmount        float64
+		AttendanceBonus float64
+		Deductions      float64
+		NetSalary       float64
 	}
 
 	groupMap := make(map[groupKey]*groupData)
 	totalEmployees := 0
 	var grandTotals = map[string]float64{
 		"basic_salary": 0, "house_rent": 0, "medical": 0,
-		"transport": 0, "gross_salary": 0, "deductions": 0, "net_salary": 0,
+		"transport": 0, "gross_salary": 0, "ot_hours": 0, "ot_amount": 0,
+		"attendance_bonus": 0, "deductions": 0, "net_salary": 0,
 	}
 
 	for _, s := range salaries {
@@ -1491,6 +1516,9 @@ func (h *SalaryHandler) Summary(c *gin.Context) {
 		d.Medical += s.MedicalAllowance
 		d.Transport += s.TransportAllowance
 		d.GrossSalary += s.GrossSalary
+		d.OTHours += s.OvertimeHours
+		d.OTAmount += s.OvertimeAmount
+		d.AttendanceBonus += s.AttendanceBonus
 		d.Deductions += s.TotalDeductions
 		d.NetSalary += s.NetSalary
 	}
@@ -1512,16 +1540,19 @@ func (h *SalaryHandler) Summary(c *gin.Context) {
 	for _, key := range keys {
 		d := groupMap[key]
 		summaries = append(summaries, map[string]interface{}{
-			"group_key":    key.Name,
-			"group_id":     key.ID,
-			"employees":    d.Employees,
-			"basic_salary": d.BasicSalary,
-			"house_rent":   d.HouseRent,
-			"medical":      d.Medical,
-			"transport":    d.Transport,
-			"gross_salary": d.GrossSalary,
-			"deductions":   d.Deductions,
-			"net_salary":   d.NetSalary,
+			"group_key":        key.Name,
+			"group_id":         key.ID,
+			"employees":        d.Employees,
+			"basic_salary":     d.BasicSalary,
+			"house_rent":       d.HouseRent,
+			"medical":          d.Medical,
+			"transport":        d.Transport,
+			"gross_salary":     d.GrossSalary,
+			"ot_hours":         d.OTHours,
+			"ot_amount":        d.OTAmount,
+			"attendance_bonus": d.AttendanceBonus,
+			"deductions":       d.Deductions,
+			"net_salary":       d.NetSalary,
 		})
 		totalEmployees += d.Employees
 		grandTotals["basic_salary"] += d.BasicSalary
@@ -1529,6 +1560,9 @@ func (h *SalaryHandler) Summary(c *gin.Context) {
 		grandTotals["medical"] += d.Medical
 		grandTotals["transport"] += d.Transport
 		grandTotals["gross_salary"] += d.GrossSalary
+		grandTotals["ot_hours"] += d.OTHours
+		grandTotals["ot_amount"] += d.OTAmount
+		grandTotals["attendance_bonus"] += d.AttendanceBonus
 		grandTotals["deductions"] += d.Deductions
 		grandTotals["net_salary"] += d.NetSalary
 	}

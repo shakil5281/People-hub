@@ -3,8 +3,8 @@
   <name>PeopleHub Web Frontend</name>
   <description>PeopleHub Next.js Frontend Server</description>
   <executable>node</executable>
-  <arguments>C:\Users\shaki\Desktop\SHAKIL\Sotware\hrhub\web\build\standalone\server.js</arguments>
-  <workingdirectory>C:\Users\shaki\Desktop\SHAKIL\Sotware\hrhub\web</workingdirectory>
+  <arguments>G:\softwer\People-hub\web\build\standalone\server.js</arguments>
+  <workingdirectory>G:\softwer\People-hub\web</workingdirectory>
   <log mode="roll-by-size">
     <sizeThreshold>10240</sizeThreshold>
     <keepFiles>8</keepFiles>

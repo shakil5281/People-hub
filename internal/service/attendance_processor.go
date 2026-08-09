@@ -215,10 +215,11 @@ func (p *AttendanceProcessor) processDay(
 			for _, ma := range missingRecords {
 				missingHandledByEmp[ma.EmployeeID] = true
 
-				// Find the shift for this employee on this date.
+				var emp *models.Employee
 				var shiftID *string
 				for i := range eligible {
 					if eligible[i].EmployeeID == ma.EmployeeID {
+						emp = &eligible[i]
 						if eligible[i].ShiftID != nil {
 							shiftID = eligible[i].ShiftID
 						}
@@ -230,11 +231,37 @@ func (p *AttendanceProcessor) processDay(
 					}
 				}
 
-				// ma.CheckIn/CheckOut are *time.Time — use them directly.
 				checkIn := ma.CheckIn
 				checkOut := ma.CheckOut
 				totalHours := utils.CalcTotalHoursStr(checkIn, checkOut)
-				zeroOT := "0"
+				otHours := 0
+
+				if emp != nil && emp.OverTimeStatus && checkOut != nil {
+					var shift *models.Shift
+					if shiftID != nil && *shiftID != "" {
+						if s, ok := shiftCache[*shiftID]; ok {
+							shift = s
+						} else {
+							s, err := p.shiftRepo.FindByID(*shiftID)
+							if err == nil && s != nil {
+								shiftCache[*shiftID] = s
+								shift = s
+							}
+						}
+					}
+					if shift != nil && shift.StartTime != "" && shift.EndTime != "" {
+						shiftEnd := utils.BuildShiftEndDatetime(attendanceDate, shift.StartTime, shift.EndTime)
+						if !shiftEnd.IsZero() {
+							otHours = utils.CalculateOvertime(*checkOut, shiftEnd, true)
+						}
+					}
+				}
+				otStr := strconv.Itoa(otHours)
+
+				_ = p.missingAttendanceRepo.UpdateFields(ma.ID, map[string]interface{}{
+					"total_hours": totalHours,
+					"over_time":   otStr,
+				})
 
 				if existing, exists := existingAttByEmp[ma.EmployeeID]; exists {
 					existing.CheckIn = checkIn
@@ -242,7 +269,7 @@ func (p *AttendanceProcessor) processDay(
 					existing.TotalHours = totalHours
 					existing.Status = ma.Status
 					existing.LateMinutes = 0
-					existing.OverTime = &zeroOT
+					existing.OverTime = &otStr
 					if shiftID != nil {
 						existing.ShiftID = shiftID
 					}
@@ -250,7 +277,7 @@ func (p *AttendanceProcessor) processDay(
 						"check_in":     checkIn,
 						"check_out":    checkOut,
 						"total_hours":  totalHours,
-						"over_time":    zeroOT,
+						"over_time":    otStr,
 						"status":       ma.Status,
 						"late_minutes": 0,
 						"shift_id":     shiftID,
@@ -265,7 +292,7 @@ func (p *AttendanceProcessor) processDay(
 						CheckIn:    checkIn,
 						CheckOut:   checkOut,
 						TotalHours: totalHours,
-						OverTime:   &zeroOT,
+						OverTime:   &otStr,
 						Status:     ma.Status,
 						ShiftID:    shiftID,
 					}

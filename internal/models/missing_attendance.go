@@ -18,6 +18,8 @@ type MissingAttendance struct {
 	Date       string         `json:"date" gorm:"type:date;not null;index:idx_missing_att_emp_date"`
 	CheckIn    *time.Time     `json:"check_in" gorm:"type:timestamp"`
 	CheckOut   *time.Time     `json:"check_out" gorm:"type:timestamp"`
+	TotalHours *string        `json:"total_hours" gorm:"type:varchar(5)"`
+	OverTime   *string        `json:"over_time" gorm:"type:varchar(5)"`
 	Status     string         `json:"status" gorm:"type:varchar(20);not null;default:present"`
 	Notes      string         `json:"notes" gorm:"type:text"`
 	CreatedAt  time.Time      `json:"created_at"`

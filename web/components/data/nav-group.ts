@@ -76,6 +76,7 @@ export const attendanceNav = [
   { title: "Manual Attendance", url: "/attendance/manual-attendance", icon: ClipboardCheckIcon },
   { title: "Missing Attendance", url: "/attendance/missing-attendance", icon: UserXIcon },
   { title: "Custom Attendance", url: "/attendance/custom-attendance", icon: ClipboardEditIcon },
+  { title: "Late Attendance", url: "/attendance/late-attendance", icon: ClockIcon },
   { title: "Absent Status", url: "/attendance/absent-status", icon: UserXIcon },
   { title: "Night Bill", url: "/attendance/night-bill", icon: MoonIcon },
   { title: "Remove Attendance", url: "/attendance/remove-attendance", icon: Trash2Icon },

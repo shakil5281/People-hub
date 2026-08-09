@@ -648,6 +648,8 @@ func upsertMissingAttendance(tx *gorm.DB, att *models.Attendance, by string) err
 	ma.Date = att.Date
 	ma.CheckIn = att.CheckIn
 	ma.CheckOut = att.CheckOut
+	ma.TotalHours = att.TotalHours
+	ma.OverTime = att.OverTime
 	ma.Status = att.Status
 	if by != "" {
 		ma.CreatedBy = &by
@@ -657,6 +659,59 @@ func upsertMissingAttendance(tx *gorm.DB, att *models.Attendance, by string) err
 		return tx.Create(&ma).Error
 	}
 	return tx.Save(&ma).Error
+}
+
+func (r *AttendanceRepository) ListLateAttendance(startDate, endDate, companyID, employeeID, departmentID, sectionID, designationID, lineID, groupID, shiftID string, page, limit int) ([]models.Attendance, int64, error) {
+	base := r.db.Model(&models.Attendance{}).
+		Preload("Employee").
+		Preload("Employee.DesignationRef").
+		Preload("Shift").
+		Where("deleted_at IS NULL AND (status = 'late' OR late_minutes > 0)")
+
+	if startDate != "" && endDate != "" {
+		base = base.Where("date BETWEEN ? AND ?", startDate, endDate)
+	}
+	if companyID != "" {
+		base = base.Where("company_id = ?", companyID)
+	}
+	if employeeID != "" {
+		base = base.Where("employee_id = ?", employeeID)
+	}
+	if departmentID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE department_id = ? AND deleted_at IS NULL)", departmentID)
+	}
+	if sectionID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE section_id = ? AND deleted_at IS NULL)", sectionID)
+	}
+	if designationID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE designation_id = ? AND deleted_at IS NULL)", designationID)
+	}
+	if lineID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE line_id = ? AND deleted_at IS NULL)", lineID)
+	}
+	if groupID != "" {
+		base = base.Where("employee_id IN (SELECT employee_id FROM employees WHERE group_id = ? AND deleted_at IS NULL)", groupID)
+	}
+	if shiftID != "" {
+		base = base.Where("shift_id = ?", shiftID)
+	}
+
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	offset := (page - 1) * limit
+
+	var list []models.Attendance
+	err := base.Order("date DESC, created_at DESC").Offset(offset).Limit(limit).Find(&list).Error
+	return list, total, err
 }
 
 func (r *AttendanceRepository) Delete(id string) error {
