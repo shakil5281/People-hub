@@ -150,7 +150,9 @@ func (h *SalaryHandler) SheetExportPDF(c *gin.Context) {
 			deptName = strings.ToLower(s.Employee.Department.Name)
 		}
 
-		isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff")
+		isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff") ||
+			strings.Contains(grpName, "executive") || strings.Contains(grpName, "exucutive") ||
+			strings.Contains(empType, "executive") || strings.Contains(empType, "exucutive")
 
 		if isStaff {
 			if strings.Contains(deptName, "production") || strings.Contains(deptName, "maintenance") {
@@ -546,7 +548,9 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 				deptName = strings.ToLower(s.Employee.Department.Name)
 			}
 
-			isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff")
+			isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff") ||
+				strings.Contains(grpName, "executive") || strings.Contains(grpName, "exucutive") ||
+				strings.Contains(empType, "executive") || strings.Contains(empType, "exucutive")
 
 			if isStaff {
 				if strings.Contains(deptName, "production") || strings.Contains(deptName, "maintenance") {

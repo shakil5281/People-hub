@@ -22,9 +22,18 @@ interface BankRecord {
     department?: { name: string }
     group_ref?: { id: string; name: string }
     line_ref?: { id: string; name: string }
+    employee_type?: string
   }
+  basic_salary?: number
+  house_rent?: number
+  medical_allowance?: number
+  transport_allowance?: number
+  gross_salary?: number
+  overtime_hours?: number
+  overtime_amount?: number
+  attendance_bonus?: number
+  total_deductions?: number
   net_salary: number
-  gross_salary: number
 }
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
@@ -34,19 +43,36 @@ const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
 
 const fmt = (n: number) => n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+function customOrderRank(name: string): number {
+  const n = name.trim().toLowerCase()
+  if (n === "office staff") return 1
+  if (n === "production staff") return 2
+  if (n.startsWith("line")) {
+    const num = parseInt(n.replace(/[^0-9]/g, ""), 10)
+    return isNaN(num) ? 100 : 10 + num
+  }
+  if (n.includes("cutting")) return 200
+  if (n.includes("finishing")) return 201
+  if (n.includes("quality")) return 202
+  if (n.includes("loader") || n.includes("cleaner")) return 203
+  if (n === "no line") return 999
+  return 300
+}
+
 interface TabConfig {
   value: string
   label: string
-  groupName: string
+  staffCategory: string
   accountType: string
 }
 
 const tabs: TabConfig[] = [
-  { value: "summary", label: "Summary", groupName: "", accountType: "" },
-  { value: "staff-mcash", label: "Staff-mCash", groupName: "Staff", accountType: "mCash" },
-  { value: "staff-card", label: "Staff-Card", groupName: "Staff", accountType: "Card" },
-  { value: "worker-mcash", label: "Worker-mCash", groupName: "Worker", accountType: "mCash" },
-  { value: "worker-card", label: "Worker-Card", groupName: "Worker", accountType: "Card" },
+  { value: "summary", label: "Summary", staffCategory: "", accountType: "" },
+  { value: "staff-mcash", label: "Staff-mCash", staffCategory: "staff", accountType: "mCash" },
+  { value: "staff-card", label: "Staff-Card", staffCategory: "staff", accountType: "Card" },
+  { value: "worker-mcash", label: "Worker-mCash", staffCategory: "worker", accountType: "mCash" },
+  { value: "worker-card", label: "Worker-Card", staffCategory: "worker", accountType: "Card" },
+  { value: "hold", label: "Hold", staffCategory: "", accountType: "hold" },
 ]
 
 export default function BankSheetPage() {
@@ -87,9 +113,8 @@ export default function BankSheetPage() {
           month: String(month + 1),
           year: String(year),
         }
-        if (tab.groupName) {
-          const gid = groupIdByName(tab.groupName)
-          if (gid) params.group_id = gid
+        if (tab.staffCategory) {
+          params.staff_category = tab.staffCategory
         }
         if (tab.accountType) params.account_type = tab.accountType
         const { data: res } = await salaryApi.bankSheet(params)
@@ -132,15 +157,92 @@ export default function BankSheetPage() {
   const currentData = tabData[activeTab] || []
   const totalNet = currentData.reduce((sum, r) => sum + (r.net_salary || 0), 0)
 
-  const lineGroups = React.useMemo(() => {
-    const groups = new Map<string, BankRecord[]>()
+  const customSummaryData = React.useMemo(() => {
+    if (activeTab !== "summary") return []
+    const map = new Map<string, {
+      name: string
+      count: number
+      basic: number
+      house: number
+      medical: number
+      transport: number
+      gross: number
+      otHours: number
+      otAmount: number
+      attBonus: number
+      deductions: number
+      net: number
+    }>()
+
     for (const r of currentData) {
-      const lineName = r.employee?.line_ref?.name || "No Line"
-      if (!groups.has(lineName)) groups.set(lineName, [])
-      groups.get(lineName)!.push(r)
+      const grpName = (r.employee?.group_ref?.name || "").toLowerCase()
+      const empType = (r.employee?.employee_type || "").toLowerCase()
+      const deptName = (r.employee?.department?.name || "").toLowerCase()
+
+      const isStaff = grpName.includes("staff") || empType.includes("staff") ||
+        grpName.includes("executive") || grpName.includes("exucutive") ||
+        empType.includes("executive") || empType.includes("exucutive")
+
+      let catName = "No Line"
+      if (isStaff) {
+        if (deptName.includes("production") || deptName.includes("maintenance")) {
+          catName = "Production Staff"
+        } else {
+          catName = "Office Staff"
+        }
+      } else {
+        let lName = r.employee?.line_ref?.name || "No Line"
+        if (lName.toLowerCase() === "admin") lName = "Loader & Cleaner"
+        catName = lName
+      }
+
+      if (!map.has(catName)) {
+        map.set(catName, {
+          name: catName, count: 0, basic: 0, house: 0, medical: 0, transport: 0,
+          gross: 0, otHours: 0, otAmount: 0, attBonus: 0, deductions: 0, net: 0,
+        })
+      }
+      const item = map.get(catName)!
+      item.count++
+      item.basic += r.basic_salary || 0
+      item.house += r.house_rent || 0
+      item.medical += r.medical_allowance || 0
+      item.transport += r.transport_allowance || 0
+      item.gross += r.gross_salary || 0
+      item.otHours += r.overtime_hours || 0
+      item.otAmount += r.overtime_amount || 0
+      item.attBonus += r.attendance_bonus || 0
+      item.deductions += r.total_deductions || 0
+      item.net += r.net_salary || 0
     }
-    return Array.from(groups.entries()).sort(([a], [b]) => a.localeCompare(b))
-  }, [currentData])
+
+    return Array.from(map.values()).sort((a, b) => {
+      const rA = customOrderRank(a.name)
+      const rB = customOrderRank(b.name)
+      if (rA !== rB) return rA - rB
+      return a.name.localeCompare(b.name)
+    })
+  }, [currentData, activeTab])
+
+  const customSummaryTotals = React.useMemo(() => {
+    return customSummaryData.reduce(
+      (acc, item) => {
+        acc.count += item.count
+        acc.basic += item.basic
+        acc.house += item.house
+        acc.medical += item.medical
+        acc.transport += item.transport
+        acc.gross += item.gross
+        acc.otHours += item.otHours
+        acc.otAmount += item.otAmount
+        acc.attBonus += item.attBonus
+        acc.deductions += item.deductions
+        acc.net += item.net
+        return acc
+      },
+      { count: 0, basic: 0, house: 0, medical: 0, transport: 0, gross: 0, otHours: 0, otAmount: 0, attBonus: 0, deductions: 0, net: 0 }
+    )
+  }, [customSummaryData])
 
   const isSummary = activeTab === "summary"
 
@@ -213,52 +315,61 @@ export default function BankSheetPage() {
                 <div className="text-center text-muted-foreground py-12">No data found</div>
               ) : isSummary ? (
                 <>
-                  <div className="rounded-lg border bg-card overflow-hidden">
+                  <div className="rounded-lg border bg-card overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b bg-muted/50">
-                            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground w-10">Sl</th>
-                            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Line</th>
-                            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Employee ID</th>
-                            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Name</th>
-                            <th className="px-3 py-2.5 text-left font-medium text-muted-foreground">Account Number</th>
-                            <th className="px-3 py-2.5 text-right font-medium text-muted-foreground">Net Salary</th>
+                          <tr className="border-b bg-muted/70 text-foreground font-semibold">
+                            <th className="px-3 py-2.5 text-center w-12">Sl</th>
+                            <th className="px-3 py-2.5 text-left min-w-[140px]">Category / Line</th>
+                            <th className="px-3 py-2.5 text-center min-w-[80px]">Employees</th>
+                            <th className="px-3 py-2.5 text-right min-w-[110px]">Basic Total</th>
+                            <th className="px-3 py-2.5 text-right min-w-[110px]">House Rent</th>
+                            <th className="px-3 py-2.5 text-right min-w-[100px]">Medical</th>
+                            <th className="px-3 py-2.5 text-right min-w-[100px]">Transport</th>
+                            <th className="px-3 py-2.5 text-right min-w-[110px]">Gross Total</th>
+                            <th className="px-3 py-2.5 text-right min-w-[110px]">Total OT Hour</th>
+                            <th className="px-3 py-2.5 text-right min-w-[110px]">Total OT Payable</th>
+                            <th className="px-3 py-2.5 text-right min-w-[120px]">Total Att. Bonus</th>
+                            <th className="px-3 py-2.5 text-right min-w-[110px]">Total Deduction</th>
+                            <th className="px-3 py-2.5 text-right min-w-[120px]">Net Payable</th>
                           </tr>
                         </thead>
-                        <tbody>
-                          {lineGroups.map(([lineName, records], groupIndex) => {
-                            const lineNet = records.reduce((s, r) => s + (r.net_salary || 0), 0)
-                            const offset = lineGroups.slice(0, groupIndex).reduce((s, [, r]) => s + r.length, 0)
-                            return (
-                              <React.Fragment key={lineName}>
-                                <tr className="border-b bg-muted/30 font-semibold">
-                                  <td className="px-3 py-2" colSpan={1}></td>
-                                  <td className="px-3 py-2" colSpan={5}>
-                                    {lineName} <span className="font-normal text-muted-foreground">({records.length} employees)</span>
-                                  </td>
-                                </tr>
-                                {records.map((row, ri) => {
-                                  const sl = offset + ri + 1
-                                  return (
-                                    <tr key={row.id} className="border-b last:border-0 hover:bg-muted/20">
-                                      <td className="px-3 py-2 text-muted-foreground text-xs">{sl}</td>
-                                      <td className="px-3 py-2 text-muted-foreground text-xs">{lineName}</td>
-                                      <td className="px-3 py-2 font-mono text-xs">{row.employee?.employee_id}</td>
-                                      <td className="px-3 py-2 font-medium">{row.employee?.name_en || "-"}</td>
-                                      <td className="px-3 py-2 font-mono">{row.employee?.account_number || "-"}</td>
-                                      <td className="px-3 py-2 text-right font-semibold">{fmt(row.net_salary)}</td>
-                                    </tr>
-                                  )
-                                })}
-                                <tr className="border-b bg-muted/10 text-sm font-semibold">
-                                  <td className="px-3 py-2" colSpan={5}></td>
-                                  <td className="px-3 py-2 text-right text-green-700">{fmt(lineNet)}</td>
-                                </tr>
-                              </React.Fragment>
-                            )
-                          })}
+                        <tbody className="divide-y">
+                          {customSummaryData.map((item, idx) => (
+                            <tr key={item.name} className="hover:bg-muted/20 transition-colors">
+                              <td className="px-3 py-2 text-center text-muted-foreground text-xs">{idx + 1}</td>
+                              <td className="px-3 py-2 font-medium">{item.name}</td>
+                              <td className="px-3 py-2 text-center font-semibold">{item.count}</td>
+                              <td className="px-3 py-2 text-right">{fmt(item.basic)}</td>
+                              <td className="px-3 py-2 text-right">{fmt(item.house)}</td>
+                              <td className="px-3 py-2 text-right">{fmt(item.medical)}</td>
+                              <td className="px-3 py-2 text-right">{fmt(item.transport)}</td>
+                              <td className="px-3 py-2 text-right font-semibold">{fmt(item.gross)}</td>
+                              <td className="px-3 py-2 text-right font-medium">{Math.round(item.otHours)}</td>
+                              <td className="px-3 py-2 text-right">{fmt(item.otAmount)}</td>
+                              <td className="px-3 py-2 text-right">{fmt(item.attBonus)}</td>
+                              <td className="px-3 py-2 text-right text-rose-600 font-medium">{fmt(item.deductions)}</td>
+                              <td className="px-3 py-2 text-right font-bold text-emerald-600">{fmt(item.net)}</td>
+                            </tr>
+                          ))}
                         </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 bg-muted/50 font-bold text-sm">
+                            <td className="px-3 py-3 text-center" colSpan={2}>Grand Total</td>
+                            <td className="px-3 py-3 text-center">{customSummaryTotals.count}</td>
+                            <td className="px-3 py-3 text-right">{fmt(customSummaryTotals.basic)}</td>
+                            <td className="px-3 py-3 text-right">{fmt(customSummaryTotals.house)}</td>
+                            <td className="px-3 py-3 text-right">{fmt(customSummaryTotals.medical)}</td>
+                            <td className="px-3 py-3 text-right">{fmt(customSummaryTotals.transport)}</td>
+                            <td className="px-3 py-3 text-right">{fmt(customSummaryTotals.gross)}</td>
+                            <td className="px-3 py-3 text-right">{Math.round(customSummaryTotals.otHours)}</td>
+                            <td className="px-3 py-3 text-right">{fmt(customSummaryTotals.otAmount)}</td>
+                            <td className="px-3 py-3 text-right">{fmt(customSummaryTotals.attBonus)}</td>
+                            <td className="px-3 py-3 text-right text-rose-700">{fmt(customSummaryTotals.deductions)}</td>
+                            <td className="px-3 py-3 text-right text-emerald-700 text-base">{fmt(customSummaryTotals.net)}</td>
+                          </tr>
+                        </tfoot>
                       </table>
                     </div>
                   </div>
@@ -266,15 +377,19 @@ export default function BankSheetPage() {
                   <div className="rounded-lg border bg-muted/40 p-4 mt-4 flex flex-wrap gap-6 text-sm">
                     <div>
                       <span className="text-muted-foreground">Total Employees</span>
-                      <p className="font-semibold text-lg">{currentData.length}</p>
+                      <p className="font-semibold text-lg">{customSummaryTotals.count}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Total Lines</span>
-                      <p className="font-semibold text-lg">{lineGroups.length}</p>
+                      <span className="text-muted-foreground">Total Categories / Lines</span>
+                      <p className="font-semibold text-lg">{customSummaryData.length}</p>
                     </div>
                     <div>
-                      <span className="text-muted-foreground">Total Net Salary</span>
-                      <p className="font-semibold text-lg">{fmt(totalNet)}</p>
+                      <span className="text-muted-foreground">Total Gross Salary</span>
+                      <p className="font-semibold text-lg">{fmt(customSummaryTotals.gross)}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total Net Payable</span>
+                      <p className="font-semibold text-lg text-emerald-600">{fmt(customSummaryTotals.net)}</p>
                     </div>
                   </div>
                 </>

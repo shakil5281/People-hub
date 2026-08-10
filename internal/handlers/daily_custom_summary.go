@@ -121,9 +121,9 @@ func fetchCustomDailySummaryData(companyID, dateStr, lang string) (CustomDailySu
 		deptLower := strings.ToLower(dept)
 		desigLower := strings.ToLower(desig)
 		grpLower := strings.ToLower(grp)
-
-		isOfficeStaff := strings.Contains(deptLower, "admin") && strings.Contains(grpLower, "staff")
-		isProductionStaff := strings.Contains(deptLower, "production") && strings.Contains(grpLower, "staff")
+		isStaff := strings.Contains(grpLower, "staff") || strings.Contains(grpLower, "executive") || strings.Contains(grpLower, "exucutive")
+		isOfficeStaff := isStaff && (strings.Contains(deptLower, "admin") || (!strings.Contains(deptLower, "production") && !strings.Contains(deptLower, "maintenance")))
+		isProductionStaff := isStaff && (strings.Contains(deptLower, "production") || strings.Contains(deptLower, "maintenance"))
 		isMechanicalStaff := strings.Contains(deptLower, "maintenance") ||
 			strings.Contains(deptLower, "mechanical") ||
 			strings.Contains(deptLower, "macanical") ||

@@ -78,6 +78,7 @@ type SalaryFilter struct {
 	ShiftID       string
 	EmployeeID    string
 	AccountType   string
+	StaffCategory string
 }
 
 func (r *SalaryRepository) ListAllByMonth(companyID string, month, year int, departmentID string) ([]models.Salary, error) {
@@ -120,7 +121,33 @@ func (r *SalaryRepository) ListAllByMonthFiltered(f SalaryFilter) ([]models.Sala
 		query = query.Where("employee_id LIKE ?", "%"+f.EmployeeID+"%")
 	}
 	if f.AccountType != "" {
-		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE account_type = ?)", f.AccountType)
+		if strings.EqualFold(f.AccountType, "hold") {
+			query = query.Where(`employee_id IN (
+				SELECT employee_id FROM employees 
+				WHERE account_type IS NULL OR TRIM(account_type) = '' OR LOWER(account_type) IN ('none', 'hold') 
+				   OR LOWER(account_type) NOT IN ('mcash', 'card')
+				   OR account_number IS NULL OR TRIM(account_number) = ''
+			)`)
+		} else if strings.EqualFold(f.AccountType, "mcash") {
+			query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE LOWER(account_type) = 'mcash' AND account_number IS NOT NULL AND TRIM(account_number) != '')")
+		} else if strings.EqualFold(f.AccountType, "card") {
+			query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE LOWER(account_type) = 'card' AND account_number IS NOT NULL AND TRIM(account_number) != '')")
+		} else {
+			query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE account_type = ?)", f.AccountType)
+		}
+	}
+	if f.StaffCategory == "staff" {
+		query = query.Where(`employee_id IN (
+			SELECT employee_id FROM employees 
+			WHERE group_id IN (SELECT id FROM groups WHERE LOWER(name) LIKE '%staff%' OR LOWER(name) LIKE '%executive%' OR LOWER(name) LIKE '%exucutive%')
+			   OR LOWER(employee_type) LIKE '%staff%' OR LOWER(employee_type) LIKE '%executive%' OR LOWER(employee_type) LIKE '%exucutive%'
+		)`)
+	} else if f.StaffCategory == "worker" {
+		query = query.Where(`employee_id NOT IN (
+			SELECT employee_id FROM employees 
+			WHERE group_id IN (SELECT id FROM groups WHERE LOWER(name) LIKE '%staff%' OR LOWER(name) LIKE '%executive%' OR LOWER(name) LIKE '%exucutive%')
+			   OR LOWER(employee_type) LIKE '%staff%' OR LOWER(employee_type) LIKE '%executive%' OR LOWER(employee_type) LIKE '%exucutive%'
+		)`)
 	}
 	var salaries []models.Salary
 	err := query.Order("LENGTH(employee_id) ASC, employee_id ASC").Find(&salaries).Error

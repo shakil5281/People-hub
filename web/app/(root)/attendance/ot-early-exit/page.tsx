@@ -47,6 +47,10 @@ export default function OtEarlyExitPage() {
   const [exporting, setExporting] = React.useState(false)
   const [totalShortfall, setTotalShortfall] = React.useState(0)
   const [affectedEmployees, setAffectedEmployees] = React.useState(0)
+  const [page, setPage] = React.useState(1)
+  const [limit, setLimit] = React.useState(20)
+  const [total, setTotal] = React.useState(0)
+  const [totalPages, setTotalPages] = React.useState(1)
   const [filters, setFilters] = React.useState<Record<string, string>>({
     month: String(currentMonth),
     year: String(currentYear),
@@ -74,12 +78,14 @@ export default function OtEarlyExitPage() {
     { accessorKey: "shortfall_hours", header: "OT Deducted", cell: ({ row }) => `${Math.round(row.original.shortfall_hours ?? 0)} hrs` },
   ]
 
-  const activeParams = (f?: Record<string, string>) => {
+  const activeParams = (f?: Record<string, string>, p?: number, l?: number) => {
     const params = f || filters
     const active: Record<string, string> = {
       company_id: params.company_id || "",
       month: params.month || String(currentMonth),
       year: params.year || String(currentYear),
+      page: String(p ?? page),
+      limit: String(l ?? limit),
     }
     if (params.department_id) active.department_id = params.department_id
     if (params.section_id) active.section_id = params.section_id
@@ -91,15 +97,19 @@ export default function OtEarlyExitPage() {
     return active
   }
 
-  const fetchData = async (f?: Record<string, string>) => {
+  const fetchData = async (f?: Record<string, string>, p?: number, l?: number) => {
     setLoading(true)
     try {
-      const { data: res } = await otEarlyExitApi.list(activeParams(f))
+      const { data: res } = await otEarlyExitApi.list(activeParams(f, p, l))
       setData(res.records || [])
+      setTotal(res.total ?? 0)
+      setTotalPages(Math.max(1, Math.ceil((res.total ?? 0) / (l ?? limit))))
       setTotalShortfall(res.total_shortfall || 0)
       setAffectedEmployees(res.affected_employees || 0)
     } catch {
       setData([])
+      setTotal(0)
+      setTotalPages(1)
       setTotalShortfall(0)
       setAffectedEmployees(0)
     } finally {
@@ -109,12 +119,16 @@ export default function OtEarlyExitPage() {
 
   const handleApply = () => {
     setSubmitting(true)
-    fetchData(filters).finally(() => setSubmitting(false))
+    setPage(1)
+    fetchData(filters, 1).finally(() => setSubmitting(false))
   }
 
   const handleReset = () => {
     setFilters({ month: String(currentMonth), year: String(currentYear) })
+    setPage(1)
     setData([])
+    setTotal(0)
+    setTotalPages(1)
     setTotalShortfall(0)
     setAffectedEmployees(0)
   }
@@ -137,7 +151,8 @@ export default function OtEarlyExitPage() {
         year: Number(filters.year || currentYear),
       })
       toast.success(res.message || "Early-exit deductions computed")
-      await fetchData(filters)
+      setPage(1)
+      fetchData(filters, 1)
     } catch (e: unknown) {
       const msg = (e as { response?: { data?: { error?: string } } })?.response?.data?.error
       toast.error(msg || "Failed to compute early-exit deductions")
@@ -193,6 +208,8 @@ export default function OtEarlyExitPage() {
       fetchData()
     })
   }, [])
+
+  React.useEffect(() => { fetchData() }, [page, limit]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const filterDefs: FilterDef[] = React.useMemo(() => [
     {
@@ -321,7 +338,7 @@ export default function OtEarlyExitPage() {
       <div className="px-4 lg:px-6 grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Total Deduction Records</p>
-          <p className="text-2xl font-bold mt-1">{data.length}</p>
+          <p className="text-2xl font-bold mt-1">{total}</p>
         </div>
         <div className="rounded-lg border bg-card p-4">
           <p className="text-sm text-muted-foreground">Affected Employees</p>
@@ -339,7 +356,18 @@ export default function OtEarlyExitPage() {
         </div>
       )}
 
-      <DataTable data={data} columns={columns} loading={loading} />
+      <DataTable
+        data={data}
+        columns={columns}
+        loading={loading}
+        serverSide
+        page={page}
+        pageSize={limit}
+        pageCount={totalPages}
+        total={total}
+        onPageChange={setPage}
+        onPageSizeChange={(size) => { setLimit(size); setPage(1) }}
+      />
     </div>
   )
 }

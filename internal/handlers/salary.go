@@ -589,7 +589,9 @@ func (h *SalaryHandler) SheetExport(c *gin.Context) {
 				deptName = strings.ToLower(s.Employee.Department.Name)
 			}
 
-			isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff")
+			isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff") ||
+				strings.Contains(grpName, "executive") || strings.Contains(grpName, "exucutive") ||
+				strings.Contains(empType, "executive") || strings.Contains(empType, "exucutive")
 
 			if isStaff {
 				if strings.Contains(deptName, "production") || strings.Contains(deptName, "maintenance") {
@@ -1028,7 +1030,9 @@ func (h *SalaryHandler) SummaryExport(c *gin.Context) {
 				deptName = strings.ToLower(s.Employee.Department.Name)
 			}
 
-			isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff")
+			isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff") ||
+				strings.Contains(grpName, "executive") || strings.Contains(grpName, "exucutive") ||
+				strings.Contains(empType, "executive") || strings.Contains(empType, "exucutive")
 
 			if isStaff {
 				if strings.Contains(deptName, "production") || strings.Contains(deptName, "maintenance") {
@@ -1477,7 +1481,9 @@ func (h *SalaryHandler) Summary(c *gin.Context) {
 			if s.Employee.Department != nil {
 				deptName = strings.ToLower(s.Employee.Department.Name)
 			}
-			isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff")
+			isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff") ||
+				strings.Contains(grpName, "executive") || strings.Contains(grpName, "exucutive") ||
+				strings.Contains(empType, "executive") || strings.Contains(empType, "exucutive")
 			if isStaff {
 				if strings.Contains(deptName, "production") || strings.Contains(deptName, "maintenance") {
 					key = groupKey{Name: "Production Staff", ID: "production_staff"}
@@ -2232,11 +2238,12 @@ func (h *SalaryHandler) BankSheet(c *gin.Context) {
 	}
 
 	salaries, err := h.salaryRepo.ListAllByMonthFiltered(repository.SalaryFilter{
-		CompanyID:   companyID,
-		Month:       month,
-		Year:        year,
-		GroupID:     c.Query("group_id"),
-		AccountType: c.Query("account_type"),
+		CompanyID:     companyID,
+		Month:         month,
+		Year:          year,
+		GroupID:       c.Query("group_id"),
+		AccountType:   c.Query("account_type"),
+		StaffCategory: c.Query("staff_category"),
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -2347,85 +2354,155 @@ func newBankSheetStyles(f *excelize.File) *bankSheetStyles {
 }
 
 func writeSummarySheet(f *excelize.File, sheet string, salaries []models.Salary, styles *bankSheetStyles) {
-	for i, h := range summaryHeaders {
-		col := string(rune('A' + i))
+	type groupData struct {
+		Employees       int
+		BasicSalary     float64
+		HouseRent       float64
+		Medical         float64
+		Transport       float64
+		GrossSalary     float64
+		OTHours         float64
+		OTAmount        float64
+		AttendanceBonus float64
+		Deductions      float64
+		NetSalary       float64
+	}
+	type groupKey struct {
+		Name string
+	}
+
+	gMap := make(map[groupKey]*groupData)
+	var keys []groupKey
+
+	addRecord := func(kName string, s models.Salary) {
+		key := groupKey{Name: kName}
+		if gMap[key] == nil {
+			gMap[key] = &groupData{}
+			keys = append(keys, key)
+		}
+		d := gMap[key]
+		d.Employees++
+		d.BasicSalary += s.BasicSalary
+		d.HouseRent += s.HouseRent
+		d.Medical += s.MedicalAllowance
+		d.Transport += s.TransportAllowance
+		d.GrossSalary += s.GrossSalary
+		d.OTHours += s.OvertimeHours
+		d.OTAmount += s.OvertimeAmount
+		d.AttendanceBonus += s.AttendanceBonus
+		d.Deductions += s.TotalDeductions
+		d.NetSalary += s.NetSalary
+	}
+
+	for _, s := range salaries {
+		grpName := ""
+		if s.Employee.GroupRef != nil {
+			grpName = strings.ToLower(s.Employee.GroupRef.Name)
+		}
+		empType := strings.ToLower(s.Employee.EmployeeType)
+		deptName := ""
+		if s.Employee.Department != nil {
+			deptName = strings.ToLower(s.Employee.Department.Name)
+		}
+
+		isStaff := strings.Contains(grpName, "staff") || strings.Contains(empType, "staff") ||
+			strings.Contains(grpName, "executive") || strings.Contains(grpName, "exucutive") ||
+			strings.Contains(empType, "executive") || strings.Contains(empType, "exucutive")
+
+		if isStaff {
+			if strings.Contains(deptName, "production") || strings.Contains(deptName, "maintenance") {
+				addRecord("Production Staff", s)
+			} else {
+				addRecord("Office Staff", s)
+			}
+		} else {
+			lineName := "No Line"
+			if s.Employee.LineRef != nil && strings.TrimSpace(s.Employee.LineRef.Name) != "" {
+				lineName = strings.TrimSpace(s.Employee.LineRef.Name)
+			}
+			if strings.EqualFold(lineName, "admin") {
+				lineName = "Loader & Cleaner"
+			}
+			addRecord(lineName, s)
+		}
+	}
+
+	sort.Slice(keys, func(i, j int) bool {
+		rankI := customOrderRank(keys[i].Name)
+		rankJ := customOrderRank(keys[j].Name)
+		if rankI != rankJ {
+			return rankI < rankJ
+		}
+		return keys[i].Name < keys[j].Name
+	})
+
+	headers := []string{"Sl", "Category / Line", "Employees", "Basic Total", "House Rent", "Medical", "Transport", "Gross Total", "Total OT Hour", "Total OT Payable", "Total Attendance Bonus", "Total Deduction", "Net Payable"}
+	widths := []float64{6, 22, 12, 16, 16, 14, 14, 16, 16, 16, 18, 16, 18}
+
+	for i, h := range headers {
+		col, _ := excelize.ColumnNumberToName(i + 1)
 		f.SetCellValue(sheet, fmt.Sprintf("%s1", col), h)
-		f.SetColWidth(sheet, col, col, summaryWidths[i])
+		f.SetColWidth(sheet, col, col, widths[i])
 		f.SetCellStyle(sheet, fmt.Sprintf("%s1", col), fmt.Sprintf("%s1", col), styles.header)
 	}
 	f.SetRowHeight(sheet, 1, 30)
 
-	lineMap := make(map[string][]bankSheetItem)
-	for _, s := range salaries {
-		lineName := "No Line"
-		if s.Employee.LineRef != nil {
-			lineName = s.Employee.LineRef.Name
-		}
-		lineMap[lineName] = append(lineMap[lineName], bankSheetItem{
-			EmployeeID:    s.Employee.EmployeeID,
-			Name:          s.Employee.NameEn,
-			AccountNumber: s.Employee.AccountNumber,
-			NetSalary:     s.NetSalary,
-		})
-	}
+	var grandEmployees int
+	var grandBasic, grandHouse, grandMedical, grandTransport, grandGross, grandOTHours, grandOTAmount, grandAttBonus, grandDeductions, grandNet float64
 
-	sortedNames := make([]string, 0, len(lineMap))
-	for k := range lineMap {
-		sortedNames = append(sortedNames, k)
-	}
-	sort.Strings(sortedNames)
+	for i, key := range keys {
+		row := i + 2
+		d := gMap[key]
 
-	row := 2
-	sl := 0
-	for _, lineName := range sortedNames {
-		items := lineMap[lineName]
-		var lineTotal float64
-		for _, it := range items {
-			lineTotal += it.NetSalary
+		vals := []interface{}{
+			i + 1, key.Name, d.Employees,
+			d.BasicSalary, d.HouseRent, d.Medical, d.Transport, d.GrossSalary, d.OTHours, d.OTAmount, d.AttendanceBonus, d.Deductions, d.NetSalary,
 		}
 
-		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "")
-		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("%s  (%d employees)", lineName, len(items)))
-		f.MergeCell(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("E%d", row))
-		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), "")
-		for i := 0; i < 6; i++ {
-			col := string(rune('A' + i))
-			f.SetCellStyle(sheet, fmt.Sprintf("%s%d", col, row), fmt.Sprintf("%s%d", col, row), styles.line)
+		for j, v := range vals {
+			col, _ := excelize.ColumnNumberToName(j + 1)
+			cell := fmt.Sprintf("%s%d", col, row)
+			f.SetCellValue(sheet, cell, v)
+			if j == 0 || j == 2 {
+				f.SetCellStyle(sheet, cell, cell, styles.data)
+			} else if j == 1 {
+				f.SetCellStyle(sheet, cell, cell, styles.data)
+			} else {
+				f.SetCellStyle(sheet, cell, cell, styles.money)
+			}
 		}
 		f.SetRowHeight(sheet, row, 22)
-		row++
 
-		for _, it := range items {
-			sl++
-			f.SetCellValue(sheet, fmt.Sprintf("A%d", row), sl)
-			f.SetCellStyle(sheet, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), styles.data)
-			f.SetCellValue(sheet, fmt.Sprintf("B%d", row), lineName)
-			f.SetCellStyle(sheet, fmt.Sprintf("B%d", row), fmt.Sprintf("B%d", row), styles.data)
-			f.SetCellValue(sheet, fmt.Sprintf("C%d", row), it.EmployeeID)
-			f.SetCellStyle(sheet, fmt.Sprintf("C%d", row), fmt.Sprintf("C%d", row), styles.data)
-			f.SetCellValue(sheet, fmt.Sprintf("D%d", row), it.Name)
-			f.SetCellStyle(sheet, fmt.Sprintf("D%d", row), fmt.Sprintf("D%d", row), styles.data)
-			f.SetCellValue(sheet, fmt.Sprintf("E%d", row), it.AccountNumber)
-			f.SetCellStyle(sheet, fmt.Sprintf("E%d", row), fmt.Sprintf("E%d", row), styles.data)
-			f.SetCellValue(sheet, fmt.Sprintf("F%d", row), it.NetSalary)
-			f.SetCellStyle(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), styles.money)
-			f.SetRowHeight(sheet, row, 20)
-			row++
-		}
+		grandEmployees += d.Employees
+		grandBasic += d.BasicSalary
+		grandHouse += d.HouseRent
+		grandMedical += d.Medical
+		grandTransport += d.Transport
+		grandGross += d.GrossSalary
+		grandOTHours += d.OTHours
+		grandOTAmount += d.OTAmount
+		grandAttBonus += d.AttendanceBonus
+		grandDeductions += d.Deductions
+		grandNet += d.NetSalary
+	}
 
-		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), "")
-		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), "")
-		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), "")
-		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), "")
-		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), "Line Total")
-		for i := 0; i < 5; i++ {
-			col := string(rune('A' + i))
-			f.SetCellStyle(sheet, fmt.Sprintf("%s%d", col, row), fmt.Sprintf("%s%d", col, row), styles.subtotal)
+	totalRow := len(keys) + 2
+	if len(keys) > 0 {
+		totalVals := []interface{}{
+			"", "Grand Total", grandEmployees,
+			grandBasic, grandHouse, grandMedical, grandTransport, grandGross, grandOTHours, grandOTAmount, grandAttBonus, grandDeductions, grandNet,
 		}
-		f.SetCellValue(sheet, fmt.Sprintf("F%d", row), lineTotal)
-		f.SetCellStyle(sheet, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), styles.moneyBold)
-		f.SetRowHeight(sheet, row, 22)
-		row++
+		for j, v := range totalVals {
+			col, _ := excelize.ColumnNumberToName(j + 1)
+			cell := fmt.Sprintf("%s%d", col, totalRow)
+			f.SetCellValue(sheet, cell, v)
+			if j >= 3 {
+				f.SetCellStyle(sheet, cell, cell, styles.moneyBold)
+			} else {
+				f.SetCellStyle(sheet, cell, cell, styles.subtotal)
+			}
+		}
+		f.SetRowHeight(sheet, totalRow, 24)
 	}
 
 	f.SetSheetView(sheet, -1, &excelize.ViewOptions{
@@ -2435,8 +2512,6 @@ func writeSummarySheet(f *excelize.File, sheet string, salaries []models.Salary,
 
 var flatHeaders = []string{"Sl", "Employee ID", "Name", "Account Number", "Net Salary"}
 var flatWidths = []float64{6, 16, 30, 22, 16}
-var summaryHeaders = []string{"Sl", "Line", "Employee ID", "Name", "Account Number", "Net Salary"}
-var summaryWidths = []float64{6, 16, 16, 30, 22, 16}
 
 func writeFlatSheet(f *excelize.File, sheet string, salaries []models.Salary, styles *bankSheetStyles) {
 	for i, h := range flatHeaders {
@@ -2485,7 +2560,7 @@ func writeFlatSheet(f *excelize.File, sheet string, salaries []models.Salary, st
 // BankSheetExportAll godoc
 //
 // @Summary      Export bank sheet (all tabs) to Excel
-// @Description  Download salary bank transfer data as multi-sheet Excel with Summary, Staff-mCash, Staff-Card, Worker-mCash, Worker-Card tabs
+// @Description  Download salary bank transfer data as multi-sheet Excel with Summary, Staff-mCash, Staff-Card, Worker-mCash, Worker-Card, Hold tabs
 // @Tags         Salary
 // @Security     BearerAuth
 // @Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
@@ -2512,18 +2587,20 @@ func (h *SalaryHandler) BankSheetExportAll(c *gin.Context) {
 		return
 	}
 
-	// Fetch all 5 datasets
+	// Fetch all 6 datasets including Hold
 	type sheetDef struct {
-		name        string
-		groupID     string
-		accountType string
+		name          string
+		groupID       string
+		staffCategory string
+		accountType   string
 	}
 	defs := []sheetDef{
-		{name: "Summary", groupID: "", accountType: ""},
-		{name: "Staff-mCash", groupID: staffGroupID, accountType: "mCash"},
-		{name: "Staff-Card", groupID: staffGroupID, accountType: "Card"},
-		{name: "Worker-mCash", groupID: workerGroupID, accountType: "mCash"},
-		{name: "Worker-Card", groupID: workerGroupID, accountType: "Card"},
+		{name: "Summary", groupID: "", staffCategory: "", accountType: ""},
+		{name: "Staff-mCash", groupID: staffGroupID, staffCategory: "staff", accountType: "mCash"},
+		{name: "Staff-Card", groupID: staffGroupID, staffCategory: "staff", accountType: "Card"},
+		{name: "Worker-mCash", groupID: workerGroupID, staffCategory: "worker", accountType: "mCash"},
+		{name: "Worker-Card", groupID: workerGroupID, staffCategory: "worker", accountType: "Card"},
+		{name: "Hold", groupID: "", staffCategory: "", accountType: "hold"},
 	}
 
 	type sheetData struct {
@@ -2533,13 +2610,18 @@ func (h *SalaryHandler) BankSheetExportAll(c *gin.Context) {
 	var results []sheetData
 
 	for _, d := range defs {
-		salaries, err := h.salaryRepo.ListAllByMonthFiltered(repository.SalaryFilter{
-			CompanyID:   companyID,
-			Month:       month,
-			Year:        year,
-			GroupID:     d.groupID,
-			AccountType: d.accountType,
-		})
+		filter := repository.SalaryFilter{
+			CompanyID:     companyID,
+			Month:         month,
+			Year:          year,
+			AccountType:   d.accountType,
+			StaffCategory: d.staffCategory,
+		}
+		if d.groupID != "" && d.staffCategory == "" {
+			filter.GroupID = d.groupID
+		}
+
+		salaries, err := h.salaryRepo.ListAllByMonthFiltered(filter)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": d.name + ": " + err.Error()})
 			return

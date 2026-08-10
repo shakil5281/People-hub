@@ -220,7 +220,7 @@ export default function SalarySheetPage() {
         lineName = "Loader & Cleaner"
       }
 
-      const isStaff = grpName.includes("staff") || empType.includes("staff")
+      const isStaff = grpName.includes("staff") || empType.includes("staff") || grpName.includes("executive") || grpName.includes("exucutive") || empType.includes("executive") || empType.includes("exucutive")
 
       if (activeTab === "Office Staff") {
         return isStaff && !deptName.includes("production") && !deptName.includes("maintenance")
