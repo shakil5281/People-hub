@@ -201,18 +201,8 @@ func (h *SeparationHandler) Update(c *gin.Context) {
 
 func (h *SeparationHandler) Delete(c *gin.Context) {
 	id := c.Param("id")
-	item, err := h.repo.FindByID(id)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "separation not found"})
-		return
-	}
-	if item.Status == "Processed" {
-		c.JSON(http.StatusConflict, gin.H{"error": "cannot delete a processed separation — cancel it or reactivate the employee instead"})
-		return
-	}
-
-	if err := h.repo.Delete(id); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	if err := h.service.Delete(id); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 

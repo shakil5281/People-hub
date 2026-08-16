@@ -44,6 +44,7 @@ type payslipLabels struct {
 	Name           string
 	Department     string
 	Section        string
+	LineNo         string
 	Designation    string
 	Grade          string
 	Shift          string
@@ -52,8 +53,9 @@ type payslipLabels struct {
 	AccountNo      string
 	NID            string
 
-	Attendance string
-	WorkingDays string
+	Attendance     string
+	TotalWorkerDay string
+	WorkingDays    string
 	Weekend    string
 	Holiday    string
 	Present    string
@@ -120,6 +122,7 @@ var enLabels = payslipLabels{
 	Name:           "Name",
 	Department:     "Department",
 	Section:        "Section",
+	LineNo:         "Line No.",
 	Designation:    "Designation",
 	Grade:          "Grade",
 	Shift:          "Shift",
@@ -128,8 +131,9 @@ var enLabels = payslipLabels{
 	AccountNo:      "Account No.",
 	NID:            "NID",
 
-	Attendance:  "ATTENDANCE",
-	WorkingDays: "Working Days",
+	Attendance:     "ATTENDANCE",
+	TotalWorkerDay: "Total Worker Day",
+	WorkingDays:    "Working Days",
 	Weekend:     "Weekend",
 	Holiday:     "Holiday",
 	Present:     "Present",
@@ -196,6 +200,7 @@ var bnLabels = payslipLabels{
 	Name:           "নাম",
 	Department:     "বিভাগ",
 	Section:        "সেকশন",
+	LineNo:         "লাইন নং",
 	Designation:    "পদবি",
 	Grade:          "গ্রেড",
 	Shift:          "শিফট",
@@ -204,8 +209,9 @@ var bnLabels = payslipLabels{
 	AccountNo:      "অ্যাকাউন্ট নং",
 	NID:            "এনআইডি",
 
-	Attendance:  "উপস্থিতি",
-	WorkingDays: "কর্মদিবস",
+	Attendance:     "উপস্থিতি",
+	TotalWorkerDay: "মোট কর্মদিবস",
+	WorkingDays:    "কর্মদিবস",
 	Weekend:     "সাপ্তাহিক ছুটি",
 	Holiday:     "ছুটি",
 	Present:     "উপস্থিত",
@@ -286,6 +292,7 @@ func buildPayslipLabels(lang string, company models.Company) payslipLabels {
 		labels.Name = utils.UnicodeToBijoy(labels.Name)
 		labels.Department = utils.UnicodeToBijoy(labels.Department)
 		labels.Section = utils.UnicodeToBijoy(labels.Section)
+		labels.LineNo = utils.UnicodeToBijoy(labels.LineNo)
 		labels.Designation = utils.UnicodeToBijoy(labels.Designation)
 		labels.Grade = utils.UnicodeToBijoy(labels.Grade)
 		labels.Shift = utils.UnicodeToBijoy(labels.Shift)
@@ -294,6 +301,7 @@ func buildPayslipLabels(lang string, company models.Company) payslipLabels {
 		labels.AccountNo = utils.UnicodeToBijoy(labels.AccountNo)
 		labels.NID = utils.UnicodeToBijoy(labels.NID)
 		labels.Attendance = utils.UnicodeToBijoy(labels.Attendance)
+		labels.TotalWorkerDay = utils.UnicodeToBijoy(labels.TotalWorkerDay)
 		labels.WorkingDays = utils.UnicodeToBijoy(labels.WorkingDays)
 		labels.Weekend = utils.UnicodeToBijoy(labels.Weekend)
 		labels.Holiday = utils.UnicodeToBijoy(labels.Holiday)
@@ -570,6 +578,7 @@ func buildPayslipCardWithCopy(s *models.Salary, month, year int, lang string, la
 	nameStr := employeeNameFor(lang, emp)
 	deptStr := departmentName(emp.Department, lang)
 	secStr := sectionName(emp.SectionRef, lang)
+	lineStr := lineName(emp.LineRef, lang)
 	desigStr := designationName(emp.DesignationRef, lang)
 	gradeStr := emp.Grade
 	shiftStr := shiftName(emp.Shift, lang)
@@ -580,12 +589,15 @@ func buildPayslipCardWithCopy(s *models.Salary, month, year int, lang string, la
 		nameStr = utils.UnicodeToBijoy(nameStr)
 		deptStr = utils.UnicodeToBijoy(deptStr)
 		secStr = utils.UnicodeToBijoy(secStr)
+		lineStr = utils.UnicodeToBijoy(lineStr)
 		desigStr = utils.UnicodeToBijoy(desigStr)
 		gradeStr = utils.UnicodeToBijoy(gradeStr)
 		shiftStr = utils.UnicodeToBijoy(shiftStr)
 		empTypeStr = utils.UnicodeToBijoy(empTypeStr)
 		addrStr = utils.UnicodeToBijoy(addrStr)
 	}
+
+	totalWorkerDays := s.WeekendDays + s.HolidayDays + s.PresentDays + s.LateDays
 
 	card := &payslipCard{
 		CompanyName:  labels.CompanyName,
@@ -604,6 +616,7 @@ func buildPayslipCardWithCopy(s *models.Salary, month, year int, lang string, la
 			{labels.Name, orDash(nameStr)},
 			{labels.Department, orDash(deptStr)},
 			{labels.Section, orDash(secStr)},
+			{labels.LineNo, orDash(lineStr)},
 			{labels.Designation, orDash(desigStr)},
 			{labels.Grade, orDash(gradeStr)},
 			{labels.Shift, orDash(shiftStr)},
@@ -614,6 +627,7 @@ func buildPayslipCardWithCopy(s *models.Salary, month, year int, lang string, la
 		},
 
 		Attendance: []payslipField{
+			{labels.TotalWorkerDay, fmt.Sprint(totalWorkerDays)},
 			{labels.WorkingDays, fmt.Sprint(s.TotalDays)},
 			{labels.Weekend, fmt.Sprint(s.WeekendDays)},
 			{labels.Holiday, fmt.Sprint(s.HolidayDays)},
@@ -634,6 +648,7 @@ func buildPayslipCardWithCopy(s *models.Salary, month, year int, lang string, la
 			{labels.OtherAllowance, fmtMoney(s.OtherAllowance)},
 			{labels.AttendanceBonus, fmtMoney(s.AttendanceBonus)},
 			{labels.Overtime, fmtMoney(s.OvertimeAmount)},
+			{labels.GrossSalary, fmtMoney(s.GrossSalary)},
 		},
 		EarningsTotal: fmtMoney(s.GrossSalary),
 
@@ -644,6 +659,7 @@ func buildPayslipCardWithCopy(s *models.Salary, month, year int, lang string, la
 			{labels.Advance, fmtMoney(s.AdvanceDeduction)},
 			{labels.AbsentDeduct, fmtMoney(s.AbsentDeduction)},
 			{labels.OtherDeduct, fmtMoney(s.OtherDeduction)},
+			{labels.TotalDeductionLine, fmtMoney(s.TotalDeductions)},
 		},
 		DeductionsTotal: fmtMoney(s.TotalDeductions),
 

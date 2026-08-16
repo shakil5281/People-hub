@@ -14,19 +14,24 @@ const (
 )
 
 var payslipExcelThinBorder = []excelize.Border{
-	{Type: "left", Color: "CBD5E1", Style: 1},
-	{Type: "right", Color: "CBD5E1", Style: 1},
-	{Type: "top", Color: "CBD5E1", Style: 1},
-	{Type: "bottom", Color: "CBD5E1", Style: 1},
+	{Type: "left", Color: "7A7A7A", Style: 1},
+	{Type: "right", Color: "7A7A7A", Style: 1},
+	{Type: "top", Color: "7A7A7A", Style: 1},
+	{Type: "bottom", Color: "7A7A7A", Style: 1},
 }
 
 var payslipExcelCutBorder = []excelize.Border{
-	{Type: "left", Color: "94A3B8", Style: 2},
-	{Type: "right", Color: "94A3B8", Style: 2},
+	{Type: "left", Color: "7A7A7A", Style: 2},
+	{Type: "right", Color: "7A7A7A", Style: 2},
+}
+
+var payslipExcelHorizontalCutBorder = []excelize.Border{
+	{Type: "top", Color: "7A7A7A", Style: 2},
+	{Type: "bottom", Color: "7A7A7A", Style: 2},
 }
 
 type payslipExcelStyles struct {
-	title, payslip, section, label, value, amount, total, net, sig, gen, cut int
+	title, section, label, value, amount, total, net, sig, cut, hCut int
 }
 
 func newPayslipExcelStyles(f *excelize.File, lang string) payslipExcelStyles {
@@ -35,60 +40,55 @@ func newPayslipExcelStyles(f *excelize.File, lang string) payslipExcelStyles {
 		fontName = "SutonnyMJ"
 	}
 	title, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 11, Color: "#FFFFFF"},
-		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#0F172A"}},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	payslip, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 10, Color: "#D97706"},
-		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#F8FAFC"}},
+		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 12, Color: "#000000"},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#FFFFFF"}},
+		Border:    payslipExcelThinBorder,
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	section, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 8.5, Color: "#1E3A8A"},
-		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#F8FAFC"}},
+		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 9.5, Color: "#000000"},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#FFFFFF"}},
 		Border:    payslipExcelThinBorder,
 		Alignment: &excelize.Alignment{Vertical: "center"},
 	})
 	label, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 8.0},
+		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 9.0, Color: "#000000"},
 		Border:    payslipExcelThinBorder,
 		Alignment: &excelize.Alignment{Vertical: "center", ShrinkToFit: true},
 	})
 	value, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Size: 8.0},
+		Font:      &excelize.Font{Family: fontName, Size: 9.0, Color: "#000000"},
 		Border:    payslipExcelThinBorder,
 		Alignment: &excelize.Alignment{Vertical: "center", ShrinkToFit: true},
 	})
 	amount, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Size: 8.0},
+		Font:      &excelize.Font{Family: fontName, Size: 9.0, Color: "#000000"},
 		Border:    payslipExcelThinBorder,
 		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center", ShrinkToFit: true},
 	})
 	total, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 8.0, Color: "#1E3A8A"},
-		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#F1F5F9"}},
+		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 9.0, Color: "#000000"},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#FFFFFF"}},
 		Border:    payslipExcelThinBorder,
 		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center", ShrinkToFit: true},
 	})
 	net, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 9.5, Color: "#FFFFFF"},
-		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#15803D"}},
+		Font:      &excelize.Font{Family: fontName, Bold: true, Size: 10.5, Color: "#FFFFFF"},
+		Fill:      excelize.Fill{Type: "pattern", Pattern: 1, Color: []string{"#000000"}},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	sig, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Size: 7.5, Color: "#475569"},
+		Font:      &excelize.Font{Family: fontName, Size: 8.5, Color: "#000000"},
 		Border:    payslipExcelThinBorder,
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	gen, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Family: fontName, Size: 6.5, Color: "#64748B"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "bottom"},
 	})
 	cut, _ := f.NewStyle(&excelize.Style{
 		Border: payslipExcelCutBorder,
 	})
-	return payslipExcelStyles{title: title, payslip: payslip, section: section, label: label, value: value, amount: amount, total: total, net: net, sig: sig, gen: gen, cut: cut}
+	hCut, _ := f.NewStyle(&excelize.Style{
+		Border: payslipExcelHorizontalCutBorder,
+	})
+	return payslipExcelStyles{title: title, section: section, label: label, value: value, amount: amount, total: total, net: net, sig: sig, cut: cut, hCut: hCut}
 }
 
 func payslipExcelCell(col, row int) string {
@@ -115,46 +115,34 @@ func drawPayslipCardExcel(f *excelize.File, sheet string, col, row int, card *pa
 		f.SetCellStyle(sheet, a, b, style)
 	}
 
-	// ---- 1. Header: Company Name ----
+	// ---- 1. Header: Company Name (White Background, Black Text, Gray Border) ----
 	f.SetRowHeight(sheet, row, 22)
 	merge(row, c0, c3)
 	f.SetCellValue(sheet, payslipExcelCell(c0, row), card.CompanyName)
 	f.SetCellStyle(sheet, payslipExcelCell(c0, row), payslipExcelCell(c3, row), st.title)
 	row++
 
-	// ---- 2. Copy Label & Payslip Title ----
-	f.SetRowHeight(sheet, row, 16)
-	merge(row, c0, c3)
-	f.SetCellValue(sheet, payslipExcelCell(c0, row), fmt.Sprintf("%s   -   %s", card.CopyLabel, card.PayslipWord))
-	f.SetCellStyle(sheet, payslipExcelCell(c0, row), payslipExcelCell(c3, row), st.payslip)
-	row++
-
-	// ---- 3. Month & Payroll No ----
+	// ---- 2. Month, Copy Label & Print Date ----
 	f.SetRowHeight(sheet, row, 17)
 	merge(row, c0, c3)
-	f.SetCellValue(sheet, payslipExcelCell(c0, row), fmt.Sprintf("%s: %s   |   %s: %s   |   %s: %s",
-		labels.PayrollMonth, card.PayrollMonth, labels.PayrollNo, card.PayrollNo, labels.PrintDateLabel, card.PrintDate))
+	metaStr := fmt.Sprintf("%s: %s   |   %s   |   %s: %s",
+		labels.PayrollMonth, card.PayrollMonth, card.CopyLabel, labels.PrintDateLabel, card.PrintDate)
+	f.SetCellValue(sheet, payslipExcelCell(c0, row), metaStr)
 	f.SetCellStyle(sheet, payslipExcelCell(c0, row), payslipExcelCell(c3, row), st.value)
 	row++
 
-	// ---- 4. Employee Information ----
+	// ---- 3. Employee Information ----
 	row = drawSectionRowExcel(f, sheet, row, c0, c3, labels.EmployeeInfo, st.section)
 	row = drawPairGridExcel(f, sheet, row, c0, c1, c2, c3, card.EmployeeInfo, st.label, st.value)
 
-	// ---- 5. Attendance Summary ----
+	// ---- 4. Attendance Summary ----
 	row = drawSectionRowExcel(f, sheet, row, c0, c3, labels.Attendance, st.section)
 	row = drawPairGridExcel(f, sheet, row, c0, c1, c2, c3, card.Attendance, st.label, st.value)
 
-	// ---- 6. Earnings & Deductions Side-by-Side ----
+	// ---- 5. Earnings & Deductions Side-by-Side ----
 	f.SetRowHeight(sheet, row, 17)
 	set(row, c0, c1, labels.Earnings, st.section)
 	set(row, c2, c3, labels.Deductions, st.section)
-	row++
-	f.SetRowHeight(sheet, row, 17)
-	set(row, c0, c0, labels.Description, st.label)
-	set(row, c1, c1, labels.Amount, st.amount)
-	set(row, c2, c2, labels.Description, st.label)
-	set(row, c3, c3, labels.Amount, st.amount)
 	row++
 
 	maxRows := len(card.Earnings)
@@ -179,36 +167,18 @@ func drawPayslipCardExcel(f *excelize.File, sheet string, col, row int, card *pa
 		}
 		row++
 	}
-	f.SetRowHeight(sheet, row, 17)
-	set(row, c0, c0, labels.TotalEarnings, st.total)
-	set(row, c1, c1, card.EarningsTotal, st.total)
-	set(row, c2, c2, labels.TotalDeduction, st.total)
-	set(row, c3, c3, card.DeductionsTotal, st.total)
-	row++
 
-	// ---- 7. Summary & Net Salary ----
-	f.SetRowHeight(sheet, row, 17)
-	set(row, c0, c1, labels.GrossSalary, st.label)
-	set(row, c2, c3, card.GrossSalary, st.amount)
-	row++
+	// ---- 6. Net Salary Box (Solid Black Background, White Text) ----
 	f.SetRowHeight(sheet, row, 20)
 	merge(row, c0, c3)
 	set(row, c0, c3, fmt.Sprintf("%s : BDT %s", labels.NetSalary, card.NetSalary), st.net)
 	row++
 
-	// Empty gap row after Net Salary (Height: 10)
-	f.SetRowHeight(sheet, row, 10)
-	row++
+	// ---- 7. Signatures (Left: Employee Signature, Right: Approved By) ----
+	row = drawSignatureRowExcel(f, sheet, row, c0, c3, card.EmployeeSig, card.ApprovedBy, st.sig)
 
-	// ---- 8. Footer Signatures ----
-	row = drawSignatureRowExcel(f, sheet, row, c0, c3, card.PreparedBy, card.CheckedBy, st.sig)
-	row = drawSignatureRowExcel(f, sheet, row, c0, c3, card.ApprovedBy, card.EmployeeSig, st.sig)
-
-	// ---- 9. Confidential Line ----
-	f.SetRowHeight(sheet, row, 14)
-	merge(row, c0, c3)
-	f.SetCellValue(sheet, payslipExcelCell(c0, row), card.GeneratedBy+"   •   "+card.Confidential)
-	f.SetCellStyle(sheet, payslipExcelCell(c0, row), payslipExcelCell(c3, row), st.gen)
+	// Empty Gap Row after Signature (Height: 50)
+	f.SetRowHeight(sheet, row, 50)
 	row++
 
 	return row
@@ -254,7 +224,7 @@ func drawSignatureRowExcel(f *excelize.File, sheet string, row, from, to int, le
 	f.SetCellStyle(sheet, a, b, style)
 	f.SetCellValue(sheet, c, right)
 	f.SetCellStyle(sheet, c, d, style)
-	f.SetRowHeight(sheet, row, 20)
+	f.SetRowHeight(sheet, row, 26)
 	return row + 1
 }
 
@@ -310,8 +280,8 @@ func exportBulkPayslipExcel(c *gin.Context, salaries []models.Salary, month, yea
 
 	setPayslipExcelColumnWidths(f, sheet)
 
-	// 2 employees per A4 page (4 cards total per A4 page: 28 rows per card + 1 gap row = 29 rows per block)
-	cardRows := 28
+	// 2 employees per A4 page (4 cards total per A4 page: 27 rows per card + 1 gap row = 28 rows per block)
+	cardRows := 27
 	gapRow := 1
 	blockRows := cardRows + gapRow // 29 rows per employee block
 	pageStep := blockRows * 2      // 58 rows per A4 page
@@ -342,10 +312,13 @@ func exportBulkPayslipExcel(c *gin.Context, salaries []models.Salary, month, yea
 			f.SetCellStyle(sheet, payslipExcelCell(5, r), payslipExcelCell(5, r), st.cut)
 		}
 
-		// Set height of center height gap row = 30
+		// Set height of center height gap row = 30 and apply horizontal cut line
 		if empIdxOnPage == 0 {
 			gapRowIdx := row + cardRows
 			f.SetRowHeight(sheet, gapRowIdx, 30)
+			for c := 1; c <= 9; c++ {
+				f.SetCellStyle(sheet, payslipExcelCell(c, gapRowIdx), payslipExcelCell(c, gapRowIdx), st.hCut)
+			}
 		}
 	}
 

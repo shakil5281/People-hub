@@ -106,52 +106,41 @@ func payslipPDFFont(pdf *gofpdf.Fpdf, lang string) string {
 func drawPayslipCardPDF(pdf *gofpdf.Fpdf, font string, x, y, w, h float64, card *payslipCard, labels payslipLabels) {
 	s := w / payslipCardW
 
-	// Outer border for payslip card
-	pdf.SetDrawColor(203, 213, 225)
-	pdf.SetLineWidth(0.35)
-	pdf.Rect(x, y, w, h, "D")
-
-	// ---- 1. Header band: Company Name ----
-	pdf.SetFillColor(15, 23, 42)
-	pdf.Rect(x, y, w, 6.0*s, "F")
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFont(font, "B", 8.5*s)
-	pdf.SetXY(x+1.5*s, y+1.0*s)
+	// ---- 1. Header band: Company Name (White background, Black text, Gray border) ----
+	pdf.SetFillColor(255, 255, 255)
+	pdf.SetDrawColor(162, 162, 162)
+	pdf.SetLineWidth(0.20)
+	pdf.Rect(x, y, w, 6.5*s, "DF")
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetFont(font, "B", 9.5*s)
+	pdf.SetXY(x+1.5*s, y+1.2*s)
 	pdf.CellFormat(w-3*s, 4.0*s, card.CompanyName, "", 0, "C", false, 0, "")
-	curY := y + 6.0*s
+	curY := y + 6.5*s
 
-	// ---- 2. Copy Label & Payslip Title ----
-	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(203, 213, 225)
-	pdf.Rect(x, curY, w, 4.5*s, "DF")
-	pdf.SetFont(font, "B", 7.5*s)
-	pdf.SetTextColor(217, 119, 6) // Amber #D97706
+	// ---- 2. Month, Copy Label & Print Date ----
+	pdf.SetFont(font, "", 6.5*s)
+	pdf.SetTextColor(0, 0, 0)
+	pdf.SetDrawColor(162, 162, 162)
+	pdf.SetLineWidth(0.20)
+	pdf.Rect(x, curY, w, 4.3*s, "D")
 	pdf.SetXY(x+1.5*s, curY+0.8*s)
-	pdf.CellFormat(w-3*s, 3.0*s, fmt.Sprintf("%s   -   %s", card.CopyLabel, card.PayslipWord), "", 0, "C", false, 0, "")
-	curY += 4.5 * s
-
-	// ---- 3. Month & Payroll No ----
-	pdf.SetFont(font, "", 5.5*s)
-	pdf.SetTextColor(15, 23, 42)
-	pdf.Rect(x, curY, w, 3.8*s, "D")
-	pdf.SetXY(x+1.5*s, curY+0.6*s)
-	metaStr := fmt.Sprintf("%s: %s   |   %s: %s   |   %s: %s",
-		labels.PayrollMonth, card.PayrollMonth, labels.PayrollNo, card.PayrollNo, labels.PrintDateLabel, card.PrintDate)
+	metaStr := fmt.Sprintf("%s: %s   |   %s   |   %s: %s",
+		labels.PayrollMonth, card.PayrollMonth, card.CopyLabel, labels.PrintDateLabel, card.PrintDate)
 	pdf.CellFormat(w-3*s, 2.6*s, metaStr, "", 0, "C", false, 0, "")
-	curY += 3.8 * s
+	curY += 4.3 * s
 
-	// ---- 4. Employee Information ----
+	// ---- 3. Employee Information ----
 	curY += 1.2 * s
 	curY = drawSectionTitlePDF(pdf, font, s, x, curY, w, labels.EmployeeInfo)
 	curY = drawFieldGridPDF(pdf, font, s, x, curY, w, card.EmployeeInfo, 2)
 	curY += 1.5 * s
 
-	// ---- 5. Attendance Summary ----
+	// ---- 4. Attendance Summary (5 columns: 10 fields in 2 rows) ----
 	curY = drawSectionTitlePDF(pdf, font, s, x, curY, w, labels.Attendance)
-	curY = drawFieldGridPDF(pdf, font, s, x, curY, w, card.Attendance, 4)
+	curY = drawFieldGridPDF(pdf, font, s, x, curY, w, card.Attendance, 5)
 	curY += 1.5 * s
 
-	// ---- 6. Earnings (left) + Deductions (right) side-by-side ----
+	// ---- 5. Earnings (left) + Deductions (right) side-by-side ----
 	startY := curY
 	halfW := (w - 2.0*s) / 2
 	endY1 := drawMoneyTablePDF(pdf, font, s, x, startY, halfW, labels.Earnings, card.Earnings, card.EarningsTotal)
@@ -161,106 +150,93 @@ func drawPayslipCardPDF(pdf *gofpdf.Fpdf, font string, x, y, w, h float64, card 
 	} else {
 		curY = endY2
 	}
+	curY += 1.0 * s
 
-	// ---- 7. Summary ----
-	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(203, 213, 225)
-	pdf.SetFont(font, "B", 5.2*s)
-	pdf.SetTextColor(30, 58, 138)
-	pdf.Rect(x, curY, halfW, 3.8*s, "DF")
-	pdf.SetXY(x+1.5*s, curY+0.6*s)
-	pdf.CellFormat(halfW*0.5, 2.6*s, labels.GrossSalary, "", 0, "L", false, 0, "")
-
-	pdf.SetFont(font, "B", 5.4*s)
-	pdf.SetTextColor(15, 23, 42)
-	pdf.Rect(x+halfW+2.0*s, curY, halfW, 3.8*s, "DF")
-	pdf.SetXY(x+halfW+3.5*s, curY+0.6*s)
-	pdf.CellFormat(halfW-3.0*s, 2.6*s, card.GrossSalary, "", 0, "R", false, 0, "")
-	curY += 3.8 * s
-
-	// Net salary green box
-	pdf.SetFillColor(21, 128, 61)
+	// Net salary black box (6.0mm height)
+	pdf.SetFillColor(0, 0, 0)
 	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFont(font, "B", 8*s)
-	pdf.Rect(x, curY, w, 5.0*s, "F")
-	pdf.SetXY(x+2*s, curY+0.8*s)
+	pdf.SetFont(font, "B", 9.5*s)
+	pdf.Rect(x, curY, w, 6.0*s, "F")
+	pdf.SetXY(x+2*s, curY+1.3*s)
 	pdf.CellFormat(w-4*s, 3.4*s, fmt.Sprintf("%s : BDT %s", labels.NetSalary, card.NetSalary), "", 0, "C", false, 0, "")
-	curY += 5.0*s + 2.0*s // Empty gap after Net Salary (Height: 2mm)
+	curY += 6.0*s + 1.5*s
 
-	// ---- 8. Footer signatures ----
-	sigCells := []payslipField{
-		{"", card.PreparedBy},
-		{"", card.CheckedBy},
-		{"", card.ApprovedBy},
-		{"", card.EmployeeSig},
-	}
-	cellW := w / 4
-	for i, f := range sigCells {
-		pdf.SetDrawColor(203, 213, 225)
-		pdf.SetLineWidth(0.2)
-		pdf.SetFont(font, "", 5.2*s)
-		pdf.SetTextColor(15, 23, 42)
-		pdf.Rect(x+float64(i)*cellW, curY, cellW, 8.5*s, "D")
-		pdf.SetXY(x+float64(i)*cellW+0.5*s, curY+6.0*s)
-		pdf.CellFormat(cellW-1*s, 2.2*s, f.Value, "", 0, "C", false, 0, "")
-	}
-	curY += 8.5*s + 1.0*s
+	// ---- 6. Signatures (Left: Employee Signature, Right: Approved By) ----
+	pdf.SetDrawColor(162, 162, 162)
+	pdf.SetLineWidth(0.20)
+	pdf.SetFont(font, "", 6.2*s)
+	pdf.SetTextColor(0, 0, 0)
 
-	// ---- 9. Generated / confidential line ----
-	pdf.SetFont(font, "", 4.5*s)
-	pdf.SetTextColor(100, 116, 139)
-	pdf.SetXY(x+1.5*s, curY)
-	pdf.CellFormat(w-3*s, 2.2*s, card.GeneratedBy+"   •   "+card.Confidential, "", 0, "C", false, 0, "")
+	halfSigW := w / 2.0
+	// Left: Employee Signature
+	pdf.Rect(x, curY, halfSigW, 10.0*s, "D")
+	pdf.SetXY(x+0.5*s, curY+7.2*s)
+	pdf.CellFormat(halfSigW-1.0*s, 2.2*s, card.EmployeeSig, "", 0, "C", false, 0, "")
+
+	// Right: Approved By
+	pdf.Rect(x+halfSigW, curY, halfSigW, 10.0*s, "D")
+	pdf.SetXY(x+halfSigW+0.5*s, curY+7.2*s)
+	pdf.CellFormat(halfSigW-1.0*s, 2.2*s, card.ApprovedBy, "", 0, "C", false, 0, "")
+
+	curY += 10.0 * s
+
+	// Outer border for payslip card (Fits exact height with zero bottom gap)
+	cardH := curY - y
+	pdf.SetDrawColor(162, 162, 162)
+	pdf.SetLineWidth(0.20)
+	pdf.Rect(x, y, w, cardH, "D")
 }
 
 func drawSectionTitlePDF(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, title string) float64 {
-	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(203, 213, 225)
-	pdf.SetFont(font, "B", 5.8*s)
-	pdf.SetTextColor(30, 58, 138)
-	pdf.Rect(x, y, w, 3.8*s, "DF")
-	pdf.SetXY(x+1.5*s, y+0.6*s)
+	pdf.SetFillColor(255, 255, 255)
+	pdf.SetDrawColor(162, 162, 162)
+	pdf.SetLineWidth(0.20)
+	pdf.SetFont(font, "B", 6.8*s)
+	pdf.SetTextColor(0, 0, 0)
+	pdf.Rect(x, y, w, 4.3*s, "DF")
+	pdf.SetXY(x+1.5*s, y+0.8*s)
 	pdf.CellFormat(w-3*s, 2.6*s, title, "", 0, "L", false, 0, "")
-	return y + 3.8*s
+	return y + 4.3*s
 }
 
 func drawFieldGridPDF(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, fields []payslipField, cols int) float64 {
-	rowH := 3.8 * s
+	rowH := 4.3 * s
 	colW := w / float64(cols)
 	for i, fld := range fields {
 		col := i % cols
 		row := i / cols
 		px := x + float64(col)*colW
 		py := y + float64(row)*rowH
-		pdf.SetDrawColor(203, 213, 225)
+		pdf.SetDrawColor(162, 162, 162)
+		pdf.SetLineWidth(0.20)
 		pdf.Rect(px, py, colW, rowH, "D")
 
 		labelStr := fld.Label
 		valStr := fld.Value
 
-		labelFontSize := 4.8 * s
-		if cols == 4 && len(labelStr) > 10 {
-			labelFontSize = 4.0 * s
+		labelFontSize := 5.8 * s
+		if cols >= 4 && len(labelStr) > 10 {
+			labelFontSize = 4.6 * s
 		}
 		pdf.SetFont(font, "B", labelFontSize)
-		pdf.SetTextColor(100, 116, 139)
+		pdf.SetTextColor(0, 0, 0)
 
 		labelWidthRatio := 0.44
-		if cols == 4 {
-			labelWidthRatio = 0.68
+		if cols == 4 || cols == 5 {
+			labelWidthRatio = 0.62
 		}
 		lblW := colW * labelWidthRatio
-		pdf.SetXY(px+0.6*s, py+0.8*s)
+		pdf.SetXY(px+0.6*s, py+1.0*s)
 		pdf.CellFormat(lblW-0.6*s, 2.2*s, labelStr, "", 0, "L", false, 0, "")
 
-		valFontSize := 4.8 * s
-		if len(valStr) > 20 {
-			valFontSize = 4.0 * s
+		valFontSize := 5.8 * s
+		if cols >= 4 || len(valStr) > 20 {
+			valFontSize = 4.8 * s
 		}
 		pdf.SetFont(font, "", valFontSize)
-		pdf.SetTextColor(15, 23, 42)
+		pdf.SetTextColor(0, 0, 0)
 		valW := colW - lblW
-		pdf.SetXY(px+lblW, py+0.8*s)
+		pdf.SetXY(px+lblW, py+1.0*s)
 		pdf.CellFormat(valW-0.4*s, 2.2*s, valStr, "", 0, "R", false, 0, "")
 	}
 	rows := (len(fields) + cols - 1) / cols
@@ -268,49 +244,47 @@ func drawFieldGridPDF(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64,
 }
 
 func drawMoneyTablePDF(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, title string, rows []payslipRow, total string) float64 {
-	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(203, 213, 225)
-	pdf.SetFont(font, "B", 5.2*s)
-	pdf.SetTextColor(30, 58, 138)
-	pdf.Rect(x, y, w, 3.8*s, "DF")
-	pdf.SetXY(x+1.5*s, y+0.6*s)
+	pdf.SetFillColor(255, 255, 255)
+	pdf.SetDrawColor(162, 162, 162)
+	pdf.SetLineWidth(0.20)
+	pdf.SetFont(font, "B", 6.2*s)
+	pdf.SetTextColor(0, 0, 0)
+	pdf.Rect(x, y, w, 4.3*s, "DF")
+	pdf.SetXY(x+1.5*s, y+0.8*s)
 	pdf.CellFormat(w*0.64, 2.6*s, title, "", 0, "L", false, 0, "")
-	pdf.SetXY(x+1.5*s, y+0.6*s)
+	pdf.SetXY(x+1.5*s, y+0.8*s)
 	pdf.CellFormat(w-3*s, 2.6*s, "BDT", "", 0, "R", false, 0, "")
 
-	y2 := y + 3.8*s
+	y2 := y + 4.3*s
 	descW := w * 0.64
 	amtW := w * 0.36
 	for _, r := range rows {
-		pdf.SetDrawColor(203, 213, 225)
-		pdf.Rect(x, y2, w, 3.8*s, "D")
+		pdf.SetDrawColor(162, 162, 162)
+		pdf.SetLineWidth(0.20)
+		pdf.Rect(x, y2, w, 4.3*s, "D")
 		labelStr := r.Label
 		if len(labelStr) > 20 {
-			pdf.SetFont(font, "", 4.0*s)
+			pdf.SetFont(font, "", 5.0*s)
 		} else {
-			pdf.SetFont(font, "", 4.6*s)
+			pdf.SetFont(font, "", 5.6*s)
 		}
-		pdf.SetXY(x+1.0*s, y2+0.8*s)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(x+1.0*s, y2+1.0*s)
 		pdf.CellFormat(descW-1.2*s, 2.2*s, labelStr, "", 0, "L", false, 0, "")
 
-		pdf.SetFont(font, "", 4.6*s)
-		pdf.SetXY(x+descW, y2+0.8*s)
+		pdf.SetFont(font, "", 5.6*s)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetXY(x+descW, y2+1.0*s)
 		pdf.CellFormat(amtW-1.2*s, 2.2*s, r.Amount, "", 0, "R", false, 0, "")
-		y2 += 3.8 * s
+		y2 += 4.3 * s
 	}
 
-	pdf.SetFillColor(241, 245, 249)
-	pdf.SetFont(font, "B", 5.0*s)
-	pdf.SetTextColor(15, 23, 42)
-	pdf.Rect(x, y2, w, 3.8*s, "DF")
-	pdf.SetXY(x+1.5*s, y2+0.8*s)
-	pdf.CellFormat(w-3*s, 2.2*s, total, "", 0, "R", false, 0, "")
-	return y2 + 3.8*s
+	return y2
 }
 
 func drawPayslipCutLines(pdf *gofpdf.Fpdf) {
-	pdf.SetDrawColor(148, 163, 184)
-	pdf.SetLineWidth(0.25)
+	pdf.SetDrawColor(162, 162, 162)
+	pdf.SetLineWidth(0.20)
 	pdf.SetDashPattern([]float64{1.5, 1.2}, 0)
 
 	// Center vertical cut line (X = 105.0mm)
@@ -319,8 +293,8 @@ func drawPayslipCutLines(pdf *gofpdf.Fpdf) {
 	pdf.Line(0, 148.5, 210.0, 148.5)
 
 	pdf.SetDashPattern([]float64{0, 0}, 0)
-	pdf.SetLineWidth(0.3)
-	pdf.SetDrawColor(30, 58, 138)
+	pdf.SetLineWidth(0.20)
+	pdf.SetDrawColor(162, 162, 162)
 	drawScissorsIconPDF(pdf, 105.0, 148.5, 3.5)
 }
 

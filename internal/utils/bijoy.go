@@ -79,10 +79,21 @@ func UnicodeToBijoy(input string) string {
 		"শুক্র":                                 "ïµevi",
 		"শনিবার":                                 "twbvevi",
 		"শনি":                                   "twbvevi",
-		"স্টাফ":                                 "÷vd",
 		"এডমিন":                                 "G¨vWwgb",
 		"এডমিন (এ.জি.এম)":                       "G¨vWwgb (G.wR.Gg)",
 		"মাষ্টারবাড়ি, গাজীপুর সিটি, গাজীপুর":       "gv÷vevwo, MvRxcyi wmwU, MvRxcyi",
+		"রক্তের গ্রুপ":                            "i³‡i",
+		"অনুমোদন":                                "Abgyw`g",
+		"অনুমোদিত স্বাক্ষর":                        "Abgyw`g ¯^v¶i",
+		"স্বাক্ষর":                                "¯^v¶i",
+		"একুশে ফ্যাশনস":                           "GKy‡k dw¨kbm",
+		"একুশে ফ্যাশনস লিঃ":                       "GKy‡k dw¨kbm wjt",
+		"একুশে ফ্যাশন লিমিটেড":                    "GKy‡k dw¨kb wjwg‡UW",
+		"একুশে ফ্যাশন":                           "GKy‡k dw¨kb",
+		"শর্তাবলী":                               "kZ©vejt",
+		"যোগাযোগ":                               "‡hvMv‡hvM",
+		"গুণগত মান • প্রতিশ্রুতি • শ্রেষ্ঠত্ব":         "iegMZ gvb • cÖwZkÖæwZ • ‡kÖôZô",
+		"ছবি":                                   "Qwe",
 	}
 
 	for k, v := range knownMap {

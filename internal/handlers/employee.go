@@ -46,6 +46,8 @@ type EmployeeRow struct {
 	LineID        *string `json:"line_id"`
 	GroupID       *string `json:"group_id"`
 	FloorID       *string `json:"floor_id"`
+	ImageURL      string  `json:"image_url"`
+	SignatureURL  string  `json:"signature_url"`
 
 	PresentAddress     string `json:"present_address"`
 	PresentPostOffice  string `json:"present_post_office"`
@@ -82,6 +84,8 @@ func toEmployeeRow(e models.Employee) EmployeeRow {
 		LineID:        e.LineID,
 		GroupID:       e.GroupID,
 		FloorID:       e.FloorID,
+		ImageURL:      e.ImageURL,
+		SignatureURL:  e.SignatureURL,
 		PresentAddress: e.PresentAddress,
 		PermanentAddress: e.PermanentAddress,
 	}
@@ -207,6 +211,10 @@ type CreateEmployeeRequest struct {
 	// Status
 	Status         string `json:"status"`
 	OverTimeStatus bool   `json:"over_time_status"`
+
+	// Media
+	ImageURL     string `json:"image_url"`
+	SignatureURL string `json:"signature_url"`
 }
 
 func bindEmployeeFields(req *CreateEmployeeRequest, emp *models.Employee) {
@@ -284,6 +292,10 @@ func bindEmployeeFields(req *CreateEmployeeRequest, emp *models.Employee) {
 		emp.Status = req.Status
 	}
 	emp.OverTimeStatus = req.OverTimeStatus
+
+	// Media
+	emp.ImageURL = req.ImageURL
+	emp.SignatureURL = req.SignatureURL
 }
 
 func validateAccount(accountType, accountNumber string) string {

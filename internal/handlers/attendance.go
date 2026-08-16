@@ -2142,25 +2142,30 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 		return
 	}
 
+	contMap := h.buildLastContinuousAbsentMap(startDate, endDate, companyFilter)
+	for i := range rows {
+		if c, ok := contMap[rows[i].EmployeeID]; ok && c > 0 {
+			rows[i].TotalAbsent = c
+		}
+	}
+
 	f := excelize.NewFile()
 	sheet := "Absent Report"
 	index, _ := f.GetSheetIndex("Sheet1")
 	f.SetActiveSheet(index)
 	f.SetSheetName("Sheet1", sheet)
 
-	nCols := 8
+	nCols := 6
 	cols := []struct {
 		header string
 		width  float64
 	}{
 		{"Sl", 8},
-		{"Employee ID", 15},
+		{"Employee ID", 12},
 		{"Name", 28},
-		{"Designation", 20},
-		{"Department", 20},
-		{"Section", 20},
-		{"Total Absent Days", 18},
-		{"Absent Dates", 40},
+		{"Designation", 22},
+		{"Status", 12},
+		{"Total Absent", 12},
 	}
 
 	borderColor := "808080"
@@ -2265,11 +2270,10 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 		svc(2, sr.EmployeeID)
 		svl(3, sr.EmployeeName)
 		svl(4, sr.Designation)
-		svl(5, sr.Department)
-		svl(6, sr.Section)
-		f.SetCellValue(sheet, colNameAttendance(7)+strconv.Itoa(row), sr.TotalAbsent)
-		f.SetCellStyle(sheet, colNameAttendance(7)+strconv.Itoa(row), colNameAttendance(7)+strconv.Itoa(row), redStyle)
-		svl(8, sr.AbsentDates)
+		f.SetCellValue(sheet, colNameAttendance(5)+strconv.Itoa(row), "Absent")
+		f.SetCellStyle(sheet, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyle)
+		f.SetCellValue(sheet, colNameAttendance(6)+strconv.Itoa(row), sr.TotalAbsent)
+		f.SetCellStyle(sheet, colNameAttendance(6)+strconv.Itoa(row), colNameAttendance(6)+strconv.Itoa(row), redStyle)
 
 		f.SetRowHeight(sheet, row, 25)
 	}
@@ -2285,6 +2289,22 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	f.MergeCell(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
 	f.SetCellStyle(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
 	f.SetRowHeight(sheet, footerRow, 22)
+
+	// Page Setup: Portrait mode, A4 size
+	fitToPage := true
+	f.SetSheetProps(sheet, &excelize.SheetPropsOptions{
+		FitToPage: &fitToPage,
+	})
+	orientation := "portrait"
+	paperSize := 9
+	fitWidth := 1
+	fitHeight := 0
+	f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
+		Size:        &paperSize,
+		Orientation: &orientation,
+		FitToWidth:  &fitWidth,
+		FitToHeight: &fitHeight,
+	})
 
 	// --- Grouped Sheets ---
 	addGroupedAbsentSheet(f, "Department Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
@@ -2308,15 +2328,15 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 
 	// --- Page Setup ---
 	for _, s := range f.GetSheetList() {
-		orientation := "landscape"
+		fitToPage := false
+		f.SetSheetProps(s, &excelize.SheetPropsOptions{
+			FitToPage: &fitToPage,
+		})
+		orientation := "portrait"
 		paperSize := 9
-		fitWidth := 1
-		fitHeight := 0
 		f.SetPageLayout(s, &excelize.PageLayoutOptions{
 			Orientation: &orientation,
 			Size:        &paperSize,
-			FitToWidth:  &fitWidth,
-			FitToHeight: &fitHeight,
 		})
 		f.SetPageMargins(s, &excelize.PageLayoutMarginsOptions{
 			Left:   func(f float64) *float64 { return &f }(0.3),
@@ -3067,19 +3087,17 @@ func (h *AttendanceHandler) buildLastContinuousAbsentMap(startDate, endDate, com
 func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddress, dateDisplay string, rows []absentSummaryRow, groupFn func(absentSummaryRow) string) {
 	f.NewSheet(sheetName)
 
-	nCols := 8
+	nCols := 6
 	cols := []struct {
 		header string
 		width  float64
 	}{
 		{"Sl", 8},
-		{"Employee ID", 15},
+		{"Employee ID", 12},
 		{"Name", 28},
-		{"Designation", 20},
-		{"Department", 20},
-		{"Section", 20},
-		{"Total Absent Days", 18},
-		{"Absent Dates", 40},
+		{"Designation", 22},
+		{"Status", 12},
+		{"Total Absent", 12},
 	}
 
 	thinBorder := []excelize.Border{
@@ -3168,11 +3186,10 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 			svc(2, sr.EmployeeID)
 			svl(3, sr.EmployeeName)
 			svl(4, sr.Designation)
-			svl(5, sr.Department)
-			svl(6, sr.Section)
-			f.SetCellValue(sheetName, colNameAttendance(7)+strconv.Itoa(row), sr.TotalAbsent)
-			f.SetCellStyle(sheetName, colNameAttendance(7)+strconv.Itoa(row), colNameAttendance(7)+strconv.Itoa(row), redStyleG)
-			svl(8, sr.AbsentDates)
+			f.SetCellValue(sheetName, colNameAttendance(5)+strconv.Itoa(row), "Absent")
+			f.SetCellStyle(sheetName, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyleG)
+			f.SetCellValue(sheetName, colNameAttendance(6)+strconv.Itoa(row), sr.TotalAbsent)
+			f.SetCellStyle(sheetName, colNameAttendance(6)+strconv.Itoa(row), colNameAttendance(6)+strconv.Itoa(row), redStyleG)
 
 			sl++
 			f.SetRowHeight(sheetName, row, 25)
@@ -3186,6 +3203,22 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 	f.MergeCell(sheetName, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
 	f.SetCellStyle(sheetName, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
 	f.SetRowHeight(sheetName, footerRow, 22)
+
+	// Page Setup: Portrait mode, A4 size
+	fitToPage := true
+	f.SetSheetProps(sheetName, &excelize.SheetPropsOptions{
+		FitToPage: &fitToPage,
+	})
+	orientation := "portrait"
+	paperSize := 9
+	fitWidth := 1
+	fitHeight := 0
+	f.SetPageLayout(sheetName, &excelize.PageLayoutOptions{
+		Size:        &paperSize,
+		Orientation: &orientation,
+		FitToWidth:  &fitWidth,
+		FitToHeight: &fitHeight,
+	})
 }
 
 // ExportSummaryExcel godoc

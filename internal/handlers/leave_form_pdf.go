@@ -495,7 +495,7 @@ func renderLeaveFormPDFPage(pdf *gofpdf.Fpdf, font string, lang string, data lea
 	curY := leaveFormTop
 
 	// Set line width & colors
-	pdf.SetDrawColor(203, 213, 225)
+	pdf.SetDrawColor(152, 160, 169)
 	pdf.SetLineWidth(0.3)
 
 	// ---- 1. Header Band ----
@@ -609,7 +609,7 @@ func renderLeaveFormPDFPage(pdf *gofpdf.Fpdf, font string, lang string, data lea
 
 func drawLeaveSectionHeader(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, title string) float64 {
 	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(203, 213, 225)
+	pdf.SetDrawColor(152, 160, 169)
 	pdf.SetFont(font, "B", 5.8*s)
 	pdf.SetTextColor(30, 58, 138)
 	pdf.Rect(x, y, w, 3.8*s, "DF")
@@ -626,7 +626,7 @@ func drawLeaveFieldGrid(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float6
 		row := i / cols
 		px := x + float64(col)*colW
 		py := y + float64(row)*rowH
-		pdf.SetDrawColor(203, 213, 225)
+		pdf.SetDrawColor(152, 160, 169)
 		pdf.Rect(px, py, colW, rowH, "D")
 
 		labelStr := fld.Label
@@ -661,7 +661,7 @@ func drawLeaveFieldGrid(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float6
 }
 
 func drawLeaveTypeCheckboxes(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, options []string, active int) float64 {
-	pdf.SetDrawColor(203, 213, 225)
+	pdf.SetDrawColor(152, 160, 169)
 	pdf.SetFillColor(255, 255, 255)
 	h := 5.0 * s
 	pdf.Rect(x, y, w, h, "D")
@@ -692,7 +692,7 @@ func drawLeaveTypeCheckboxes(pdf *gofpdf.Fpdf, font string, s float64, x, y, w f
 }
 
 func drawLeaveTextBox(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, title, content string, h float64) float64 {
-	pdf.SetDrawColor(203, 213, 225)
+	pdf.SetDrawColor(152, 160, 169)
 	pdf.Rect(x, y, w, h*s, "D")
 	pdf.SetFont(font, "B", 4.8*s)
 	pdf.SetTextColor(100, 116, 139)
@@ -714,7 +714,7 @@ func drawLeaveBalanceTable(pdf *gofpdf.Fpdf, font string, s float64, x, y, w flo
 	h := 3.8 * s
 
 	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(203, 213, 225)
+	pdf.SetDrawColor(152, 160, 169)
 	pdf.SetFont(font, "B", 4.8*s)
 	pdf.SetTextColor(30, 58, 138)
 	for i, hdr := range headers {
@@ -731,7 +731,7 @@ func drawLeaveBalanceTable(pdf *gofpdf.Fpdf, font string, s float64, x, y, w flo
 		vals := []string{r.LeaveType, r.Entitled, r.Used, r.Remaining}
 		for i, v := range vals {
 			px := x + float64(i)*colW
-			pdf.SetDrawColor(203, 213, 225)
+			pdf.SetDrawColor(152, 160, 169)
 			pdf.Rect(px, y, colW, h, "D")
 			pdf.SetXY(px+0.5*s, y+0.8*s)
 			align := "C"
@@ -762,7 +762,7 @@ func drawLeaveApprovalCards(pdf *gofpdf.Fpdf, font string, s float64, x, y, w fl
 
 	for i, c := range cards {
 		cx := x + float64(i)*cardW
-		pdf.SetDrawColor(203, 213, 225)
+		pdf.SetDrawColor(152, 160, 169)
 		pdf.SetLineWidth(0.3)
 		pdf.Rect(cx, y, cardW, h, "D")
 

@@ -45,7 +45,8 @@ type Employee struct {
 	PunchNumber   string    `json:"punch_number" gorm:"type:varchar(50);uniqueIndex;not null"`
 	EmployeeType  string    `json:"employee_type" gorm:"type:varchar(50)"`
 	Grade         string    `json:"grade" gorm:"type:varchar(50)"`
-	JoiningDate   time.Time `json:"joining_date" gorm:"not null"`
+	JoiningDate   time.Time  `json:"joining_date" gorm:"not null"`
+	ResignDate    *time.Time `json:"resign_date,omitempty" gorm:"type:date"`
 	ShiftID       *string   `json:"shift_id" gorm:"type:uuid"`
 	ReportsTo     *string   `json:"reports_to" gorm:"type:uuid"`
 

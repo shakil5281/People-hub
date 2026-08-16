@@ -251,31 +251,41 @@ func (s *SeparationService) ProcessOne(id string) (*ProcessResult, error) {
 	return result, txErr
 }
 
-// Cancel marks a pending/approved separation as cancelled.
+// Cancel marks a pending/approved/processed separation as cancelled and restores the employee to active/Regular status.
 func (s *SeparationService) Cancel(id string) error {
 	sep, err := s.sepRepo.FindByID(id)
 	if err != nil {
 		return errors.New("separation not found")
 	}
-	if sep.Status == "Processed" {
-		return errors.New("cannot cancel a processed separation; use reactivate instead")
-	}
 	if sep.Status == "Cancelled" {
 		return nil
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		if sep.Status == "Processed" || sep.Status == "Approved" {
+			emp, empErr := s.employeeRepo.WithTx(tx).FindByEmployeeID(sep.EmployeeID)
+			if empErr == nil && emp != nil {
+				updates := map[string]interface{}{
+					"employee_type": "Regular",
+					"status":        "active",
+					"resign_date":   nil,
+				}
+				if err := tx.Model(emp).Select("employee_type", "status", "resign_date").Updates(updates).Error; err != nil {
+					return err
+				}
+			}
+		}
 		return tx.Model(sep).Update("status", "Cancelled").Error
 	})
 }
 
-// Reactivate reverts a processed separation, restoring the employee to active/Regular status.
+// Reactivate reverts a processed separation, restoring the employee to active/Regular status and clearing resign_date.
 func (s *SeparationService) Reactivate(id string) error {
 	sep, err := s.sepRepo.FindByID(id)
 	if err != nil {
 		return errors.New("separation not found")
 	}
-	if sep.Status != "Processed" {
-		return errors.New("only processed separations can be reactivated")
+	if sep.Status != "Processed" && sep.Status != "Approved" {
+		return errors.New("only processed or approved separations can be reactivated")
 	}
 
 	emp, err := s.employeeRepo.FindByEmployeeID(sep.EmployeeID)
@@ -287,22 +297,57 @@ func (s *SeparationService) Reactivate(id string) error {
 		updates := map[string]interface{}{
 			"employee_type": "Regular",
 			"status":        "active",
+			"resign_date":   nil,
 		}
-		if err := tx.Model(emp).Updates(updates).Error; err != nil {
+		if err := tx.Model(emp).Select("employee_type", "status", "resign_date").Updates(updates).Error; err != nil {
 			return err
 		}
 		return tx.Model(sep).Update("status", "Cancelled").Error
 	})
 }
 
-// processOne applies employee changes and marks separation as Processed.
+// Delete soft-deletes a separation record and, if it was processed/approved,
+// restores the employee to active/Regular status and clears resign_date.
+func (s *SeparationService) Delete(id string) error {
+	sep, err := s.sepRepo.FindByID(id)
+	if err != nil {
+		return errors.New("separation not found")
+	}
+
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if sep.Status == "Processed" || sep.Status == "Approved" {
+			emp, empErr := s.employeeRepo.WithTx(tx).FindByEmployeeID(sep.EmployeeID)
+			if empErr == nil && emp != nil {
+				updates := map[string]interface{}{
+					"employee_type": "Regular",
+					"status":        "active",
+					"resign_date":   nil,
+				}
+				if err := tx.Model(emp).Select("employee_type", "status", "resign_date").Updates(updates).Error; err != nil {
+					return err
+				}
+			}
+		}
+		return s.sepRepo.WithTx(tx).Delete(id)
+	})
+}
+
+// processOne applies employee changes (resignation date, status inactive, employee type) and marks separation as Processed.
 // Must be called within a transaction.
 func (s *SeparationService) processOne(tx *gorm.DB, sep *models.Separation, emp *models.Employee, newType string) (*ProcessResult, error) {
+	var resignDate *time.Time
+	if sep.Date != "" {
+		if t, err := time.Parse("2006-01-02", sep.Date); err == nil {
+			resignDate = &t
+		}
+	}
+
 	updates := map[string]interface{}{
 		"employee_type": newType,
 		"status":        "inactive",
+		"resign_date":   resignDate,
 	}
-	if err := tx.Model(emp).Updates(updates).Error; err != nil {
+	if err := tx.Model(emp).Select("employee_type", "status", "resign_date").Updates(updates).Error; err != nil {
 		return nil, err
 	}
 

@@ -390,7 +390,7 @@ export const idCardApi = {
   create: (data: Record<string, unknown>) => api.post("/id-cards", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/id-cards/${id}`, data),
   delete: (id: string) => api.delete(`/id-cards/${id}`),
-  generate: (employeeIds: string[]) => api.post("/id-cards/generate", { employee_ids: employeeIds }),
+  generate: (employeeIds: string[], lang: string = "en") => api.post("/id-cards/generate", { employee_ids: employeeIds, lang }),
 }
 
 export const leaveTypeApi = {

@@ -749,13 +749,13 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 
 	// Draw Header Row
 	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(203, 213, 225)
+	pdf.SetDrawColor(152, 160, 169)
 	pdf.SetLineWidth(0.3)
 	pdf.SetFont(font, "B", 8.5)
 	pdf.SetTextColor(15, 23, 42)
 
 	drawCell := func(cx, cy, cw, ch float64, txt, align string, bg bool, r, g, b int) {
-		pdf.SetDrawColor(203, 213, 225)
+		pdf.SetDrawColor(152, 160, 169)
 		if bg {
 			pdf.SetFillColor(r, g, b)
 			pdf.Rect(cx, cy, cw, ch, "DF")
@@ -846,7 +846,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 	pdf.SetTextColor(255, 255, 255)
 
 	drawGrandCell := func(cx, cy, cw, ch float64, txt string) {
-		pdf.SetDrawColor(203, 213, 225)
+		pdf.SetDrawColor(152, 160, 169)
 		pdf.SetFillColor(0, 160, 233)
 		pdf.Rect(cx, cy, cw, ch, "DF")
 		offsetY := (ch - 4.0) / 2.0

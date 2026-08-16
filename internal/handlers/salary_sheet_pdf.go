@@ -199,25 +199,25 @@ func (h *SalaryHandler) SheetExportPDF(c *gin.Context) {
 	}
 
 	renderHeader := func(displayLine string) {
-		pdf.SetFont(font, "B", 14)
+		pdf.SetFont(font, "B", 15)
 		pdf.SetTextColor(15, 23, 42)
 		pdf.Cell(0, 6, compName)
 		pdf.Ln(6)
 
-		pdf.SetFont(font, "", 8)
+		pdf.SetFont(font, "", 9)
 		pdf.SetTextColor(100, 100, 100)
 		if compAddr != "" {
 			pdf.Cell(0, 4, compAddr)
 			pdf.Ln(4)
 		}
 
-		pdf.SetFont(font, "B", 10)
+		pdf.SetFont(font, "B", 11)
 		pdf.SetTextColor(15, 23, 42)
 		title := fmt.Sprintf("%s - %s %d", labels.Title, monthLabel, year)
 		pdf.Cell(0, 5, title)
 		pdf.Ln(5)
 
-		pdf.SetFont(font, "B", 9)
+		pdf.SetFont(font, "B", 10)
 		pdf.SetTextColor(31, 41, 55)
 		lineText := fmt.Sprintf("Line: %s", displayLine)
 		if lang == "bn" {
@@ -228,10 +228,11 @@ func (h *SalaryHandler) SheetExportPDF(c *gin.Context) {
 
 		// Table Header
 		headerH := 7.0
-		pdf.SetDrawColor(217, 217, 217)
+		pdf.SetDrawColor(162, 162, 162)
+		pdf.SetLineWidth(0.20)
 		pdf.SetFillColor(68, 114, 196)
 		pdf.SetTextColor(255, 255, 255)
-		pdf.SetFont(font, "B", 6)
+		pdf.SetFont(font, "B", 7)
 		for _, c := range cols {
 			pdf.CellFormat(c.width, headerH, c.header, "1", 0, c.align, true, 0, "")
 		}
@@ -240,7 +241,7 @@ func (h *SalaryHandler) SheetExportPDF(c *gin.Context) {
 
 	renderFooter := func() {
 		pdf.SetY(sheetPDFPageH - 12)
-		pdf.SetFont(font, "", 7)
+		pdf.SetFont(font, "", 8)
 		pdf.SetTextColor(50, 50, 50)
 		pdf.CellFormat(80, 4, "Prepared By", "", 0, "L", false, 0, "")
 		pdf.CellFormat(185.6, 4, "Admin (A.G.M)                     Asst. General Manager", "", 0, "C", false, 0, "")
@@ -255,13 +256,13 @@ func (h *SalaryHandler) SheetExportPDF(c *gin.Context) {
 		renderHeader(grp.displayName)
 
 		rowH := 6.0
-		pdf.SetFont(font, "", 6)
+		pdf.SetFont(font, "", 7)
 
 		var totalBasic, totalHouse, totalMed, totalTrans, totalFood, totalGross float64
 		var totalAbsent, totalDeductions, totalOTHours, totalOTAmount, totalBonus, totalNet float64
 
 		for i, s := range grp.list {
-			pdf.SetDrawColor(217, 217, 217)
+			pdf.SetDrawColor(162, 162, 162)
 			pdf.SetFillColor(255, 255, 255)
 			pdf.SetTextColor(30, 30, 30)
 
@@ -329,10 +330,10 @@ func (h *SalaryHandler) SheetExportPDF(c *gin.Context) {
 		}
 
 		// Total Row for this Group
-		pdf.SetDrawColor(217, 217, 217)
+		pdf.SetDrawColor(162, 162, 162)
 		pdf.SetFillColor(226, 239, 218)
 		pdf.SetTextColor(0, 97, 0)
-		pdf.SetFont(font, "B", 6)
+		pdf.SetFont(font, "B", 7)
 		totalRowH := 6.5
 		totalData := []struct {
 			val   string
@@ -623,7 +624,7 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 
 	renderFooter := func() {
 		pdf.SetY(210.0 - 12)
-		pdf.SetFont(font, "", 7)
+		pdf.SetFont(font, "", 8)
 		pdf.SetTextColor(50, 50, 50)
 		pdf.CellFormat(70, 4, "Prepared By", "", 0, "L", false, 0, "")
 		pdf.CellFormat(147, 4, "Admin (A.G.M)                     Asst. General Manager", "", 0, "C", false, 0, "")
@@ -637,19 +638,19 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 		pdf.AddPage()
 
 		// Page Header
-		pdf.SetFont(font, "B", 14)
+		pdf.SetFont(font, "B", 15)
 		pdf.SetTextColor(15, 23, 42)
 		pdf.Cell(0, 6, compName)
 		pdf.Ln(6)
 
-		pdf.SetFont(font, "", 8)
+		pdf.SetFont(font, "", 9)
 		pdf.SetTextColor(100, 100, 100)
 		if compAddr != "" {
 			pdf.Cell(0, 4, compAddr)
 			pdf.Ln(4)
 		}
 
-		pdf.SetFont(font, "B", 11)
+		pdf.SetFont(font, "B", 12)
 		pdf.SetTextColor(15, 23, 42)
 		reportTitle := fmt.Sprintf("Salary Summary Report - %s %d", monthLabel, year)
 		if lang == "bn" {
@@ -684,10 +685,11 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 		}
 
 		headerH := 8.0
-		pdf.SetDrawColor(217, 217, 217)
+		pdf.SetDrawColor(162, 162, 162)
+		pdf.SetLineWidth(0.20)
 		pdf.SetFillColor(68, 114, 196)
 		pdf.SetTextColor(255, 255, 255)
-		pdf.SetFont(font, "B", 7)
+		pdf.SetFont(font, "B", 8)
 		for _, sc := range sCols {
 			pdf.CellFormat(sc.width, headerH, sc.header, "1", 0, sc.align, true, 0, "")
 		}
@@ -701,13 +703,13 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 			keys, gMap = buildGroupData(tab.groupMode)
 		}
 
-		pdf.SetFont(font, "", 7)
+		pdf.SetFont(font, "", 8)
 		rowH := 6.5
 		var grand groupData
 
 		for i, key := range keys {
 			d := gMap[key]
-			pdf.SetDrawColor(217, 217, 217)
+			pdf.SetDrawColor(162, 162, 162)
 			pdf.SetFillColor(255, 255, 255)
 			pdf.SetTextColor(30, 30, 30)
 
@@ -753,7 +755,7 @@ func (h *SalaryHandler) SummaryExportPDF(c *gin.Context) {
 		}
 
 		// Grand Total Row
-		pdf.SetDrawColor(217, 217, 217)
+		pdf.SetDrawColor(162, 162, 162)
 		pdf.SetFillColor(226, 239, 218)
 		pdf.SetTextColor(0, 97, 0)
 		pdf.SetFont(font, "B", 7)
@@ -913,7 +915,8 @@ func (h *SalaryHandler) DailySummaryExportPDF(c *gin.Context) {
 		}
 
 		headerH := 8.0
-		pdf.SetDrawColor(217, 217, 217)
+		pdf.SetDrawColor(162, 162, 162)
+		pdf.SetLineWidth(0.20)
 		pdf.SetFillColor(68, 114, 196)
 		pdf.SetTextColor(255, 255, 255)
 		pdf.SetFont(font, "B", 7)
@@ -975,7 +978,7 @@ func (h *SalaryHandler) DailySummaryExportPDF(c *gin.Context) {
 
 		for i, k := range keys {
 			d := gMap[k]
-			pdf.SetDrawColor(217, 217, 217)
+			pdf.SetDrawColor(162, 162, 162)
 			pdf.SetFillColor(255, 255, 255)
 			pdf.SetTextColor(30, 30, 30)
 
@@ -1010,7 +1013,7 @@ func (h *SalaryHandler) DailySummaryExportPDF(c *gin.Context) {
 			grandPay += d.TotalPay
 		}
 
-		pdf.SetDrawColor(217, 217, 217)
+		pdf.SetDrawColor(162, 162, 162)
 		pdf.SetFillColor(226, 239, 218)
 		pdf.SetTextColor(0, 97, 0)
 		pdf.SetFont(font, "B", 7)

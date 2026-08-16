@@ -70,16 +70,18 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
     )
   }
 
-  const toOthers = (r: SummaryRecord) => (r.late || 0) + (r.half_day || 0) + (r.weekend || 0)
+  const toOthers = (r: SummaryRecord) => (r.half_day || 0) + (r.weekend || 0)
   const toLeave = (r: SummaryRecord) => r.on_leave || 0
+  const toLate = (r: SummaryRecord) => r.late || 0
 
   const grandTotal = data.reduce((s, r) => ({
     present: s.present + r.present,
+    late: s.late + toLate(r),
     absent: s.absent + r.absent,
     leave: s.leave + toLeave(r),
     others: s.others + toOthers(r),
     total: s.total + r.total,
-  }), { present: 0, absent: 0, leave: 0, others: 0, total: 0 })
+  }), { present: 0, late: 0, absent: 0, leave: 0, others: 0, total: 0 })
 
   const displayName = (name: string | undefined) => {
     if (!name) return `Unassigned ${title || ""}`.trim()
@@ -94,6 +96,7 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
             <th className="text-left py-3 px-4 font-semibold text-muted-foreground w-10">#</th>
             <th className="text-left py-3 px-4 font-semibold text-muted-foreground">{title || "Section"}</th>
             <th className="text-center py-3 px-4 font-semibold text-green-700 bg-green-50/50">Present</th>
+            <th className="text-center py-3 px-4 font-semibold text-amber-700 bg-amber-50/50">Late</th>
             <th className="text-center py-3 px-4 font-semibold text-red-700 bg-red-50/50">Absent</th>
             <th className="text-center py-3 px-4 font-semibold text-indigo-700 bg-indigo-50/50">Leave</th>
             <th className="text-center py-3 px-4 font-semibold text-orange-700 bg-orange-50/50">Others</th>
@@ -105,11 +108,13 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
           {data.map((row, i) => {
             const others = toOthers(row)
             const leave = toLeave(row)
+            const late = toLate(row)
             return (
               <tr key={row.id} className="border-b last:border-0 hover:bg-muted/20">
                 <td className="py-2.5 px-4 text-muted-foreground text-xs">{i + 1}</td>
                 <td className="py-2.5 px-4 font-medium">{displayName(row.name)}</td>
                 <td className="py-2.5 px-4 text-center font-semibold text-green-700">{row.present}</td>
+                <td className="py-2.5 px-4 text-center font-semibold text-amber-700">{late || "-"}</td>
                 <td className="py-2.5 px-4 text-center font-semibold text-red-700">{row.absent}</td>
                 <td className="py-2.5 px-4 text-center font-semibold text-indigo-700">{leave || "-"}</td>
                 <td className="py-2.5 px-4 text-center font-semibold text-orange-700">{others || "-"}</td>
@@ -124,6 +129,7 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
             <td className="py-3 px-4 text-muted-foreground" colSpan={1}></td>
             <td className="py-3 px-4 text-base">Grand Total</td>
             <td className="py-3 px-4 text-center text-green-700 text-base">{grandTotal.present}</td>
+            <td className="py-3 px-4 text-center text-amber-700 text-base">{grandTotal.late}</td>
             <td className="py-3 px-4 text-center text-red-700 text-base">{grandTotal.absent}</td>
             <td className="py-3 px-4 text-center text-indigo-700 text-base">{grandTotal.leave}</td>
             <td className="py-3 px-4 text-center text-orange-700 text-base">{grandTotal.others}</td>

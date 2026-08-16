@@ -47,7 +47,17 @@ export function ImageUpload({ value, onChange, label = "Upload Image", accept = 
   }
 
   const baseUrl = getUploadBaseUrl()
-  const imageUrl = value?.startsWith("/uploads") ? `${baseUrl}${value}` : value
+  const resolveUrl = (val?: string) => {
+    if (!val) return ""
+    if (val.startsWith("http://") || val.startsWith("https://") || val.startsWith("blob:") || val.startsWith("data:")) {
+      return val
+    }
+    if (val.startsWith("/")) {
+      return `${baseUrl}${val}`
+    }
+    return `${baseUrl}/${val}`
+  }
+  const imageUrl = resolveUrl(value)
 
   return (
     <div className="space-y-2">

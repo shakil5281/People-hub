@@ -14,21 +14,24 @@ import (
 	"github.com/shakil5281/peoplehub-api/internal/database"
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"github.com/shakil5281/peoplehub-api/internal/service"
+	"github.com/shakil5281/peoplehub-api/internal/utils"
 )
 
 type GenerateIdCardRequest struct {
 	EmployeeIDs []string `json:"employee_ids" binding:"required"`
+	Lang        string   `json:"lang"`   // "en" or "bn"
+	Format      string   `json:"format"` // "2x4" (default) or "sheet" (A4 6-up)
 }
 
 // GenerateIdCards godoc
 //
-//	@Summary      Generate ID cards PDF
-//	@Description  Generate printable ID cards (front + back on same page, 3 employees per A4 portrait page, 35x45mm photo). English design without QR or barcode.
+//	@Summary      Generate ID cards PDF (2x4 inch portrait or A4 sheet)
+//	@Description  Generate printable ID cards for Ekushe Fashions Ltd. in 2x4 inch portrait mode (Page 1 Front, Page 2 Back) or A4 sheet format in English or Bangla.
 //	@Tags         ID Cards
 //	@Security     BearerAuth
 //	@Accept       json
 //	@Produce      json
-//	@Param        request body GenerateIdCardRequest true "Employee IDs (business keys)"
+//	@Param        request body GenerateIdCardRequest true "Employee IDs, format and language"
 //	@Success      200  {object}  map[string]string
 //	@Failure      400  {object}  map[string]string
 //	@Failure      500  {object}  map[string]string
@@ -44,6 +47,9 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		return
 	}
 
+	isBn := strings.ToLower(req.Lang) == "bn" || strings.ToLower(req.Lang) == "bangla"
+	is2x4Format := strings.ToLower(req.Format) == "2x4"
+
 	var employees []models.Employee
 	if err := database.DB.
 		Preload("Company").
@@ -58,50 +64,90 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		return
 	}
 
-	// --- Font setup (SutonnyMJ or embedded Noto Sans Bengali) ---
-	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(0, 0, 0)
-	pdf.SetAutoPageBreak(false, 0)
-	font := loadBanglaFont(pdf)
+	var pdf *gofpdf.Fpdf
+	var font string
 
-	// --- Layout constants (Portrait A4: 210 x 297) ---
-	// 3 columns x 1 row per half -> 3 front cards on top half, 3 back cards on bottom half.
-	const (
-		pageW = 210.0
-		pageH = 297.0
-		margin = 8.0
-		gapX   = 3.0
-		cols   = 3
-		cardH  = 95.0
-	)
+	if is2x4Format {
+		// Single 2x4 Inch Portrait Card Layout (Width: 50.8 mm, Height: 101.6 mm)
+		// Page 1 = Front side, Page 2 = Back side
+		const (
+			cardW = 50.8
+			cardH = 101.6
+		)
 
-	cardW := (pageW - 2*margin - float64(cols-1)*gapX) / float64(cols)
-	halfH := pageH / 2
-	offsetY := (halfH - cardH) / 2
-	cardTopY := margin + offsetY
-	cardBottomY := pageH/2 + offsetY
-
-	// Generate pages (cols employees per page: fronts top, backs bottom)
-	for i := 0; i < len(employees); i += cols {
-		pdf.AddPage()
-		if pdf.Error() != nil {
-			service.WriteErrorLog("idcard", "AddPage error: "+pdf.Error().Error())
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "PDF page error: " + pdf.Error().Error()})
-			return
+		pdf = gofpdf.NewCustom(&gofpdf.InitType{
+			OrientationStr: "P",
+			UnitStr:        "mm",
+			Size: gofpdf.SizeType{
+				Wd: cardW,
+				Ht: cardH,
+			},
+		})
+		pdf.SetMargins(0, 0, 0)
+		pdf.SetAutoPageBreak(false, 0)
+		if isBn {
+			font = loadBanglaFont(pdf)
+		} else {
+			font = "Arial"
 		}
-		end := i + cols
-		if end > len(employees) {
-			end = len(employees)
+
+		for _, emp := range employees {
+			// Page 1: Front
+			pdf.AddPage()
+			drawCardFront(pdf, 0, 0, cardW, cardH, emp, font, isBn)
+
+			// Page 2: Back
+			pdf.AddPage()
+			drawCardBack(pdf, 0, 0, cardW, cardH, emp, font, isBn)
 		}
-		for j, emp := range employees[i:end] {
-			x := margin + float64(j)*(cardW+gapX)
-			drawCardFront(pdf, x, cardTopY, cardW, cardH, emp, font)
+	} else {
+		// Default: A4 Sheet Layout (6 employees per A4 page: Front + Back side-by-side)
+		pdf = gofpdf.New("P", "mm", "A4", "")
+		pdf.SetMargins(0, 0, 0)
+		pdf.SetAutoPageBreak(false, 0)
+		if isBn {
+			font = loadBanglaFont(pdf)
+		} else {
+			font = "Arial"
+		}
+
+		const (
+			employeesPerPage = 6
+			cardW            = 46.0
+			cardH            = 86.0
+			startX           = 6.0
+			startY           = 9.0
+			gapX             = 4.0
+			gapY             = 6.5
+		)
+
+		for i := 0; i < len(employees); i += employeesPerPage {
+			pdf.AddPage()
 			if pdf.Error() != nil {
-				service.WriteErrorLog("idcard", "drawCardFront error at emp="+emp.EmployeeID+": "+pdf.Error().Error())
+				service.WriteErrorLog("idcard", "AddPage error: "+pdf.Error().Error())
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "PDF page error: " + pdf.Error().Error()})
+				return
 			}
-			drawCardBack(pdf, x, cardBottomY, cardW, cardH, emp, font)
-			if pdf.Error() != nil {
-				service.WriteErrorLog("idcard", "drawCardBack error at emp="+emp.EmployeeID+": "+pdf.Error().Error())
+
+			end := i + employeesPerPage
+			if end > len(employees) {
+				end = len(employees)
+			}
+
+			pageEmps := employees[i:end]
+			for idx, emp := range pageEmps {
+				row := idx / 2
+				colInRow := idx % 2
+
+				frontCol := colInRow * 2
+				backCol := frontCol + 1
+
+				frontX := startX + float64(frontCol)*(cardW+gapX)
+				backX := startX + float64(backCol)*(cardW+gapX)
+				cardY := startY + float64(row)*(cardH+gapY)
+
+				drawCardFront(pdf, frontX, cardY, cardW, cardH, emp, font, isBn)
+				drawCardBack(pdf, backX, cardY, cardW, cardH, emp, font, isBn)
 			}
 		}
 	}
@@ -120,242 +166,511 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 	}
 
 	encoded := base64.StdEncoding.EncodeToString(buf.Bytes())
-	filename := "id_cards_" + strings.ReplaceAll(time.Now().Format("2006-01-02"), "-", "_") + ".pdf"
+	filename := "id_card_" + strings.ReplaceAll(time.Now().Format("2006-01-02"), "-", "_") + ".pdf"
 	c.JSON(http.StatusOK, gin.H{"data": encoded, "filename": filename})
 }
 
-func companyDisplayName(company models.Company) string {
+func companyDisplayName(company models.Company, isBn bool) string {
+	if isBn {
+		if company.CompanyNameBn != "" {
+			return utils.UnicodeToBijoy(company.CompanyNameBn)
+		}
+		if company.CompanyNameEn != "" {
+			return utils.UnicodeToBijoy(company.CompanyNameEn)
+		}
+		return utils.UnicodeToBijoy("একুশে ফ্যাশনস লিঃ")
+	}
 	if company.CompanyNameEn != "" {
 		return company.CompanyNameEn
 	}
 	if company.CompanyNameBn != "" {
 		return company.CompanyNameBn
 	}
-	return "Company"
+	return "Ekushe Fashions Ltd."
 }
 
-func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, font string) {
-	// Card border
-	pdf.SetDrawColor(29, 78, 137)
-	pdf.SetLineWidth(0.6)
+func fitTextFontSize(pdf *gofpdf.Fpdf, font string, style string, text string, maxWidth float64, initialSize float64, minSize float64) float64 {
+	size := initialSize
+	for size > minSize {
+		pdf.SetFont(font, style, size)
+		if pdf.GetStringWidth(text) <= maxWidth {
+			return size
+		}
+		size -= 0.2
+	}
+	return minSize
+}
+
+func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, font string, isBn bool) {
+	// Card Outer Border (Rounded corners)
+	pdf.SetDrawColor(210, 215, 220)
+	pdf.SetLineWidth(0.4)
 	pdf.Rect(x, y, w, h, "D")
 
-	companyName := companyDisplayName(emp.Company)
+	companyName := companyDisplayName(emp.Company, isBn)
 
-	// Header: logo placeholder + company name + subtitle
-	logoSize := 9.0
-	pdf.SetFillColor(29, 78, 137)
-	pdf.SetDrawColor(29, 78, 137)
+	// Top Punch Slot Indicator (Pill shape)
+	pdf.SetDrawColor(180, 185, 190)
 	pdf.SetLineWidth(0.3)
-	pdf.Rect(x+2, y+2, logoSize, logoSize, "FD")
-	pdf.SetFont(font, "B", 4)
+	pdf.SetFillColor(245, 247, 250)
+	slotW, slotH := 12.0, 2.5
+	pdf.Rect(x+(w-slotW)/2, y+1.2, slotW, slotH, "FD")
+
+	// Header: Circular Logo Badge + Company Name on ONE LINE (LARGE FONT)
+	logoR := 3.8
+	logoCenterX := x + 6.0
+	logoCenterY := y + 8.2
+
+	pdf.SetFillColor(18, 58, 99) // Primary Navy #123A63
+	pdf.SetDrawColor(18, 58, 99)
+	pdf.SetLineWidth(0.3)
+	pdf.Circle(logoCenterX, logoCenterY, logoR, "FD")
+
+	pdf.SetFont("Arial", "B", 3.2)
 	pdf.SetTextColor(255, 255, 255)
-	pdf.SetXY(x+2, y+2+logoSize/2-1.5)
-	pdf.CellFormat(logoSize, 3, "LOGO", "", 0, "C", false, 0, "")
+	pdf.SetXY(logoCenterX-logoR, logoCenterY-1.5)
+	pdf.CellFormat(logoR*2, 3, "LOGO", "", 0, "C", false, 0, "")
 
-	pdf.SetFont(font, "B", 7)
-	pdf.SetTextColor(29, 78, 137)
-	pdf.SetXY(x+12.5, y+1.8)
-	pdf.MultiCell(w-14.5, 3.6, companyName, "", "L", false)
+	// Fit Company Name — LARGE FONT (starting at 9.5pt)
+	headerFontSz := fitTextFontSize(pdf, font, "B", companyName, w-12.5, 9.5, 6.5)
+	pdf.SetFont(font, "B", headerFontSz)
+	pdf.SetTextColor(18, 58, 99)
+	pdf.SetXY(x+11.0, y+5.8)
+	pdf.CellFormat(w-12.0, 5.0, companyName, "", 0, "L", false, 0, "")
 
-	pdf.SetFont(font, "B", 5.5)
-	pdf.SetTextColor(120, 120, 120)
-	pdf.SetXY(x, y+9)
-	pdf.CellFormat(w, 3.5, "EMPLOYEE ID CARD", "", 0, "C", false, 0, "")
+	// Tagline
+	tagline := "Quality • Commitment • Excellence"
+	if isBn {
+		tagline = utils.UnicodeToBijoy("গুণগত মান • প্রতিশ্রুতি • শ্রেষ্ঠত্ব")
+	}
+	pdf.SetFont(font, "", 3.6)
+	pdf.SetTextColor(107, 114, 128)
+	pdf.SetXY(x, y+13.5)
+	pdf.CellFormat(w, 2.8, tagline, "", 0, "C", false, 0, "")
 
-	pdf.SetDrawColor(29, 78, 137)
-	pdf.SetLineWidth(0.5)
-	pdf.Line(x+2, y+12.2, x+w-2, y+12.2)
+	pdf.SetDrawColor(210, 215, 220)
+	pdf.SetLineWidth(0.3)
+	pdf.Line(x+3.0, y+16.5, x+w-3.0, y+16.5)
 
-	// Photo area 35 x 45 mm
-	photoW, photoH := 35.0, 45.0
-	photoX := x + (w-photoW)/2
-	photoY := y + 13.5
-	pdf.SetDrawColor(180, 180, 180)
-	pdf.SetLineWidth(0.4)
-	pdf.Rect(photoX, photoY, photoW, photoH, "D")
+	// --- Employee Photo (ROUNDED CIRCLE AVATAR) ---
+	photoCenterX := x + w/2
+	photoCenterY := y + 31.5
+	photoR := 13.0
+
+	pdf.SetFillColor(245, 247, 250)
+	pdf.SetDrawColor(18, 58, 99)
+	pdf.SetLineWidth(0.6)
+	pdf.Circle(photoCenterX, photoCenterY, photoR, "FD")
 
 	hasImage := false
 	if emp.ImageURL != "" {
 		imgPath := resolveImagePath(emp.ImageURL)
 		if _, err := os.Stat(imgPath); err == nil {
-			pdf.ImageOptions(imgPath, photoX+1, photoY+1, photoW-2, 0, false, gofpdf.ImageOptions{ImageType: filepath.Ext(imgPath)}, 0, "")
-			hasImage = true
+			pdf.ClipCircle(photoCenterX, photoCenterY, photoR-0.3, true)
+			pdf.ImageOptions(imgPath, photoCenterX-photoR, photoCenterY-photoR, photoR*2, photoR*2, false, gofpdf.ImageOptions{}, 0, "")
+			pdf.ClipEnd()
+			if pdf.Ok() {
+				hasImage = true
+			} else {
+				pdf.SetError(nil)
+			}
 		}
 	}
+
 	if !hasImage {
-		pdf.SetFont(font, "", 4.5)
+		photoText := "PHOTO"
+		if isBn {
+			photoText = utils.UnicodeToBijoy("ছবি")
+		}
+		pdf.SetFont(font, "", 4.2)
 		pdf.SetTextColor(150, 150, 150)
-		pdf.SetXY(photoX, photoY+14)
-		pdf.CellFormat(photoW, 3.5, "EMPLOYEE PHOTO", "", 0, "C", false, 0, "")
-		pdf.SetFont(font, "", 4)
-		pdf.SetXY(photoX, photoY+18.5)
-		pdf.CellFormat(photoW, 3, "35 x 45 mm", "", 0, "C", false, 0, "")
+		pdf.SetXY(photoCenterX-photoR, photoCenterY-1.5)
+		pdf.CellFormat(photoR*2, 3.0, photoText, "", 0, "C", false, 0, "")
 	}
 
-	// Employee info below photo
-	labelW := 18.0
-	infoX := x + 3
-	infoY := photoY + photoH + 1.5
-	lineH := 4.6
+	// Outer Navy Ring Frame around Avatar
+	pdf.SetDrawColor(18, 58, 99)
+	pdf.SetLineWidth(0.6)
+	pdf.Circle(photoCenterX, photoCenterY, photoR, "D")
 
-	name := emp.NameEn
-	if name == "" {
-		name = emp.NameBn
+	// Employee Name & Designation (below circular photo)
+	nameY := photoCenterY + photoR + 2.5
+
+	name := ""
+	if isBn {
+		if emp.NameBn != "" {
+			name = utils.UnicodeToBijoy(emp.NameBn)
+		} else {
+			name = utils.UnicodeToBijoy(emp.NameEn)
+		}
+	} else {
+		if emp.NameEn != "" {
+			name = emp.NameEn
+		} else {
+			name = emp.EmployeeID
+		}
+		name = strings.ToUpper(name)
 	}
-	name = strings.ToUpper(name)
+
+	nameFontSz := fitTextFontSize(pdf, font, "B", name, w-4.0, 6.0, 4.2)
+	pdf.SetFont(font, "B", nameFontSz)
+	pdf.SetTextColor(18, 58, 99)
+	pdf.SetXY(x+2.0, nameY)
+	pdf.CellFormat(w-4.0, 3.2, truncateString(name, 24), "", 0, "C", false, 0, "")
 
 	desig := ""
 	if emp.DesignationRef != nil {
-		desig = emp.DesignationRef.Name
-		if desig == "" {
-			desig = emp.DesignationRef.NameBn
+		if isBn {
+			if emp.DesignationRef.NameBn != "" {
+				desig = utils.UnicodeToBijoy(emp.DesignationRef.NameBn)
+			} else {
+				desig = utils.UnicodeToBijoy(emp.DesignationRef.Name)
+			}
+		} else {
+			desig = emp.DesignationRef.Name
+			if desig != "" {
+				desig = strings.ToUpper(desig)
+			}
 		}
 	}
-	dept := ""
-	if emp.Department != nil {
-		dept = emp.Department.Name
-		if dept == "" {
-			dept = emp.Department.NameBn
+	if desig == "" {
+		if isBn {
+			desig = utils.UnicodeToBijoy("কর্মকর্তা")
+		} else {
+			desig = "OFFICER"
 		}
-	}
-	lineName := ""
-	if emp.LineRef != nil {
-		lineName = emp.LineRef.Name
-		if lineName == "" {
-			lineName = emp.LineRef.NameBn
-		}
-	}
-	joinDate := ""
-	if !emp.JoiningDate.IsZero() {
-		joinDate = emp.JoiningDate.Format("02 January 2006")
 	}
 
-	rows := [][2]string{
-		{"Employee ID", emp.EmployeeID},
-		{"Employee Name", name},
-		{"Joining Date", joinDate},
-		{"Designation", desig},
-		{"Department", dept},
-		{"Line", lineName},
+	desigFontSz := fitTextFontSize(pdf, font, "", desig, w-4.0, 4.2, 3.4)
+	pdf.SetFont(font, "", desigFontSz)
+	pdf.SetTextColor(107, 114, 128)
+	pdf.SetXY(x+2.0, nameY+3.4)
+	pdf.CellFormat(w-4.0, 2.8, truncateString(desig, 26), "", 0, "C", false, 0, "")
+
+	// Underline accent bar
+	pdf.SetDrawColor(59, 130, 182)
+	pdf.SetLineWidth(0.6)
+	pdf.Line(x+w/2-7.0, nameY+7.2, x+w/2+7.0, nameY+7.2)
+
+	// Details List Rows (Rounded Circular Icon Badge + Label : Value)
+	infoY := nameY + 8.5
+	lineH := 4.2
+
+	dept := ""
+	if emp.Department != nil {
+		if isBn {
+			if emp.Department.NameBn != "" {
+				dept = utils.UnicodeToBijoy(emp.Department.NameBn)
+			} else {
+				dept = utils.UnicodeToBijoy(emp.Department.Name)
+			}
+		} else {
+			dept = emp.Department.Name
+		}
+	}
+	if dept == "" {
+		if isBn {
+			dept = utils.UnicodeToBijoy("প্রোডাকশন")
+		} else {
+			dept = "Production"
+		}
+	}
+
+	joinDate := ""
+	if !emp.JoiningDate.IsZero() {
+		if isBn {
+			joinDate = emp.JoiningDate.Format("02/01/2006")
+		} else {
+			joinDate = emp.JoiningDate.Format("02 Jan 2006")
+		}
+	}
+
+	blood := emp.BloodGroup
+	if blood == "" {
+		blood = "-"
+	} else if isBn {
+		blood = utils.UnicodeToBijoy(blood)
+	}
+
+	var rows [][2]string
+	if isBn {
+		rows = [][2]string{
+			{utils.UnicodeToBijoy("কর্মচারী আইডি"), emp.EmployeeID},
+			{utils.UnicodeToBijoy("বিভাগ"), dept},
+			{utils.UnicodeToBijoy("যোগদানের তারিখ"), joinDate},
+			{utils.UnicodeToBijoy("রক্তের গ্রুপ"), blood},
+		}
+	} else {
+		rows = [][2]string{
+			{"Employee ID", emp.EmployeeID},
+			{"Department", dept},
+			{"Joining Date", joinDate},
+			{"Blood Group", blood},
+		}
 	}
 
 	for i, r := range rows {
 		ry := infoY + float64(i)*lineH
-		pdf.SetFont(font, "B", 4.8)
-		pdf.SetTextColor(110, 110, 110)
-		pdf.SetXY(infoX, ry)
-		pdf.CellFormat(labelW, 3.2, r[0], "", 0, "L", false, 0, "")
-		pdf.SetFont(font, "B", 5.5)
-		pdf.SetTextColor(0, 0, 0)
-		pdf.SetXY(infoX+labelW, ry)
-		pdf.CellFormat(w-labelW-6, 3.4, truncateString(r[1], 24), "", 0, "L", false, 0, "")
+
+		// Circular Icon Badge (No sharp corners)
+		pdf.SetFillColor(18, 58, 99)
+		pdf.Circle(x+3.6, ry+1.8, 1.6, "F")
+
+		// Label
+		pdf.SetFont(font, "", 4.0)
+		pdf.SetTextColor(107, 114, 128)
+		pdf.SetXY(x+6.0, ry)
+		pdf.CellFormat(14.0, 3.0, r[0], "", 0, "L", false, 0, "")
+
+		// Colon
+		pdf.SetXY(x+20.0, ry)
+		pdf.CellFormat(2.0, 3.0, ":", "", 0, "C", false, 0, "")
+
+		// Value
+		pdf.SetFont(font, "B", 4.5)
+		pdf.SetTextColor(38, 50, 56)
+		pdf.SetXY(x+22.5, ry)
+		pdf.CellFormat(w-24.5, 3.0, truncateString(r[1], 20), "", 0, "L", false, 0, "")
+
+		// Divider line
+		pdf.SetDrawColor(235, 238, 242)
+		pdf.SetLineWidth(0.2)
+		pdf.Line(x+6.0, ry+3.8, x+w-2.0, ry+3.8)
 	}
 
-	// Signatures
-	sigY := y + h - 7
-	pdf.SetDrawColor(0, 0, 0)
+	// Front Signatures: TWO SEPARATE SIGNATURE SECTIONS (Authorisation & Signature)
+	sigY := y + h - 12.0
+	lineWidth := 16.0
+	leftX := x + 2.5
+	rightX := x + w - lineWidth - 2.5
+
+	pdf.SetDrawColor(120, 120, 120)
 	pdf.SetLineWidth(0.3)
-	pdf.Line(x+3, sigY, x+26, sigY)
-	pdf.Line(x+36.5, sigY, x+w-3, sigY)
-	pdf.SetFont(font, "", 4)
-	pdf.SetTextColor(130, 130, 130)
-	pdf.SetXY(x+3, sigY+1)
-	pdf.CellFormat(23, 2.5, "Employee Signature", "", 0, "C", false, 0, "")
-	pdf.SetXY(x+36.5, sigY+1)
-	pdf.CellFormat(w-39.5, 2.5, "Authorized Signature", "", 0, "C", false, 0, "")
+	pdf.Line(leftX, sigY, leftX+lineWidth, sigY)
+	pdf.Line(rightX, sigY, rightX+lineWidth, sigY)
+
+	pdf.SetFont(font, "", 3.6)
+	pdf.SetTextColor(107, 114, 128)
+
+	authText := "Authorisation"
+	sigText := "Signature"
+	if isBn {
+		authText = utils.UnicodeToBijoy("অনুমোদন")
+		sigText = utils.UnicodeToBijoy("স্বাক্ষর")
+	}
+
+	pdf.SetXY(leftX, sigY+0.6)
+	pdf.CellFormat(lineWidth, 2.2, authText, "", 0, "C", false, 0, "")
+	pdf.SetXY(rightX, sigY+0.6)
+	pdf.CellFormat(lineWidth, 2.2, sigText, "", 0, "C", false, 0, "")
+
+	// Bottom Curved Dark Navy Wave Banner (#123A63)
+	pdf.SetFillColor(18, 58, 99)
+	pdf.Polygon([]gofpdf.PointType{
+		{X: x, Y: y + h - 3.5},
+		{X: x + w/2, Y: y + h - 5.5},
+		{X: x + w, Y: y + h - 3.5},
+		{X: x + w, Y: y + h},
+		{X: x, Y: y + h},
+	}, "F")
+
+	// Light Blue Accent Line (#3B82B6)
+	pdf.SetDrawColor(59, 130, 182)
+	pdf.SetLineWidth(0.4)
+	pdf.Line(x, y+h-3.5, x+w/2, y+h-5.5)
+	pdf.Line(x+w/2, y+h-5.5, x+w, y+h-3.5)
+
+	// Bottom Footer Brand Text
+	footerText := "EKUSHE FASHIONS"
+	if isBn {
+		footerText = utils.UnicodeToBijoy("একুশে ফ্যাশনস")
+	}
+	pdf.SetFont(font, "B", 3.8)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetXY(x, y+h-3.2)
+	pdf.CellFormat(w, 3.0, footerText, "", 0, "C", false, 0, "")
 }
 
-func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, font string) {
-	pdf.SetDrawColor(29, 78, 137)
-	pdf.SetLineWidth(0.6)
+func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, font string, isBn bool) {
+	// Card Outer Border
+	pdf.SetDrawColor(210, 215, 220)
+	pdf.SetLineWidth(0.4)
 	pdf.Rect(x, y, w, h, "D")
 
-	companyName := companyDisplayName(emp.Company)
+	companyName := companyDisplayName(emp.Company, isBn)
 
-	// Header
-	pdf.SetFont(font, "B", 7)
-	pdf.SetTextColor(29, 78, 137)
-	pdf.SetXY(x, y+1.8)
-	pdf.CellFormat(w, 3.6, companyName, "", 0, "C", false, 0, "")
-	pdf.SetFont(font, "B", 5.5)
-	pdf.SetTextColor(120, 120, 120)
-	pdf.SetXY(x, y+6)
-	pdf.CellFormat(w, 3.4, "PEOPLEHUB HR & PAYROLL", "", 0, "C", false, 0, "")
+	// Top Punch Slot Indicator
+	pdf.SetDrawColor(180, 185, 190)
+	pdf.SetLineWidth(0.3)
+	pdf.SetFillColor(245, 247, 250)
+	slotW, slotH := 12.0, 2.5
+	pdf.Rect(x+(w-slotW)/2, y+1.2, slotW, slotH, "FD")
 
-	pdf.SetDrawColor(29, 78, 137)
-	pdf.SetLineWidth(0.5)
-	pdf.Line(x+2, y+9.5, x+w-2, y+9.5)
+	// Header: Circular Logo Badge + Company Name on ONE LINE (LARGE FONT)
+	logoR := 3.8
+	logoCenterX := x + 6.0
+	logoCenterY := y + 8.2
 
-	m := 3.0
-	cy := y + 11.5
+	pdf.SetFillColor(18, 58, 99)
+	pdf.SetDrawColor(18, 58, 99)
+	pdf.SetLineWidth(0.3)
+	pdf.Circle(logoCenterX, logoCenterY, logoR, "FD")
 
-	// Company address
-	pdf.SetFont(font, "B", 5)
-	pdf.SetTextColor(110, 110, 110)
+	pdf.SetFont("Arial", "B", 3.2)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetXY(logoCenterX-logoR, logoCenterY-1.5)
+	pdf.CellFormat(logoR*2, 3, "LOGO", "", 0, "C", false, 0, "")
+
+	headerFontSz := fitTextFontSize(pdf, font, "B", companyName, w-12.5, 9.5, 6.5)
+	pdf.SetFont(font, "B", headerFontSz)
+	pdf.SetTextColor(18, 58, 99)
+	pdf.SetXY(x+11.0, y+5.8)
+	pdf.CellFormat(w-12.0, 5.0, companyName, "", 0, "L", false, 0, "")
+
+	pdf.SetDrawColor(210, 215, 220)
+	pdf.SetLineWidth(0.3)
+	pdf.Line(x+3.0, y+13.5, x+w-3.0, y+13.5)
+
+	m := 2.5
+	cy := y + 14.5
+
+	// Terms & Conditions
+	termsTitle := "TERMS & CONDITIONS"
+	if isBn {
+		termsTitle = utils.UnicodeToBijoy("শর্তাবলী")
+	}
+	pdf.SetFont(font, "B", 4.4)
+	pdf.SetTextColor(18, 58, 99)
 	pdf.SetXY(x+m, cy)
-	pdf.CellFormat(w-2*m, 3.2, "Company Address", "", 0, "L", false, 0, "")
-	address := emp.Company.AddressEn
-	if address == "" {
-		address = emp.Company.AddressBn
-	}
-	if address == "" {
-		address = "-"
-	}
-	pdf.SetFont(font, "", 5)
-	pdf.SetTextColor(0, 0, 0)
-	pdf.SetXY(x+m, cy+3.4)
-	pdf.MultiCell(w-2*m, 3.4, address, "", "L", false)
-	cy = pdf.GetY() + 1.5
+	pdf.CellFormat(w-2*m, 2.8, termsTitle, "", 0, "L", false, 0, "")
+	cy += 3.2
 
-	// Contact lines
-	if emp.Company.Phone != "" {
-		pdf.SetFont(font, "", 4.8)
-		pdf.SetTextColor(0, 0, 0)
+	var terms []string
+	if isBn {
+		terms = []string{
+			utils.UnicodeToBijoy("১. এই কার্ডটি একুশে ফ্যাশনস এর সম্পত্তি।"),
+			utils.UnicodeToBijoy("২. এই কার্ডটি অ-হস্তান্তরযোগ্য।"),
+			utils.UnicodeToBijoy("৩. ডিউটির সময় কার্ডটি সাথে রাখুন।"),
+			utils.UnicodeToBijoy("৪. কার্ড হারালে সাথে সাথে এইচআর এ জানান।"),
+			utils.UnicodeToBijoy("৫. পাওয়া গেলে এইচআর বিভাগে জমা দিন।"),
+		}
+	} else {
+		terms = []string{
+			"1. This card is company property.",
+			"2. Non-transferable.",
+			"3. Must carry during duty.",
+			"4. Report lost card to HR.",
+			"5. Return to HR if found.",
+		}
+	}
+
+	pdf.SetFont(font, "", 3.6)
+	pdf.SetTextColor(38, 50, 56)
+	for _, term := range terms {
 		pdf.SetXY(x+m, cy)
-		pdf.CellFormat(w-2*m, 3.2, "Phone : "+emp.Company.Phone, "", 0, "L", false, 0, "")
-		cy += 3.6
-	}
-	if emp.Company.Email != "" {
-		pdf.SetFont(font, "", 4.8)
-		pdf.SetTextColor(0, 0, 0)
-		pdf.SetXY(x+m, cy)
-		pdf.CellFormat(w-2*m, 3.2, "Email : "+emp.Company.Email, "", 0, "L", false, 0, "")
-		cy += 3.6
+		pdf.MultiCell(w-2*m, 2.4, term, "", "L", false)
+		cy = pdf.GetY() + 0.4
 	}
 
-	// Emergency contact
-	cy += 1.0
-	pdf.SetFont(font, "B", 5)
-	pdf.SetTextColor(110, 110, 110)
-	pdf.SetXY(x+m, cy)
-	pdf.CellFormat(w-2*m, 3.2, "Emergency Contact", "", 0, "L", false, 0, "")
-	emergency := emp.EmergencyPhone
-	if emergency == "" {
-		emergency = emp.EmergencyContact
-	}
-	if emergency == "" {
-		emergency = "-"
-	}
-	cy += 3.4
-	pdf.SetFont(font, "B", 5)
-	pdf.SetTextColor(0, 0, 0)
-	pdf.SetXY(x+m, cy)
-	pdf.CellFormat(w-2*m, 3.4, emergency, "", 0, "L", false, 0, "")
-	cy += 4.4
+	pdf.SetDrawColor(230, 235, 240)
+	pdf.SetLineWidth(0.2)
+	pdf.Line(x+m, cy+1.0, x+w-m, cy+1.0)
+	cy += 2.0
 
-	// Return note
-	pdf.SetFont(font, "", 4.5)
-	pdf.SetTextColor(90, 90, 90)
+	// Company Information / Contact
+	infoTitle := "COMPANY INFORMATION"
+	if isBn {
+		infoTitle = utils.UnicodeToBijoy("যোগাযোগ")
+	}
+	pdf.SetFont(font, "B", 4.4)
+	pdf.SetTextColor(18, 58, 99)
 	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 3.2, "If found, please return this card to the Human Resource Department.", "", "C", false)
+	pdf.CellFormat(w-2*m, 2.8, infoTitle, "", 0, "L", false, 0, "")
+	cy += 3.2
+
+	address := ""
+	if isBn {
+		if emp.Company.AddressBn != "" {
+			address = utils.UnicodeToBijoy(emp.Company.AddressBn)
+		} else {
+			address = utils.UnicodeToBijoy(emp.Company.AddressEn)
+		}
+	} else {
+		address = emp.Company.AddressEn
+	}
+	if address == "" {
+		if isBn {
+			address = utils.UnicodeToBijoy("গাজীপুর, বাংলাদেশ")
+		} else {
+			address = "Gazipur, Bangladesh"
+		}
+	}
+
+	pdf.SetFont(font, "", 3.8)
+	pdf.SetTextColor(38, 50, 56)
+	pdf.SetXY(x+m, cy)
+	pdf.MultiCell(w-2*m, 2.6, address, "", "L", false)
 	cy = pdf.GetY() + 1.0
 
-	// Property note
-	pdf.SetFont(font, "", 4.5)
-	pdf.SetTextColor(90, 90, 90)
+	phone := emp.Company.Phone
+	if phone == "" {
+		phone = "+880 1700 000000"
+	}
+	email := emp.Company.Email
+	if email == "" {
+		email = "hr@ekushefashions.com"
+	}
+
+	pdf.SetFont(font, "", 3.6)
 	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 3.2, "This card remains the property of "+companyName+".", "", "C", false)
+	pdf.CellFormat(w-2*m, 2.4, "Phone: "+phone, "", 0, "L", false, 0, "")
+	cy += 2.8
+	pdf.SetXY(x+m, cy)
+	pdf.CellFormat(w-2*m, 2.4, "Email: "+email, "", 0, "L", false, 0, "")
+	cy += 3.5
+
+	// QR Code Box Placeholder
+	qrSize := 12.0
+	qrX := x + (w-qrSize)/2
+	qrY := cy + 1.0
+	pdf.SetDrawColor(18, 58, 99)
+	pdf.SetLineWidth(0.4)
+	pdf.SetFillColor(255, 255, 255)
+	pdf.Rect(qrX, qrY, qrSize, qrSize, "FD")
+
+	// Draw stylized QR matrix code inside frame
+	pdf.SetFillColor(18, 58, 99)
+	pdf.Rect(qrX+1.2, qrY+1.2, 3.0, 3.0, "F")
+	pdf.Rect(qrX+qrSize-4.2, qrY+1.2, 3.0, 3.0, "F")
+	pdf.Rect(qrX+1.2, qrY+qrSize-4.2, 3.0, 3.0, "F")
+	pdf.Rect(qrX+5.0, qrY+5.0, 2.0, 2.0, "F")
+	pdf.Rect(qrX+7.5, qrY+7.5, 2.5, 2.5, "F")
+
+	// Bottom Curved Dark Navy Wave Banner (#123A63)
+	pdf.SetFillColor(18, 58, 99)
+	pdf.Polygon([]gofpdf.PointType{
+		{X: x, Y: y + h - 3.5},
+		{X: x + w/2, Y: y + h - 5.5},
+		{X: x + w, Y: y + h - 3.5},
+		{X: x + w, Y: y + h},
+		{X: x, Y: y + h},
+	}, "F")
+
+	// Light Blue Accent Line (#3B82B6)
+	pdf.SetDrawColor(59, 130, 182)
+	pdf.SetLineWidth(0.4)
+	pdf.Line(x, y+h-3.5, x+w/2, y+h-5.5)
+	pdf.Line(x+w/2, y+h-5.5, x+w, y+h-3.5)
+
+	// Bottom Footer Brand Text
+	footerTextBack := "EKUSHE FASHIONS LTD."
+	if isBn {
+		footerTextBack = utils.UnicodeToBijoy("একুশে ফ্যাশনস লিঃ")
+	}
+	pdf.SetFont(font, "B", 3.8)
+	pdf.SetTextColor(255, 255, 255)
+	pdf.SetXY(x, y+h-3.2)
+	pdf.CellFormat(w, 3.0, footerTextBack, "", 0, "C", false, 0, "")
 }
 
 func resolveImagePath(url string) string {

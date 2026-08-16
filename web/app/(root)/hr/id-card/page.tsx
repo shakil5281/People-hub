@@ -1,12 +1,13 @@
 "use client"
 
 import * as React from "react"
-import { IdCardIcon, DownloadIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
+import { IdCardIcon, DownloadIcon, Loader2, FilterIcon, XIcon, EyeIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { statusOptionsEmployee, genderOptions, bloodGroupOptions } from "@/components/data/employee-data"
 import {
   employeeApi,
@@ -66,10 +67,14 @@ export default function IdCardPage() {
   const [data, setData] = React.useState<EmployeeRow[]>([])
   const [loading, setLoading] = React.useState(true)
   const [generating, setGenerating] = React.useState(false)
+  const [previewing, setPreviewing] = React.useState(false)
   const [selectedRows, setSelectedRows] = React.useState<EmployeeRow[]>([])
   const [error, setError] = React.useState("")
   const [filters, setFilters] = React.useState<Record<string, string>>({ employee_type: "Regular", status: "active" })
   const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
+  const [lang, setLang] = React.useState<"en" | "bn">("en")
+  const [previewOpen, setPreviewOpen] = React.useState(false)
+  const [previewPdfUrl, setPreviewPdfUrl] = React.useState("")
 
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [departments, setDepartments] = React.useState<Department[]>([])
@@ -180,12 +185,20 @@ export default function IdCardPage() {
     setFilters((prev) => ({ ...prev, [key]: value }))
   }
 
-  const handleGenerate = async () => {
+  const handleLangChange = async (newLang: "en" | "bn") => {
+    setLang(newLang)
+    if (previewOpen) {
+      await handlePreview(newLang)
+    }
+  }
+
+  const handleGenerate = async (downloadLang: "en" | "bn" = lang) => {
     if (selectedRows.length === 0) return
     setGenerating(true)
+    setError("")
     try {
       const employeeIds = selectedRows.map((r) => r.employee_id)
-      const res = await idCardApi.generate(employeeIds)
+      const res = await idCardApi.generate(employeeIds, downloadLang)
       const { data: base64Data, filename } = res.data
       const binaryStr = atob(base64Data)
       const bytes = new Uint8Array(binaryStr.length)
@@ -196,7 +209,7 @@ export default function IdCardPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = filename || `id_cards_${new Date().toISOString().slice(0, 10)}.pdf`
+      a.download = filename || `id_cards_${downloadLang}_${new Date().toISOString().slice(0, 10)}.pdf`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -206,20 +219,75 @@ export default function IdCardPage() {
     }
   }
 
+  const handlePreview = async (targetLang: "en" | "bn" = lang) => {
+    setError("")
+    setPreviewing(true)
+    try {
+      let targetEmps = selectedRows.map((r) => r.employee_id)
+      if (targetEmps.length === 0 && data.length > 0) {
+        targetEmps = data.slice(0, 2).map((r) => r.employee_id)
+      }
+      if (targetEmps.length === 0) {
+        setError("No employees available for preview")
+        setPreviewing(false)
+        return
+      }
+
+      const res = await idCardApi.generate(targetEmps, targetLang)
+      const { data: base64Data } = res.data
+      const pdfDataUrl = `data:application/pdf;base64,${base64Data}`
+      setPreviewPdfUrl(pdfDataUrl)
+      setPreviewOpen(true)
+    } catch {
+      setError("Failed to generate ID card preview")
+    } finally {
+      setPreviewing(false)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
-      <div className="px-4 lg:px-6 flex items-center justify-between">
+      <div className="px-4 lg:px-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <IdCardIcon className="h-6 w-6 text-muted-foreground" />
           <div>
             <h1 className="text-3xl font-bold tracking-tight">ID Card</h1>
-            <p className="text-muted-foreground mt-1">Generate employee ID cards</p>
+            <p className="text-muted-foreground mt-1">Generate & preview employee ID cards (6 per page)</p>
           </div>
         </div>
-        <div className="hidden md:block">
-          <Button onClick={handleGenerate} disabled={generating || selectedRows.length === 0}>
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Language Selection Toggle */}
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border">
+            <Button
+              type="button"
+              variant={lang === "en" ? "default" : "outline"}
+              size="sm"
+              className="h-8 px-3 text-xs font-semibold"
+              onClick={() => handleLangChange("en")}
+            >
+              En
+            </Button>
+            <Button
+              type="button"
+              variant={lang === "bn" ? "default" : "outline"}
+              size="sm"
+              className="h-8 px-3 text-xs font-semibold"
+              onClick={() => handleLangChange("bn")}
+            >
+              Bn
+            </Button>
+          </div>
+
+          {/* Preview Button */}
+          <Button variant="outline" onClick={() => handlePreview(lang)} disabled={previewing || data.length === 0}>
+            {previewing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <EyeIcon className="mr-2 h-4 w-4" />}
+            {previewing ? "Preparing..." : "Preview"}
+          </Button>
+
+          {/* Download Button */}
+          <Button onClick={() => handleGenerate(lang)} disabled={generating || selectedRows.length === 0}>
             {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
-            {generating ? "Generating..." : `Download Selected (${selectedRows.length})`}
+            {generating ? "Generating..." : `Download (${selectedRows.length}) [${lang.toUpperCase()}]`}
           </Button>
         </div>
       </div>
@@ -349,7 +417,7 @@ export default function IdCardPage() {
               </div>
             </SheetContent>
           </Sheet>
-          <Button onClick={handleGenerate} disabled={generating || selectedRows.length === 0} className="flex-1">
+          <Button onClick={() => handleGenerate(lang)} disabled={generating || selectedRows.length === 0} className="flex-1">
             {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
             {generating ? "Gen..." : `Download (${selectedRows.length})`}
           </Button>
@@ -485,6 +553,63 @@ export default function IdCardPage() {
         onPageSizeChange={(size) => { setLimit(size); setPage(1) }}
         loading={loading}
       />
+
+      {/* ID Card Preview Modal */}
+      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-4">
+          <DialogHeader className="flex flex-row items-center justify-between pb-2 border-b pr-8">
+            <DialogTitle className="text-lg font-bold flex items-center gap-2">
+              <EyeIcon className="h-5 w-5 text-primary" />
+              ID Card Design Preview ({lang === "bn" ? "Bangla — বাংলা" : "English"})
+            </DialogTitle>
+            <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border">
+              <Button
+                type="button"
+                variant={lang === "en" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 px-3 text-xs font-semibold"
+                onClick={() => handleLangChange("en")}
+              >
+                En
+              </Button>
+              <Button
+                type="button"
+                variant={lang === "bn" ? "default" : "ghost"}
+                size="sm"
+                className="h-7 px-3 text-xs font-semibold"
+                onClick={() => handleLangChange("bn")}
+              >
+                Bn
+              </Button>
+            </div>
+          </DialogHeader>
+
+          <div className="flex-1 w-full bg-slate-100 dark:bg-slate-900 rounded-md overflow-hidden my-2">
+            {previewPdfUrl ? (
+              <iframe src={previewPdfUrl} className="w-full h-full border-0" title="ID Card Preview" />
+            ) : (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <Loader2 className="h-6 w-6 animate-spin mr-2" /> Loading preview...
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="pt-2 border-t flex flex-row items-center justify-between">
+            <span className="text-xs text-muted-foreground">
+              Layout: 6 Cards per page (4 cols x 3 rows grid) | Format: {lang === "bn" ? "Bangla" : "English"}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button onClick={() => handleGenerate(lang)} disabled={generating || selectedRows.length === 0}>
+                {generating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <DownloadIcon className="mr-2 h-4 w-4" />}
+                Download ({selectedRows.length})
+              </Button>
+              <Button variant="outline" onClick={() => setPreviewOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

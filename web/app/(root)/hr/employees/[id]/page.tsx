@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { employeeApi } from "@/lib/api"
-import { cn } from "@/lib/utils"
+import { cn, getUploadBaseUrl } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface Employee {
@@ -266,6 +266,14 @@ export default function EmployeeProfilePage() {
   const { employee, attendance, salary } = profile
   const imageInitial = employee.name_en?.charAt(0)?.toUpperCase() || "?"
   const totalAttendance = attendance.reduce((sum, a) => sum + a.count, 0)
+  const baseUrl = getUploadBaseUrl()
+  const fullImageUrl = employee.image_url
+    ? employee.image_url.startsWith("http")
+      ? employee.image_url
+      : employee.image_url.startsWith("/")
+      ? `${baseUrl}${employee.image_url}`
+      : `${baseUrl}/${employee.image_url}`
+    : ""
 
   return (
     <div className="flex flex-col gap-4 pb-8 md:gap-6 md:pb-10">
@@ -281,9 +289,24 @@ export default function EmployeeProfilePage() {
           <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
             {/* Avatar */}
             <div className="shrink-0 self-start sm:self-center">
-              {employee.image_url ? (
-                <div className="relative h-20 w-20 overflow-hidden rounded-2xl border-2 border-border/50 shadow-sm lg:h-24 lg:w-24">
-                  <img src={employee.image_url} alt={employee.name_en} className="h-full w-full object-cover" />
+              {fullImageUrl ? (
+                <div className="relative h-20 w-20 overflow-hidden rounded-2xl border-2 border-primary/20 shadow-sm lg:h-24 lg:w-24 bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                  <img
+                    src={fullImageUrl}
+                    alt={employee.name_en}
+                    className="h-full w-full object-cover"
+                    onError={(e) => {
+                      const target = e.currentTarget
+                      target.style.display = "none"
+                      const parent = target.parentElement
+                      if (parent && !parent.querySelector(".fallback-initial")) {
+                        const span = document.createElement("span")
+                        span.className = "fallback-initial text-2xl font-bold text-primary/70 lg:text-3xl"
+                        span.innerText = imageInitial
+                        parent.appendChild(span)
+                      }
+                    }}
+                  />
                 </div>
               ) : (
                 <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 border-2 border-primary/20 shadow-sm lg:h-24 lg:w-24">
