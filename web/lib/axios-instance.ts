@@ -1,6 +1,6 @@
 import axios from "axios"
 import { toast } from "sonner"
-import { getApiBaseUrl } from "./utils"
+import { getApiBaseUrl, withBasePath } from "./utils"
 
 let isRedirecting = false
 
@@ -10,7 +10,7 @@ function clearAuthAndRedirect() {
   localStorage.removeItem("access_token")
   localStorage.removeItem("refresh_token")
   document.cookie = "auth_token=; path=/; max-age=0"
-  window.location.href = "/login"
+  window.location.href = withBasePath("/login")
 }
 
 const api = axios.create({

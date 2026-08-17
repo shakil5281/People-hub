@@ -3,6 +3,7 @@
 import * as React from "react"
 import { FileTextIcon, DownloadIcon, Loader2, ClipboardCheckIcon, FilterIcon, XIcon, MoreHorizontalIcon } from "lucide-react"
 import { attendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
+import { withBasePath } from "@/lib/utils"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { Button } from "@/components/ui/button"
@@ -70,7 +71,7 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
     )
   }
 
-  const toOthers = (r: SummaryRecord) => (r.half_day || 0) + (r.weekend || 0)
+  const toOthers = (r: SummaryRecord) => r.weekend || 0
   const toLeave = (r: SummaryRecord) => r.on_leave || 0
   const toLate = (r: SummaryRecord) => r.late || 0
 
@@ -78,10 +79,11 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
     present: s.present + r.present,
     late: s.late + toLate(r),
     absent: s.absent + r.absent,
+    half_day: s.half_day + (r.half_day || 0),
     leave: s.leave + toLeave(r),
     others: s.others + toOthers(r),
     total: s.total + r.total,
-  }), { present: 0, late: 0, absent: 0, leave: 0, others: 0, total: 0 })
+  }), { present: 0, late: 0, absent: 0, half_day: 0, leave: 0, others: 0, total: 0 })
 
   const displayName = (name: string | undefined) => {
     if (!name) return `Unassigned ${title || ""}`.trim()
@@ -98,6 +100,7 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
             <th className="text-center py-3 px-4 font-semibold text-green-700 bg-green-50/50">Present</th>
             <th className="text-center py-3 px-4 font-semibold text-amber-700 bg-amber-50/50">Late</th>
             <th className="text-center py-3 px-4 font-semibold text-red-700 bg-red-50/50">Absent</th>
+            <th className="text-center py-3 px-4 font-semibold text-teal-700 bg-teal-50/50">Half Day</th>
             <th className="text-center py-3 px-4 font-semibold text-indigo-700 bg-indigo-50/50">Leave</th>
             <th className="text-center py-3 px-4 font-semibold text-orange-700 bg-orange-50/50">Others</th>
             <th className="text-center py-3 px-4 font-semibold text-muted-foreground">Total</th>
@@ -116,6 +119,7 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
                 <td className="py-2.5 px-4 text-center font-semibold text-green-700">{row.present}</td>
                 <td className="py-2.5 px-4 text-center font-semibold text-amber-700">{late || "-"}</td>
                 <td className="py-2.5 px-4 text-center font-semibold text-red-700">{row.absent}</td>
+                <td className="py-2.5 px-4 text-center font-semibold text-teal-700">{row.half_day || "-"}</td>
                 <td className="py-2.5 px-4 text-center font-semibold text-indigo-700">{leave || "-"}</td>
                 <td className="py-2.5 px-4 text-center font-semibold text-orange-700">{others || "-"}</td>
                 <td className="py-2.5 px-4 text-center font-semibold">{row.total}</td>
@@ -131,6 +135,7 @@ function SummaryTable({ data, loading, title, activeFilters }: { data: SummaryRe
             <td className="py-3 px-4 text-center text-green-700 text-base">{grandTotal.present}</td>
             <td className="py-3 px-4 text-center text-amber-700 text-base">{grandTotal.late}</td>
             <td className="py-3 px-4 text-center text-red-700 text-base">{grandTotal.absent}</td>
+            <td className="py-3 px-4 text-center text-teal-700 text-base">{grandTotal.half_day}</td>
             <td className="py-3 px-4 text-center text-indigo-700 text-base">{grandTotal.leave}</td>
             <td className="py-3 px-4 text-center text-orange-700 text-base">{grandTotal.others}</td>
             <td className="py-3 px-4 text-center text-base">{grandTotal.total}</td>
@@ -277,11 +282,14 @@ export default function DailySummaryPage() {
       active.start_date = filters.date || today
       active.end_date = filters.date || today
       const res = await attendanceApi.exportSummaryExcel(active)
+      const rawDate = filters.date || today
+      const parts = rawDate ? rawDate.split("-") : []
+      const formattedDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : rawDate
       const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `daily_summary_${filters.date || today}.xlsx`
+      a.download = `Attendance Summary - ${formattedDate}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -305,7 +313,7 @@ export default function DailySummaryPage() {
             </div>
           </div>
           <ButtonGroup className="hidden md:flex">
-            <Button variant="default" onClick={() => window.location.href = "/attendance/custom-summary"}>
+            <Button variant="default" onClick={() => window.location.href = withBasePath("/attendance/custom-summary")}>
               <FileTextIcon className="mr-2 h-4 w-4" />
               Custom Summary
             </Button>

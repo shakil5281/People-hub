@@ -576,7 +576,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryExcel(c *gin.Context) {
 	sewingEndRow := 0
 
 	for _, r := range data.Rows {
-		f.SetRowHeight(sheet, rowIdx, 20)
+		f.SetRowHeight(sheet, rowIdx, 21)
 
 		st := cellNormal
 		stLeft := cellNormalLeft
@@ -680,7 +680,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryExcel(c *gin.Context) {
 		Size:        &size,
 	})
 
-	filename := fmt.Sprintf("daily_summary_%s.xlsx", dateStr)
+	filename := fmt.Sprintf("Attendance Summary - %s.xlsx", data.FormattedDate)
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	f.Write(c.Writer)
@@ -745,7 +745,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 	colWSec := 35.0
 	colWVal := 20.0
 	colWRem := 25.0
-	rowH := 6.5
+	rowH := 7.0
 
 	// Draw Header Row
 	pdf.SetFillColor(248, 250, 252)
@@ -841,7 +841,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 	}
 
 	// Grand Total Row
-	grandH := 7.5
+	grandH := 8.5
 	pdf.SetFont(font, "B", 8.5)
 	pdf.SetTextColor(255, 255, 255)
 
@@ -868,7 +868,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 	cx += colWVal
 	drawGrandCell(cx, curY, colWRem, grandH, "")
 
-	filename := fmt.Sprintf("daily_summary_%s.pdf", dateStr)
+	filename := fmt.Sprintf("Attendance Summary - %s.pdf", data.FormattedDate)
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
 	if err := pdf.Output(c.Writer); err != nil {

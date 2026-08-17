@@ -52,7 +52,7 @@ export function RegisterForm() {
       localStorage.setItem("access_token", res.access_token)
       localStorage.setItem("refresh_token", res.refresh_token)
       document.cookie = `auth_token=1; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`
-      window.location.href = "/"
+      router.push("/")
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Registration failed"
       if (typeof err === "object" && err !== null && "response" in err) {

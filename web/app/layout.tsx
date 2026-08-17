@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Playfair_Display, Roboto } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
+import { cn, withBasePath } from "@/lib/utils";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   description: "HR management and employee attendance system",
   icons: {
     icon: [
-      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: withBasePath("/favicon.svg"), type: "image/svg+xml" },
     ],
   },
 };

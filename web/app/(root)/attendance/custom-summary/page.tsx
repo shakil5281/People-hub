@@ -110,10 +110,12 @@ export default function CustomSummaryPage() {
         ? await attendanceApi.exportCustomDailySummaryPdf(params)
         : await attendanceApi.exportCustomDailySummaryExcel(params)
 
+      const parts = date ? date.split("-") : []
+      const formattedDate = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : date
       const url = window.URL.createObjectURL(new Blob([res.data]))
       const a = document.createElement("a")
       a.href = url
-      a.download = `daily_summary_${date}.${kind === "pdf" ? "pdf" : "xlsx"}`
+      a.download = `Attendance Summary - ${formattedDate}.${kind === "pdf" ? "pdf" : "xlsx"}`
       a.click()
       window.URL.revokeObjectURL(url)
     } catch {

@@ -188,3 +188,26 @@ func TestResolveInOut_NoPunches(t *testing.T) {
 		t.Errorf("want (nil, nil), got (%v, %v)", in, out)
 	}
 }
+
+// ─── Weekend/holiday overtime ─────────────────────────────────────────────────
+
+func TestOtHoursOnSpecialDay(t *testing.T) {
+	cases := []struct {
+		total string
+		want  int
+	}{
+		{"00:30", 0},
+		{"03:13", 3},
+		{"05:00", 5},
+		{"08:00", 8},
+		{"10:00", 10},
+	}
+	for _, c := range cases {
+		if got := otHoursOnSpecialDay(&c.total); got != c.want {
+			t.Errorf("otHoursOnSpecialDay(%q): want %d, got %d", c.total, c.want, got)
+		}
+	}
+	if got := otHoursOnSpecialDay(nil); got != 0 {
+		t.Errorf("otHoursOnSpecialDay(nil): want 0, got %d", got)
+	}
+}

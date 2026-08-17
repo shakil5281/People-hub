@@ -3390,8 +3390,13 @@ func (h *AttendanceHandler) ExportSummaryExcel(c *gin.Context) {
 		f.SetSheetView(s, -1, &excelize.ViewOptions{ShowGridLines: ptrBool(false)})
 	}
 
+	parts := strings.Split(startDate, "-")
+	formattedDate := startDate
+	if len(parts) == 3 {
+		formattedDate = fmt.Sprintf("%s-%s-%s", parts[2], parts[1], parts[0])
+	}
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=daily_summary_%s_%s.xlsx", startDate, endDate))
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=Attendance Summary - %s.xlsx", formattedDate))
 	f.Write(c.Writer)
 }
 

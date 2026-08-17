@@ -159,7 +159,7 @@ var leaveEnLabels = leaveFormLabels{
 
 var leaveBnLabels = leaveFormLabels{
 	SystemTitle: "GBPAvi A¨vÛ ceIivj wm‡÷g",
-	FormTitle:   "QywUi Av‡ebbcÎ (LEAVE APPLICATION)",
+	FormTitle:   "QzwUi Av‡e`bcÎ (LEAVE APPLICATION)",
 
 	Company: "tKv¤úvbxi bvg",
 	Branch:  "kvLv/KviLvbv",
@@ -303,14 +303,19 @@ func bnDigits(s string) string {
 }
 
 func formatLeaveFormDate(s, lang string) string {
-	t, err := time.Parse("2006-01-02", s)
-	if err != nil {
-		return s
+	if s == "" || s == "-" {
+		return "-"
 	}
-	if lang == "bn" {
-		return fmt.Sprintf("%s %s %s", bnDigits(t.Format("02")), bnMonthNames[int(t.Month())], bnDigits(t.Format("2006")))
+	if len(s) >= 10 {
+		sub := s[:10]
+		if t, err := time.Parse("2006-01-02", sub); err == nil {
+			return t.Format("02/01/2006")
+		}
 	}
-	return t.Format("02 Jan 2006")
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t.Format("02/01/2006")
+	}
+	return s
 }
 
 func leaveAppNo(id, fromDate string) string {
@@ -475,323 +480,612 @@ func employeeNameFor(lang string, e *models.Employee) string {
 
 func leaveFormFont(pdf *gofpdf.Fpdf, lang string) string {
 	if lang == "bn" {
-		return loadBanglaFont(pdf)
+		fn := loadBanglaFont(pdf)
+		if fn != "" && fn != "Arial" {
+			return fn
+		}
 	}
-	return "Helvetica"
+	return "Arial"
 }
 
-const (
-	leaveFormPageW = 210.0
-	leaveFormPageH = 297.0
-	leaveFormLeft  = 10.0
-	leaveFormW     = 190.0
-	leaveFormTop   = 8.0
-)
+func drawDottedUnderline(pdf *gofpdf.Fpdf, x, y, width float64) {
+	pdf.SetDrawColor(120, 120, 120)
+	pdf.SetLineWidth(0.3)
+	pdf.SetDashPattern([]float64{0.5, 0.7}, 0)
+	pdf.Line(x, y, x+width, y)
+	pdf.SetDashPattern([]float64{}, 0)
+}
 
 func renderLeaveFormPDFPage(pdf *gofpdf.Fpdf, font string, lang string, data leaveFormData, labels leaveFormLabels) {
-	s := 1.0
-	x := leaveFormLeft
-	w := leaveFormW
-	curY := leaveFormTop
+	isBn := lang == "bn"
+	x := 12.0
+	w := 186.0
+	curY := 10.0
 
-	// Set line width & colors
-	pdf.SetDrawColor(152, 160, 169)
+	pdf.SetDrawColor(80, 80, 80)
 	pdf.SetLineWidth(0.3)
 
-	// ---- 1. Header Band ----
-	pdf.SetFillColor(15, 23, 42) // Dark Slate Navy #0F172A
-	pdf.Rect(x, curY, w, 18*s, "F")
+	// Helper for text formatting
+	font = leaveFormFont(pdf, lang)
 
-	// Left: Company Name & Branch/Address
-	pdf.SetTextColor(255, 255, 255)
-	pdf.SetFont(font, "B", 10*s)
-	pdf.SetXY(x+3*s, curY+2.5*s)
-	pdf.CellFormat(110*s, 5*s, data.Company, "", 0, "L", false, 0, "")
-
-	pdf.SetFont(font, "", 5.5*s)
-	pdf.SetTextColor(203, 213, 225)
-	pdf.SetXY(x+3*s, curY+8.0*s)
-	pdf.CellFormat(110*s, 3.5*s, data.Branch, "", 0, "L", false, 0, "")
-	pdf.SetXY(x+3*s, curY+12.0*s)
-	pdf.CellFormat(110*s, 3.5*s, labels.SystemTitle, "", 0, "L", false, 0, "")
-
-	// Right: Form Title & App No / Date
-	pdf.SetTextColor(245, 158, 11) // Amber #F59E0B
-	pdf.SetFont(font, "B", 10*s)
-	pdf.SetXY(x+115*s, curY+2.5*s)
-	pdf.CellFormat(72*s, 5*s, labels.FormTitle, "", 0, "R", false, 0, "")
-
-	pdf.SetFont(font, "", 5.5*s)
-	pdf.SetTextColor(203, 213, 225)
-	pdf.SetXY(x+115*s, curY+8.0*s)
-	pdf.CellFormat(72*s, 3.5*s, labels.AppNo+": "+data.AppNo, "", 0, "R", false, 0, "")
-	pdf.SetXY(x+115*s, curY+12.0*s)
-	pdf.CellFormat(72*s, 3.5*s, labels.AppDate+": "+data.AppDate, "", 0, "R", false, 0, "")
-	curY += 18*s + 2*s
-
-	// ---- 2. Employee Information Grid (4 Columns) ----
-	curY = drawLeaveSectionHeader(pdf, font, s, x, curY, w, labels.EmployeeInfo)
-	empFields := []payslipField{
-		{labels.EmployeeID, data.EmployeeID},
-		{labels.Name, data.Name},
-		{labels.Department, data.Department},
-		{labels.Section, data.Section},
-		{labels.Designation, data.Designation},
-		{labels.Grade, data.Grade},
-		{labels.Shift, data.Shift},
-		{labels.JoiningDate, data.JoiningDate},
-		{labels.ReportsTo, data.ReportsTo},
-		{labels.EmpType, data.EmpType},
-		{labels.CardNo, data.CardNo},
-		{labels.Mobile, data.Mobile},
+	// Clean helper for English font to avoid encoding crashes
+	clean := func(s string) string {
+		if isBn {
+			return s
+		}
+		var b strings.Builder
+		for _, r := range s {
+			if r <= 255 {
+				b.WriteRune(r)
+			}
+		}
+		return b.String()
 	}
-	curY = drawLeaveFieldGrid(pdf, font, s, x, curY, w, empFields, 4)
-	curY += 2.5 * s
 
-	// ---- 3. Leave Details (Left) + Leave Balance (Right) Side-by-Side ----
-	startY := curY
-	halfW := (w - 3*s) / 2
+	// ---- 1. TOP HEADER ----
+	pdf.SetTextColor(30, 30, 30)
 
-	// Left: Leave Details
-	leftY := drawLeaveSectionHeader(pdf, font, s, x, startY, halfW, labels.LeaveDetails)
-	leftY = drawLeaveTypeCheckboxes(pdf, font, s, x, leftY, halfW, data.LeaveTypeOptions, data.LeaveTypeActive)
-	detailFields := []payslipField{
-		{labels.FromDate, data.FromDate},
-		{labels.ToDate, data.ToDate},
-		{labels.TotalDays, data.TotalDays},
-		{labels.EmergencyPhone, data.EmergencyPhone},
-		{labels.AddressDuring, data.AddressDuring},
+	// Company Title
+	pdf.SetFont(font, "B", 18.0)
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(w, 6.0, clean(data.Company), "", 0, "C", false, 0, "")
+	curY += 7.5
+
+	// Company Address
+	pdf.SetFont(font, "", 12.5)
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(w, 4.5, clean(data.Branch), "", 0, "C", false, 0, "")
+	curY += 6.5
+
+	// Form Title
+	pdf.SetFont(font, "B", 16.5)
+	formTitle := "QzwUi Av‡e`bcÎ"
+	if !isBn {
+		formTitle = "LEAVE APPLICATION FORM"
 	}
-	leftY = drawLeaveFieldGrid(pdf, font, s, x, leftY, halfW, detailFields, 2)
-	leftY = drawLeaveTextBox(pdf, font, s, x, leftY, halfW, labels.Reason, data.Reason, 12.0)
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(w, 5.5, formTitle, "", 0, "C", false, 0, "")
 
-	// Right: Leave Balance Table
-	rightY := drawLeaveSectionHeader(pdf, font, s, x+halfW+3*s, startY, halfW, labels.LeaveBalance)
-	rightY = drawLeaveBalanceTable(pdf, font, s, x+halfW+3*s, rightY, halfW, labels, data.Balances)
+	// Application Date (Right Side)
+	pdf.SetFont(font, "", 12.5)
+	dateLabel := "ZvwiL t " + data.AppDate
+	if !isBn {
+		dateLabel = "Date : " + data.AppDate
+	}
+	pdf.SetXY(x+w-65.0, curY+1.0)
+	pdf.CellFormat(65.0, 4.5, dateLabel, "", 0, "R", false, 0, "")
+	curY += 15.0
 
-	if leftY > rightY {
-		curY = leftY
+	// ---- 2. APPLICANT DETAILS & LEAVE REQUEST (SECTION 1) ----
+	pdf.SetFont(font, "", 13.0)
+
+	// Row 1: Name & Designation
+	lbl1 := "bvg t "
+	val1 := clean(data.Name)
+	lbl2 := "c`ex t "
+	val2 := clean(data.Designation)
+	lbl1W := 11.0
+	lbl2W := 14.0
+	val1W := 96.5 - 11.0 // 85.5 mm
+	val2X := x + 97.0 + 14.0
+	if !isBn {
+		lbl1 = "Name : "
+		lbl2 = "Designation : "
+		lbl1W = 17.0
+		lbl2W = 30.0
+		val1W = 96.5 - 17.0 // 79.5 mm
+		val2X = x + 97.0 + 30.0
+	}
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lbl1W, 5.0, lbl1, "", 0, "L", false, 0, "")
+	pdf.CellFormat(val1W, 5.0, val1, "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+lbl1W, curY+5.8, val1W)
+
+	// Center gap: 0.5 mm (underline ends at x+96.5 mm, lbl2 starts at x+97.0 mm)
+	pdf.SetXY(x+97.0, curY)
+	pdf.CellFormat(lbl2W, 5.0, lbl2, "", 0, "L", false, 0, "")
+	pdf.SetXY(val2X, curY)
+	val2W := (x + w) - val2X
+	pdf.CellFormat(val2W, 5.0, val2, "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, val2X, curY+5.8, val2W)
+	curY += 9.0
+
+	// Row 2: Section/Line & Card No
+	lbl3 := "‡mKkb / jvBb t "
+	val3 := clean(data.Section)
+	if data.Shift != "-" && data.Shift != "" {
+		val3 += " / " + clean(data.Shift)
+	}
+	lbl4 := "KvW© bs t "
+	val4 := clean(data.EmployeeID)
+	lbl3W := 28.0
+	lbl4W := 16.0
+	val3W := 96.5 - 28.0 // 68.5 mm
+	val4X := x + 97.0 + 16.0
+	if !isBn {
+		lbl3 = "Section / Line : "
+		lbl4 = "Card No : "
+		lbl3W = 34.0
+		lbl4W = 20.0
+		val3W = 96.5 - 34.0 // 62.5 mm
+		val4X = x + 97.0 + 20.0
+	}
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lbl3W, 5.0, lbl3, "", 0, "L", false, 0, "")
+	pdf.CellFormat(val3W, 5.0, val3, "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+lbl3W, curY+5.8, val3W)
+
+	// Center gap: 0.5 mm (underline ends at x+96.5 mm, lbl4 starts at x+97.0 mm)
+	pdf.SetXY(x+97.0, curY)
+	pdf.CellFormat(lbl4W, 5.0, lbl4, "", 0, "L", false, 0, "")
+	pdf.SetXY(val4X, curY)
+	val4W := (x + w) - val4X
+	pdf.CellFormat(val4W, 5.0, val4, "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, val4X, curY+5.8, val4W)
+	curY += 9.0
+	lbl5 := "QywUi KviY t "
+	val5 := clean(data.Reason)
+
+	// Row 3: Reason for Leave & Leave Period (Single Inline Line)
+	if !isBn {
+		lbl5 = "Reason for Leave : "
+		lbl5W := 38.0
+		pdf.SetXY(x, curY)
+		pdf.CellFormat(lbl5W, 5.0, lbl5, "", 0, "L", false, 0, "")
+		val5W := 44.0
+		pdf.CellFormat(val5W, 5.0, val5, "", 0, "L", false, 0, "")
+		drawDottedUnderline(pdf, x+lbl5W, curY+5.8, val5W)
+
+		pdf.SetXY(x+82.5, curY)
+		pdf.CellFormat(28.0, 5.0, "Leave Period : ", "", 0, "L", false, 0, "")
+		pdf.CellFormat(13.0, 5.0, "From : ", "", 0, "L", false, 0, "")
+		pdf.CellFormat(24.0, 5.0, data.FromDate, "", 0, "C", false, 0, "")
+		drawDottedUnderline(pdf, x+123.5, curY+5.8, 24.0)
+
+		pdf.SetXY(x+148.0, curY)
+		pdf.CellFormat(11.0, 5.0, "To : ", "", 0, "L", false, 0, "")
+		pdf.CellFormat(24.0, 5.0, data.ToDate, "", 0, "C", false, 0, "")
+		drawDottedUnderline(pdf, x+159.0, curY+5.8, 24.0)
 	} else {
-		curY = rightY
+		lbl5W := 20.0
+		pdf.SetXY(x, curY)
+		pdf.CellFormat(lbl5W, 5.0, lbl5, "", 0, "L", false, 0, "")
+		val5W := 66.0
+		pdf.CellFormat(val5W, 5.0, val5, "", 0, "L", false, 0, "")
+		drawDottedUnderline(pdf, x+lbl5W, curY+5.8, val5W)
+
+		pdf.SetXY(x+86.5, curY)
+		pdf.CellFormat(20.0, 5.0, "QywUi ZvwiL t ", "", 0, "L", false, 0, "")
+		pdf.CellFormat(24.0, 5.0, data.FromDate, "", 0, "C", false, 0, "")
+		drawDottedUnderline(pdf, x+106.5, curY+5.8, 24.0)
+
+		pdf.SetXY(x+131.0, curY)
+		pdf.CellFormat(11.0, 5.0, "‡_‡K t ", "", 0, "C", false, 0, "")
+		pdf.CellFormat(24.0, 5.0, data.ToDate, "", 0, "C", false, 0, "")
+		drawDottedUnderline(pdf, x+142.5, curY+5.8, 24.0)
+
+		pdf.SetXY(x+167.0, curY)
+		pdf.CellFormat(19.0, 5.0, "ch©šÍ", "", 0, "L", false, 0, "")
 	}
-	curY += 2.5 * s
+	curY += 9.0
 
-	// ---- 4. Work Handover Information ----
-	curY = drawLeaveSectionHeader(pdf, font, s, x, curY, w, labels.Handover)
-	handoverFields := []payslipField{
-		{labels.HandoverTo, data.HandoverTo},
-		{labels.HandoverDept, data.HandoverDept},
-		{labels.HandoverDesig, data.HandoverDesig},
+	// Row 5: Total Days Note
+	lbl9 := "‡gvU t "
+	lbl10 := "w`b-Gi QywU gbRyim~PK Av‡eb Kwi‡ZwQ|"
+	lbl9W := 11.0
+	if !isBn {
+		lbl9 = "Total : "
+		lbl10 = "days leave approval is humbly requested."
+		lbl9W = 16.0
 	}
-	curY = drawLeaveFieldGrid(pdf, font, s, x, curY, w, handoverFields, 3)
-	curY = drawLeaveTextBox(pdf, font, s, x, curY, w, labels.HandoverDetails, data.HandoverDetails, 9.0)
-	curY += 2.5 * s
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lbl9W, 5.0, lbl9, "", 0, "L", false, 0, "")
+	pdf.CellFormat(20.0, 5.0, data.TotalDays, "", 0, "C", false, 0, "")
+	drawDottedUnderline(pdf, x+lbl9W, curY+5.8, 20.0)
 
-	// ---- 5. Approval Workflow (5 Box Side-by-Side Cards) ----
-	curY = drawLeaveSectionHeader(pdf, font, s, x, curY, w, labels.Approval)
-	curY = drawLeaveApprovalCards(pdf, font, s, x, curY, w, labels, data)
-	curY += 2.5 * s
+	pdf.SetXY(x+lbl9W+20.5, curY)
+	lbl10W := w - (lbl9W + 20.5)
+	pdf.CellFormat(lbl10W, 5.0, lbl10, "", 0, "L", false, 0, "")
+	curY += 9.0
 
-	// ---- 6. Notes & Footer ----
-	pdf.SetFont(font, "", 4.5*s)
-	pdf.SetTextColor(100, 116, 139)
-	pdf.SetXY(x+1.5*s, curY)
-	notesStr := fmt.Sprintf("%s: 1. %s  2. %s  3. %s", labels.Notes, labels.Note1, labels.Note2, labels.Note3)
-	pdf.CellFormat(w-3*s, 2.5*s, notesStr, "", 0, "C", false, 0, "")
-	curY += 3.5 * s
-
-	pdf.SetFont(font, "", 4.5*s)
-	pdf.SetTextColor(100, 116, 139)
-	pdf.SetXY(x+1.5*s, curY)
-	footerStr := fmt.Sprintf("%s    •    %s: %s    •    %s: %s", data.GeneratedBy, labels.DocumentNo, data.DocumentNo, labels.PrintDate, data.PrintDate)
-	pdf.CellFormat(w-3*s, 2.5*s, footerStr, "", 0, "C", false, 0, "")
-}
-
-func drawLeaveSectionHeader(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, title string) float64 {
-	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(152, 160, 169)
-	pdf.SetFont(font, "B", 5.8*s)
-	pdf.SetTextColor(30, 58, 138)
-	pdf.Rect(x, y, w, 3.8*s, "DF")
-	pdf.SetXY(x+1.5*s, y+0.6*s)
-	pdf.CellFormat(w-3*s, 2.6*s, title, "", 0, "L", false, 0, "")
-	return y + 3.8*s
-}
-
-func drawLeaveFieldGrid(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, fields []payslipField, cols int) float64 {
-	rowH := 3.8 * s
-	colW := w / float64(cols)
-	for i, fld := range fields {
-		col := i % cols
-		row := i / cols
-		px := x + float64(col)*colW
-		py := y + float64(row)*rowH
-		pdf.SetDrawColor(152, 160, 169)
-		pdf.Rect(px, py, colW, rowH, "D")
-
-		labelStr := fld.Label
-		valStr := fld.Value
-
-		lblFontSize := 4.8 * s
-		if cols >= 3 && len(labelStr) > 10 {
-			lblFontSize = 4.0 * s
-		}
-		pdf.SetFont(font, "B", lblFontSize)
-		pdf.SetTextColor(100, 116, 139)
-
-		lblW := colW * 0.44
-		if cols >= 3 {
-			lblW = colW * 0.58
-		}
-		pdf.SetXY(px+0.6*s, py+0.8*s)
-		pdf.CellFormat(lblW-0.6*s, 2.2*s, labelStr, "", 0, "L", false, 0, "")
-
-		valFontSize := 4.8 * s
-		if len(valStr) > 20 {
-			valFontSize = 4.0 * s
-		}
-		pdf.SetFont(font, "", valFontSize)
-		pdf.SetTextColor(15, 23, 42)
-		valW := colW - lblW
-		pdf.SetXY(px+lblW, py+0.8*s)
-		pdf.CellFormat(valW-0.4*s, 2.2*s, valStr, "", 0, "L", false, 0, "")
+	// Row 6: Address During Leave
+	lbl11 := "QywUKvjxb wVKvbv t "
+	val11 := clean(data.AddressDuring)
+	lbl11W := 30.0
+	if !isBn {
+		lbl11 = "Address During Leave : "
+		lbl11W = 48.0
 	}
-	rows := (len(fields) + cols - 1) / cols
-	return y + float64(rows)*rowH
-}
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lbl11W, 5.0, lbl11, "", 0, "L", false, 0, "")
+	val11W := 80.0
+	pdf.CellFormat(val11W, 5.0, val11, "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+lbl11W, curY+5.8, val11W)
+	curY += 9.0
 
-func drawLeaveTypeCheckboxes(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, options []string, active int) float64 {
-	pdf.SetDrawColor(152, 160, 169)
-	pdf.SetFillColor(255, 255, 255)
-	h := 5.0 * s
-	pdf.Rect(x, y, w, h, "D")
+	// Row 7: Phone & Applicant Signature (With Line Height Gap & Upper Underline)
+	lbl12 := "‡dvo t "
+	val12 := clean(data.EmergencyPhone)
+	lblSig1 := "Av‡ebKvixi ¯^v¶i"
+	lbl12W := 11.0
+	if !isBn {
+		lbl12 = "Phone : "
+		lblSig1 = "Applicant's Signature"
+		lbl12W = 17.0
+	}
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lbl12W, 5.0, lbl12, "", 0, "L", false, 0, "")
+	pdf.CellFormat(64.0, 5.0, val12, "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+lbl12W, curY+5.8, 64.0)
 
-	cbSize := 2.5 * s
-	cx := x + 1.5*s
-	cy := y + 1.25*s
-	pdf.SetFont(font, "", 4.5*s)
-	for i, opt := range options {
-		if cx+cbSize+12*s > x+w {
+	// Upper Underline for Employee Signature & Label placed below
+	drawDottedUnderline(pdf, x+126.0, curY+4.0, 60.0)
+	pdf.SetXY(x+126.0, curY+5.8)
+	pdf.CellFormat(60.0, 4.0, lblSig1, "", 0, "C", false, 0, "")
+	curY += 14.0
+
+	// ---- 3. OFFICE USE SECTION DIVIDER ----
+	pdf.SetDrawColor(120, 120, 120)
+	pdf.SetLineWidth(0.3)
+	pdf.Line(x, curY, x+w, curY)
+	curY += 4.0
+
+	officeNote := "------------------- GB Ask Awdm KZ©„K c~iY Kiv n‡e -------------------"
+	if !isBn {
+		officeNote = "------------------- THIS PORTION TO BE FILLED BY OFFICE -------------------"
+	}
+	pdf.SetFont(font, "", 12.5)
+	pdf.SetTextColor(60, 60, 60)
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(w, 4.0, officeNote, "", 0, "C", false, 0, "")
+	curY += 7.5
+
+	// ---- 4. JOINING DATE & LEAVE PERIOD METADATA ----
+	pdf.SetFont(font, "", 12.5)
+	pdf.SetTextColor(30, 30, 30)
+
+	lblJoin := "PvKix‡Z ‡hvM`v‡bi ZvwiLt"
+	lblCalc := "QywUi wnmeiKvjt"
+	lblHw := "nB‡Z"
+	lblJoinW := 44.0
+	box1X := x + 44.5
+	box1W := 28.0
+	lblCalcX := x + 73.5
+	lblCalcW := 28.0
+	box2X := x + 102.0
+	box2W := 28.0
+	lblHwX := x + 131.0
+	lblHwW := 12.0
+	box3X := x + 144.0
+	box3W := 42.0
+
+	if !isBn {
+		lblJoin = "Joining Date :"
+		lblCalc = "Leave Period :"
+		lblHw = "To"
+		lblJoinW = 28.0
+		box1X = x + 28.5
+		box1W = 28.0
+		lblCalcX = x + 57.5
+		lblCalcW = 28.0
+		box2X = x + 86.0
+		box2W = 28.0
+		lblHwX = x + 115.0
+		lblHwW = 10.0
+		box3X = x + 126.0
+		box3W = 60.0
+	}
+
+	// Extract Leave Calculation Year bounds (01/01/YYYY to 31/12/YYYY)
+	calcFrom := "01/01/2026"
+	calcTo := "31/12/2026"
+	refDate := data.FromDate
+	if refDate == "" {
+		refDate = data.AppDate
+	}
+	for _, part := range strings.FieldsFunc(refDate, func(r rune) bool { return r == '/' || r == '-' || r == ' ' }) {
+		if len(part) == 4 {
+			calcFrom = "01/01/" + part
+			calcTo = "31/12/" + part
 			break
 		}
-		pdf.SetDrawColor(15, 23, 42)
-		pdf.SetLineWidth(0.3)
-		pdf.Rect(cx, cy, cbSize, cbSize, "D")
-		if i == active {
-			pdf.SetLineWidth(0.5)
-			pdf.Line(cx+0.3*s, cy+0.3*s, cx+cbSize-0.3*s, cy+cbSize-0.3*s)
-			pdf.Line(cx+cbSize-0.3*s, cy+0.3*s, cx+0.3*s, cy+cbSize-0.3*s)
-		}
-		pdf.SetTextColor(15, 23, 42)
-		txtW := pdf.GetStringWidth(opt) + 2*s
-		pdf.SetXY(cx+cbSize+0.8*s, cy-0.2*s)
-		pdf.CellFormat(txtW, 2.6*s, opt, "", 0, "L", false, 0, "")
-		cx += cbSize + txtW + 3*s
 	}
-	return y + h
-}
 
-func drawLeaveTextBox(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, title, content string, h float64) float64 {
-	pdf.SetDrawColor(152, 160, 169)
-	pdf.Rect(x, y, w, h*s, "D")
-	pdf.SetFont(font, "B", 4.8*s)
-	pdf.SetTextColor(100, 116, 139)
-	pdf.SetXY(x+1.5*s, y+0.8*s)
-	pdf.CellFormat(w-3*s, 2.2*s, title+":", "", 0, "L", false, 0, "")
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lblJoinW, 6.5, lblJoin, "", 0, "L", false, 0, "")
+	pdf.Rect(box1X, curY, box1W, 6.5, "D")
+	pdf.SetXY(box1X, curY+1.0)
+	pdf.CellFormat(box1W, 4.5, data.JoiningDate, "", 0, "C", false, 0, "")
 
-	if content != "" {
-		pdf.SetFont(font, "", 4.6*s)
-		pdf.SetTextColor(15, 23, 42)
-		pdf.SetXY(x+1.5*s, y+3.2*s)
-		pdf.CellFormat(w-3*s, 2.2*s, content, "", 0, "L", false, 0, "")
+	pdf.SetXY(lblCalcX, curY)
+	pdf.CellFormat(lblCalcW, 6.5, lblCalc, "", 0, "L", false, 0, "")
+	pdf.Rect(box2X, curY, box2W, 6.5, "D")
+	pdf.SetXY(box2X, curY+1.0)
+	pdf.CellFormat(box2W, 4.5, calcFrom, "", 0, "C", false, 0, "")
+
+	pdf.SetXY(lblHwX, curY)
+	pdf.CellFormat(lblHwW, 6.5, lblHw, "", 0, "C", false, 0, "")
+	pdf.Rect(box3X, curY, box3W, 6.5, "D")
+	pdf.SetXY(box3X, curY+1.0)
+	pdf.CellFormat(box3W, 4.5, calcTo, "", 0, "C", false, 0, "")
+	curY += 9.5
+
+	// ---- 5. LEAVE BALANCE TABLE (4 TYPES x 3 ROWS) ----
+	tableLeft := x
+	tableW := w
+	lblColW := 40.0
+	valColW := (tableW - lblColW) / 4.0 // 36.5 mm each
+
+	// Header Row (Leave Types)
+	typeHeaders := []string{
+		"‰bwgwËK QywU",
+		"cxov-QywU",
+		"AR©j QywU",
+		"gvZ„Z¡RwbZ QywU",
 	}
-	return y + h*s
-}
-
-func drawLeaveBalanceTable(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, labels leaveFormLabels, rows []leaveBalanceRow) float64 {
-	headers := []string{labels.BalLeaveType, labels.BalEntitled, labels.BalUsed, labels.BalRemaining}
-	colW := w / 4.0
-	h := 3.8 * s
-
-	pdf.SetFillColor(248, 250, 252)
-	pdf.SetDrawColor(152, 160, 169)
-	pdf.SetFont(font, "B", 4.8*s)
-	pdf.SetTextColor(30, 58, 138)
-	for i, hdr := range headers {
-		px := x + float64(i)*colW
-		pdf.Rect(px, y, colW, h, "DF")
-		pdf.SetXY(px+0.5*s, y+0.8*s)
-		pdf.CellFormat(colW-1*s, 2.2*s, hdr, "", 0, "C", false, 0, "")
+	if !isBn {
+		typeHeaders = []string{"Casual Leave", "Sick Leave", "Earned Leave", "Maternity Leave"}
 	}
-	y += h
 
-	pdf.SetFont(font, "", 4.6*s)
-	pdf.SetTextColor(15, 23, 42)
-	for _, r := range rows {
-		vals := []string{r.LeaveType, r.Entitled, r.Used, r.Remaining}
-		for i, v := range vals {
-			px := x + float64(i)*colW
-			pdf.SetDrawColor(152, 160, 169)
-			pdf.Rect(px, y, colW, h, "D")
-			pdf.SetXY(px+0.5*s, y+0.8*s)
-			align := "C"
-			if i == 0 {
-				align = "L"
+	pdf.SetFont(font, "B", 12.5)
+	lblTable := "QywUi weeiY   :"
+	if !isBn {
+		lblTable = "Leave Details :"
+	}
+	pdf.SetXY(tableLeft, curY)
+	pdf.CellFormat(lblColW, 6.0, lblTable, "", 0, "L", false, 0, "")
+
+	for i, th := range typeHeaders {
+		px := tableLeft + lblColW + float64(i)*valColW
+		pdf.Rect(px, curY, valColW, 6.0, "D")
+		pdf.SetXY(px, curY+0.8)
+		pdf.CellFormat(valColW, 4.4, th, "", 0, "C", false, 0, "")
+	}
+	curY += 7.5
+
+	// Data Rows (Entitled, Used, Remaining)
+	rowLabels := []string{
+		"cÖvc¨ QywU   :",
+		"‡fvMKyZ QywU   :",
+		"Aewkó QywU   :",
+	}
+	if !isBn {
+		rowLabels = []string{"Entitled Leave :", "Used Leave :", "Remaining Leave :"}
+	}
+
+	// Extract balance values per type (Casual, Sick, Earned, Maternity)
+	balMap := make(map[string][3]string) // key: type, val: [entitled, used, remaining]
+	for _, b := range data.Balances {
+		k := strings.ToLower(b.LeaveType)
+		balMap[k] = [3]string{b.Entitled, b.Used, b.Remaining}
+	}
+
+	findBal := func(kw string) [3]string {
+		for k, v := range balMap {
+			if strings.Contains(k, kw) {
+				return v
 			}
-			pdf.CellFormat(colW-1*s, 2.2*s, v, "", 0, align, false, 0, "")
 		}
-		y += h
-	}
-	return y
-}
-
-func drawLeaveApprovalCards(pdf *gofpdf.Fpdf, font string, s float64, x, y, w float64, labels leaveFormLabels, data leaveFormData) float64 {
-	cards := []struct {
-		role string
-		sig  string
-	}{
-		{labels.EmployeeRole, labels.Signature},
-		{labels.SupervisorRole, labels.Signature},
-		{labels.DeptHeadRole, labels.Signature},
-		{labels.HRRole, labels.Signature},
-		{labels.FinalRole, labels.HRManagerSig},
+		return [3]string{"-", "-", "-"}
 	}
 
-	cardW := w / 5.0
-	h := 18.0 * s
-
-	for i, c := range cards {
-		cx := x + float64(i)*cardW
-		pdf.SetDrawColor(152, 160, 169)
-		pdf.SetLineWidth(0.3)
-		pdf.Rect(cx, y, cardW, h, "D")
-
-		// Header
-		pdf.SetFillColor(248, 250, 252)
-		pdf.Rect(cx, y, cardW, 3.8*s, "DF")
-		pdf.SetFont(font, "B", 4.8*s)
-		pdf.SetTextColor(30, 58, 138)
-		pdf.SetXY(cx+0.5*s, y+0.8*s)
-		pdf.CellFormat(cardW-1*s, 2.2*s, c.role, "", 0, "C", false, 0, "")
-
-		// Status line
-		pdf.SetFont(font, "", 4.2*s)
-		pdf.SetTextColor(100, 116, 139)
-		if i == 0 {
-			pdf.SetXY(cx+0.5*s, y+5.0*s)
-			pdf.CellFormat(cardW-1*s, 2.0*s, labels.Date+": _____", "", 0, "C", false, 0, "")
+	cBal := findBal("casual")
+	if cBal[0] == "-" || cBal[0] == "" {
+		cBal = findBal("নৈমিত্তিক")
+	}
+	if cBal[0] == "-" || cBal[0] == "" {
+		cBal[0] = "10"
+		usedVal := 0
+		if cBal[1] != "-" && cBal[1] != "" {
+			fmt.Sscanf(cBal[1], "%d", &usedVal)
 		} else {
-			pdf.SetXY(cx+0.5*s, y+5.0*s)
-			pdf.CellFormat(cardW-1*s, 2.0*s, checkBoxText(labels.Approved, data.ApprovedYes)+" "+checkBoxText(labels.Rejected, data.RejectedYes), "", 0, "C", false, 0, "")
+			cBal[1] = "0"
 		}
-
-		// Signature line at bottom
-		pdf.SetFont(font, "", 4.5*s)
-		pdf.SetTextColor(15, 23, 42)
-		pdf.SetXY(cx+0.5*s, y+h-3.2*s)
-		pdf.CellFormat(cardW-1*s, 2.2*s, c.sig, "", 0, "C", false, 0, "")
+		cBal[2] = strconv.Itoa(10 - usedVal)
 	}
-	return y + h
+
+	sBal := findBal("sick")
+	if sBal[0] == "-" || sBal[0] == "" {
+		sBal = findBal("পীড়া")
+	}
+	if sBal[0] == "-" || sBal[0] == "" {
+		sBal[0] = "14" // Sick leave default entitled balance is 14 days
+		usedVal := 0
+		if sBal[1] != "-" && sBal[1] != "" {
+			fmt.Sscanf(sBal[1], "%d", &usedVal)
+		} else {
+			sBal[1] = "0"
+		}
+		sBal[2] = strconv.Itoa(14 - usedVal)
+	}
+
+	eBal := findBal("earned")
+	if eBal[0] == "-" || eBal[0] == "" {
+		eBal = findBal("annual")
+	}
+	if eBal[0] == "-" || eBal[0] == "" {
+		eBal = findBal("বাৎসরিক")
+	}
+
+	mBal := findBal("maternity")
+	if mBal[0] == "-" || mBal[0] == "" {
+		mBal = findBal("মাতৃত্ব")
+	}
+
+	typeBals := [4][3]string{cBal, sBal, eBal, mBal}
+
+	pdf.SetFont(font, "", 12.5)
+	for rIdx, rLbl := range rowLabels {
+		pdf.SetXY(tableLeft, curY)
+		pdf.CellFormat(lblColW, 6.0, rLbl, "", 0, "L", false, 0, "")
+
+		for cIdx := 0; cIdx < 4; cIdx++ {
+			px := tableLeft + lblColW + float64(cIdx)*valColW
+			valStr := typeBals[cIdx][rIdx]
+			if valStr == "" {
+				valStr = "-"
+			}
+			pdf.Rect(px, curY, valColW, 6.0, "D")
+			pdf.SetXY(px, curY+0.8)
+			pdf.CellFormat(valColW, 4.4, valStr, "", 0, "C", false, 0, "")
+		}
+		curY += 7.5
+	}
+	curY += 3.0
+
+	// ---- 6. APPROVAL GRANT NOTE ----
+	pdf.SetFont(font, "", 12.5)
+	pdf.Rect(x+30.0, curY, 35.0, 6.5, "D")
+	pdf.SetXY(x+30.0, curY+1.0)
+	pdf.CellFormat(35.0, 4.5, data.TotalDays, "", 0, "C", false, 0, "")
+
+	grantNote := "w`bi ‰bwgwËK/ cxov/ AR©j/ gvZ„Z¡ RwbZ QywU gbRyi Kiv nBj|"
+	if !isBn {
+		grantNote = "days Casual / Sick / Earned / Maternity Leave granted."
+	}
+	pdf.SetXY(x+67.0, curY+1.0)
+	pdf.CellFormat(119.0, 4.5, grantNote, "", 0, "L", false, 0, "")
+	curY += 21.0
+
+	// ---- 7. 5-COLUMN APPROVAL SIGNATURES ROW ----
+	sigCols := []string{
+		"GBP. Avi.",
+		"BbPvR©",
+		"‡cÖvWvKkb g¨v‡bRvi",
+		"G¨vWwgb (G.wR.Gg)",
+		"G. wR. Gg.",
+	}
+	if !isBn {
+		sigCols = []string{
+			"H.R.",
+			"Incharge",
+			"Production Manager",
+			"Admin (A.G.M)",
+			"A.G.M.",
+		}
+	}
+
+	colW5 := w / 5.0 // 37.2 mm each
+	pdf.SetFont(font, "", 11.0)
+	pdf.SetDrawColor(120, 120, 120)
+	pdf.SetLineWidth(0.3)
+
+	for i, sc := range sigCols {
+		px := x + float64(i)*colW5
+		pdf.Line(px+2.5, curY, px+colW5-2.5, curY)
+		pdf.SetXY(px, curY+1.0)
+		pdf.CellFormat(colW5, 3.5, sc, "", 0, "C", false, 0, "")
+	}
+	curY += 10.0
+
+	// ---- 8. JOINING REPORT AFTER LEAVE (BOTTOM CUT SECTION) ----
+	pdf.SetDrawColor(120, 120, 120)
+	pdf.SetLineWidth(0.3)
+	pdf.Line(x, curY, x+w, curY)
+	curY += 5.0
+
+	// Company Title & Report Title
+	pdf.SetFont(font, "B", 16.0)
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(w, 5.0, clean(data.Company), "", 0, "C", false, 0, "")
+	curY += 6.5
+
+	pdf.SetFont(font, "", 12.5)
+	reportTitle := "QywU ‡k‡l Kv‡R ‡hvM`v‡bi cÖwZ‡e`b"
+	if !isBn {
+		reportTitle = "REPORT OF JOINING WORK AFTER LEAVE"
+	}
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(w, 4.0, reportTitle, "", 0, "C", false, 0, "")
+	curY += 7.5
+
+	// Row 1: Name, Card No, Issue Date
+	lblJ1 := "bvg t "
+	lblJ2 := "KvW© bs : "
+	lblJ3 := "Bmmyi ZvwiL t "
+	lblJ1W := 11.0
+	lblJ2W := 16.0
+	lblJ3W := 24.0
+	if !isBn {
+		lblJ1 = "Name : "
+		lblJ2 = "Card No : "
+		lblJ3 = "Issue Date : "
+		lblJ1W = 17.0
+		lblJ2W = 20.0
+		lblJ3W = 26.0
+	}
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lblJ1W, 5.0, lblJ1, "", 0, "L", false, 0, "")
+	valJ1W := 52.0
+	if !isBn {
+		valJ1W = 46.0
+	}
+	pdf.CellFormat(valJ1W, 5.0, clean(data.Name), "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+lblJ1W, curY+5.8, valJ1W)
+
+	pdf.SetXY(x+lblJ1W+valJ1W+0.5, curY)
+	pdf.CellFormat(lblJ2W, 5.0, lblJ2, "", 0, "L", false, 0, "")
+	pdf.CellFormat(34.0, 5.0, clean(data.EmployeeID), "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+lblJ1W+valJ1W+0.5+lblJ2W, curY+5.8, 34.0)
+
+	pdf.SetXY(x+114.0, curY)
+	pdf.CellFormat(lblJ3W, 5.0, lblJ3, "", 0, "L", false, 0, "")
+	valJ3W := (x + w) - (x + 114.0 + lblJ3W)
+	pdf.CellFormat(valJ3W, 5.0, data.AppDate, "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+114.0+lblJ3W, curY+5.8, valJ3W)
+	curY += 9.0
+
+	// Row 2: Joining Date per Approved Leave
+	lblJ4 := "gbRyiK…Z QywU Abymv‡i ‡hvM`v‡bi ZvwiL  :"
+	lblJ4W := 64.0
+	if !isBn {
+		lblJ4 = "Joining Date per Approved Leave : "
+		lblJ4W = 72.0
+	}
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lblJ4W, 5.0, lblJ4, "", 0, "L", false, 0, "")
+	valJ4W := w - lblJ4W
+	pdf.CellFormat(valJ4W, 5.0, data.ToDate, "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+lblJ4W, curY+5.8, valJ4W)
+	curY += 9.0
+
+	// Row 3: Actual Joining Date
+	lblJ5 := "‡hvM`v‡bi cÖK…Z ZvwiL  :"
+	lblJ5W := 40.0
+	if !isBn {
+		lblJ5 = "Actual Joining Date : "
+		lblJ5W = 46.0
+	}
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(lblJ5W, 5.0, lblJ5, "", 0, "L", false, 0, "")
+	valJ5W := w - lblJ5W
+	pdf.CellFormat(valJ5W, 5.0, "", "", 0, "L", false, 0, "")
+	drawDottedUnderline(pdf, x+lblJ5W, curY+5.8, valJ5W)
+	curY += 11.0
+
+	// Bottom Footer Notes & Signatures
+	lblSigApp := "Av‡ebKvixi ¯^v¶i"
+	bottomNote := "GB AskwU QywU ‡k‡l Kv‡R ‡hvM`v‡bi mgq cÖkvmb kvLvq rgvgw‡Z n‡e|"
+	lblSigHR := "GBPAvi kvLv"
+	if !isBn {
+		lblSigApp = "Applicant's Signature"
+		bottomNote = "This portion must be submitted to Admin Dept upon joining work after leave."
+		lblSigHR = "HR Dept"
+	}
+
+	pdf.SetFont(font, "", 11.5)
+	pdf.SetXY(x, curY)
+	pdf.CellFormat(45.0, 4.0, lblSigApp, "", 0, "L", false, 0, "")
+
+	pdf.SetFont(font, "", 11.0)
+	pdf.SetTextColor(80, 80, 80)
+	pdf.SetXY(x+45.0, curY)
+	pdf.CellFormat(96.0, 4.0, bottomNote, "", 0, "C", false, 0, "")
+
+	pdf.SetFont(font, "", 11.5)
+	pdf.SetTextColor(30, 30, 30)
+	pdf.SetXY(x+141.0, curY)
+	pdf.CellFormat(45.0, 4.0, lblSigHR, "", 0, "R", false, 0, "")
 }
 
 func checkBoxText(label string, checked bool) string {

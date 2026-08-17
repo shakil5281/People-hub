@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 
-import { cn } from "@/lib/utils"
+import { cn, withBasePath } from "@/lib/utils"
 import { authApi } from "@/lib/api"
 import { Button } from "@/components/ui/button"
 import {
@@ -36,9 +36,9 @@ export function LoginForm({
 
       const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/"
       if (data.user.force_password_change) {
-        window.location.href = "/settings?force_change=true"
+        window.location.href = withBasePath("/settings?force_change=true")
       } else {
-        window.location.href = redirectTo
+        window.location.href = withBasePath(redirectTo)
       }
     } catch (err: unknown) {
       const message =

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 
+import Link from "next/link"
 import {
   SidebarGroup,
   SidebarGroupContent,
@@ -43,10 +44,10 @@ export function NavSecondary({
                     <span>{item.title}</span>
                   </button>
                 ) : (
-                  <a href={item.url} onClick={closeOnMobile}>
+                  <Link href={item.url} onClick={closeOnMobile}>
                     {item.icon}
                     <span>{item.title}</span>
-                  </a>
+                  </Link>
                 )}
               </SidebarMenuButton>
             </SidebarMenuItem>

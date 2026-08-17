@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -40,14 +41,14 @@ func TestRenderIdCards(t *testing.T) {
 	font := loadBanglaFont(pdf)
 
 	pdf.AddPage()
-	drawCardFront(pdf, 8, 26.75, 62.67, 95, *emp, font)
-	drawCardBack(pdf, 8, 175.25, 62.67, 95, *emp, font)
+	drawCardFront(pdf, 8, 26.75, 62.67, 95, *emp, font, true)
+	drawCardBack(pdf, 8, 175.25, 62.67, 95, *emp, font, true)
 
 	if pdf.Error() != nil {
 		t.Fatalf("pdf error: %v", pdf.Error())
 	}
 
-	out := "C:\\Users\\shaki\\AppData\\Local\\Temp\\opencode\\id_cards_test.pdf"
+	out := filepath.Join(os.TempDir(), "id_cards_test.pdf")
 	if err := pdf.OutputFileAndClose(out); err != nil {
 		t.Fatalf("output: %v", err)
 	}

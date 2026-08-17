@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { AlertTriangleIcon, RefreshCwIcon, HomeIcon } from "lucide-react"
+import Link from "next/link"
 import { Button } from "@/components/ui/button"
 
 export default function Error({
@@ -29,10 +30,10 @@ export default function Error({
           Try again
         </Button>
         <Button variant="outline" asChild>
-          <a href="/dashboard">
+          <Link href="/dashboard">
             <HomeIcon className="mr-2 h-4 w-4" />
             Go home
-          </a>
+          </Link>
         </Button>
       </div>
     </div>

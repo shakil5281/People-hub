@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"net/http"
@@ -768,6 +769,16 @@ func (h *LeaveHandler) ExportLeaveFormPDF(c *gin.Context) {
 	pdf.AddPage()
 	font := leaveFormFont(pdf, lang)
 	renderLeaveFormPDFPage(pdf, font, lang, data, labels)
+	if pdf.Error() != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "PDF error: " + pdf.Error().Error()})
+		return
+	}
+
+	var buf bytes.Buffer
+	if err := pdf.Output(&buf); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF: " + err.Error()})
+		return
+	}
 
 	langSuffix := lang
 	if langSuffix == "" {
@@ -776,7 +787,5 @@ func (h *LeaveHandler) ExportLeaveFormPDF(c *gin.Context) {
 	filename := fmt.Sprintf("leave_application_%s_%s.pdf", leave.EmployeeID, langSuffix)
 	c.Header("Content-Type", "application/pdf")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
-	if err := pdf.Output(c.Writer); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
-	}
+	c.Data(http.StatusOK, "application/pdf", buf.Bytes())
 }

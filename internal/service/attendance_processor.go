@@ -249,7 +249,10 @@ func (p *AttendanceProcessor) processDay(
 							}
 						}
 					}
-					if shift != nil && shift.StartTime != "" && shift.EndTime != "" {
+					if shift != nil && (isGovHoliday || isCompWeekend || (!isGenDuty && shift.WeekendDays != "" && utils.IsWeekend(date, shift.WeekendDays))) {
+						// Weekend/holiday: all worked hours count as OT.
+						otHours = otHoursOnSpecialDay(totalHours)
+					} else if shift != nil && shift.StartTime != "" && shift.EndTime != "" {
 						shiftEnd := utils.BuildShiftEndDatetime(attendanceDate, shift.StartTime, shift.EndTime)
 						if !shiftEnd.IsZero() {
 							otHours = utils.CalculateOvertime(*checkOut, shiftEnd, true)
@@ -634,21 +637,10 @@ func (p *AttendanceProcessor) computeAttendance(
 
 	if emp.OverTimeStatus && checkOut != nil {
 		if isSpecialDay {
-			// On special days, all worked time counts as OT (after 1h break deduction
-			// if worked past 14:00).
-			if att.TotalHours != nil {
-				if m, ok := utils.ParseHHMMToMinutes(*att.TotalHours); ok && m > 0 {
-					otMin := m
-					if checkOut.Hour()*60+checkOut.Minute() > 14*60 {
-						otMin -= 60 // deduct 1h lunch break
-					}
-					if otMin < 0 {
-						otMin = 0
-					}
-					otHours = calcOTHours(otMin)
-				}
-			}
-		} else if !isSpecialDay && shift != nil && shift.EndTime != "" && shift.StartTime != "" {
+			// Weekend/holiday: all worked hours count as OT.
+			// total_hours is already net of the lunch break.
+			otHours = otHoursOnSpecialDay(att.TotalHours)
+		} else if shift != nil && shift.EndTime != "" && shift.StartTime != "" {
 			// Regular day: OT is time worked beyond shift end.
 			shiftEnd := utils.BuildShiftEndDatetime(attendanceDate, shift.StartTime, shift.EndTime)
 			if !shiftEnd.IsZero() {
@@ -679,6 +671,19 @@ func calcOTHours(otMin int) int {
 		h = 8
 	}
 	return h
+}
+
+// otHoursOnSpecialDay returns the whole worked hours as OT for weekend/holiday days
+// when the employee has overtime enabled. totalHours is an "HH:MM" string that is
+// already net of the lunch break; the fractional part is dropped (e.g. 03:13 → 3).
+func otHoursOnSpecialDay(totalHours *string) int {
+	if totalHours == nil {
+		return 0
+	}
+	if m, ok := utils.ParseHHMMToMinutes(*totalHours); ok && m > 0 {
+		return m / 60
+	}
+	return 0
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

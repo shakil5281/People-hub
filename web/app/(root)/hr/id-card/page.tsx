@@ -556,11 +556,11 @@ export default function IdCardPage() {
 
       {/* ID Card Preview Modal */}
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-5xl h-[85vh] flex flex-col p-4">
+        <DialogContent className="max-w-[700px] w-full h-[85vh] flex flex-col p-4">
           <DialogHeader className="flex flex-row items-center justify-between pb-2 border-b pr-8">
             <DialogTitle className="text-lg font-bold flex items-center gap-2">
               <EyeIcon className="h-5 w-5 text-primary" />
-              ID Card Design Preview ({lang === "bn" ? "Bangla — বাংলা" : "English"})
+              ID Card Design Preview — 640px Width ({lang === "bn" ? "Bangla — বাংলা" : "English"})
             </DialogTitle>
             <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border">
               <Button
@@ -584,7 +584,7 @@ export default function IdCardPage() {
             </div>
           </DialogHeader>
 
-          <div className="flex-1 w-full bg-slate-100 dark:bg-slate-900 rounded-md overflow-hidden my-2">
+          <div className="flex-1 w-[640px] max-w-[640px] mx-auto bg-slate-100 dark:bg-slate-900 rounded-md overflow-hidden my-2 shadow-sm border">
             {previewPdfUrl ? (
               <iframe src={previewPdfUrl} className="w-full h-full border-0" title="ID Card Preview" />
             ) : (
@@ -596,7 +596,7 @@ export default function IdCardPage() {
 
           <DialogFooter className="pt-2 border-t flex flex-row items-center justify-between">
             <span className="text-xs text-muted-foreground">
-              Layout: 6 Cards per page (4 cols x 3 rows grid) | Format: {lang === "bn" ? "Bangla" : "English"}
+              Layout: 640px Pair Width | Front & Back 0 Gap | Format: {lang === "bn" ? "Bangla" : "English"}
             </span>
             <div className="flex items-center gap-2">
               <Button onClick={() => handleGenerate(lang)} disabled={generating || selectedRows.length === 0}>

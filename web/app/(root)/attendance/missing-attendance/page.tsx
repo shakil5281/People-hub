@@ -5,7 +5,7 @@ import { UserXIcon, Loader2, PencilIcon, FilterIcon, XIcon, CheckIcon, SquareIco
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { attendanceApi, missingAttendanceApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
-import { formatCheck } from "@/lib/utils"
+import { formatCheck, withBasePath } from "@/lib/utils"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -360,7 +360,7 @@ export default function MissingAttendancePage() {
               </Button>
             )}
             <Button asChild variant="outline" className="flex-1 sm:flex-none">
-              <a href="/attendance/custom-attendance">
+              <a href={withBasePath("/attendance/custom-attendance")}>
                 <ClipboardEditIcon className="mr-2 h-4 w-4" />
                 Custom Attendance
               </a>
