@@ -329,6 +329,12 @@ func (s *NightBillService) ProcessFromConfig(params ProcessConfigParams) (*Proce
 				continue
 			}
 
+			inTime := att.CheckIn
+			outTime := att.CheckOut
+			if inTime != nil && outTime != nil && inTime.After(*outTime) {
+				inTime, outTime = outTime, inTime
+			}
+
 			billType := entry.BillType
 			eligibleHours, rate, amount, qualifies := computeNightBill(att, dateStr, billType, entry.FixedAmount, entry.HourlyRate)
 			if !qualifies || amount <= 0 {
@@ -336,28 +342,40 @@ func (s *NightBillService) ProcessFromConfig(params ProcessConfigParams) (*Proce
 				continue
 			}
 
-			var dupCount int64
-			if err := tx.Model(&models.NightBill{}).
-				Where("employee_id = ? AND attendance_date = ? AND bill_type = ? AND deleted_at IS NULL", att.EmployeeID, dateStr, billType).
-				Count(&dupCount).Error; err != nil {
-				res.Errors = append(res.Errors, err.Error())
-				continue
-			}
-			if dupCount > 0 {
+			_, shiftEndStr := shiftEndOnDate(att, dateStr)
+
+			var existing models.NightBill
+			err := tx.Where("employee_id = ? AND attendance_date = ? AND bill_type = ? AND deleted_at IS NULL", att.EmployeeID, dateStr, billType).First(&existing).Error
+			if err == nil && existing.ID != "" {
+				existing.CompanyID = att.CompanyID
+				existing.AttendanceID = att.ID
+				existing.ShiftID = att.ShiftID
+				existing.InTime = inTime
+				existing.OutTime = outTime
+				existing.ShiftEndTime = &shiftEndStr
+				existing.EligibleHours = eligibleHours
+				existing.Rate = rate
+				existing.Amount = amount
+				existing.Remarks = fmt.Sprintf("Auto-calculated %s night bill", billType)
+				existing.ProcessedAt = &now
+				existing.UpdatedBy = &params.UserID
+				if err := tx.Save(&existing).Error; err != nil {
+					res.Errors = append(res.Errors, err.Error())
+					continue
+				}
 				res.Duplicates++
 				res.Processed++
 				continue
 			}
 
-			_, shiftEndStr := shiftEndOnDate(att, dateStr)
 			nb := &models.NightBill{
 				CompanyID:      att.CompanyID,
 				AttendanceID:   att.ID,
 				EmployeeID:     att.EmployeeID,
 				AttendanceDate: dateStr,
 				ShiftID:        att.ShiftID,
-				InTime:         att.CheckIn,
-				OutTime:        att.CheckOut,
+				InTime:         inTime,
+				OutTime:        outTime,
 				BillType:       billType,
 				ShiftEndTime:   &shiftEndStr,
 				EligibleHours:  eligibleHours,

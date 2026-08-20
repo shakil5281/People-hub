@@ -49,6 +49,7 @@ func Setup(
 	otEarlyExitHandler *handlers.OtEarlyExitHandler,
 	nightBillHandler *handlers.NightBillHandler,
 	nightBillEmployeeListHandler *handlers.NightBillEmployeeListHandler,
+	migrationHandler *handlers.MigrationHandler,
 	jwtSecret string,
 ) {
 	r.GET("/health", handlers.HealthCheck)
@@ -391,6 +392,8 @@ func Setup(
 	{
 		separation.POST("/process", separationHandler.ProcessBatch)
 		separation.GET("", separationHandler.List)
+		separation.GET("/export/excel", separationHandler.ExportListExcel)
+		separation.GET("/export/pdf", separationHandler.ExportListPDF)
 		separation.GET("/:id", separationHandler.GetByID)
 		separation.POST("", separationHandler.Create)
 		separation.PUT("/:id", separationHandler.Update)
@@ -399,6 +402,18 @@ func Setup(
 		separation.POST("/:id/cancel", separationHandler.Cancel)
 		separation.POST("/:id/reactivate", separationHandler.Reactivate)
 		separation.GET("/:id/export/pdf", separationHandler.ExportPDF)
+	}
+
+	// Protected migration routes
+	migration := api.Group("/migrations")
+	migration.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		migration.GET("", migrationHandler.List)
+		migration.GET("/summary", migrationHandler.GetSummary)
+		migration.GET("/export/excel", migrationHandler.ExportExcel)
+		migration.GET("/export/pdf", migrationHandler.ExportPDF)
+		migration.GET("/:id", migrationHandler.GetByID)
+		migration.POST("", migrationHandler.Create)
 	}
 
 	// Protected id-card routes

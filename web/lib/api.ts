@@ -382,6 +382,18 @@ export const separationApi = {
   process: (date?: string) => api.post("/separations/process" + (date ? `?date=${date}` : "")),
   processOne: (id: string) => api.post(`/separations/${id}/process`),
   cancel: (id: string) => api.post(`/separations/${id}/cancel`),
+  exportExcel: (params?: Record<string, string>) => api.get("/separations/export/excel", { params, responseType: "blob" }),
+  exportPdf: (params?: Record<string, string>) => api.get("/separations/export/pdf", { params, responseType: "blob" }),
+  exportFormPdf: (id: string, lang: string = "en") => api.get(`/separations/${id}/export/pdf`, { params: { lang }, responseType: "blob" }),
+}
+
+export const migrationApi = {
+  list: (params?: Record<string, string>) => api.get("/migrations", { params }),
+  get: (id: string) => api.get(`/migrations/${id}`),
+  summary: (params?: Record<string, string>) => api.get("/migrations/summary", { params }),
+  create: (data: Record<string, unknown>) => api.post("/migrations", data),
+  exportExcel: (params?: Record<string, string>) => api.get("/migrations/export/excel", { params, responseType: "blob" }),
+  exportPdf: (params?: Record<string, string>) => api.get("/migrations/export/pdf", { params, responseType: "blob" }),
 }
 
 export const idCardApi = {
@@ -544,6 +556,7 @@ export interface NightBillRecord {
   remarks?: string
   processed_at?: string | null
   created_at: string
+  attendance?: { check_in?: string | null; check_out?: string | null } | null
   employee?: {
     id: string
     employee_id: string

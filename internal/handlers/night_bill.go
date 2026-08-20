@@ -257,20 +257,32 @@ func (h *NightBillHandler) DeleteBulk(c *gin.Context) {
 }
 
 // nightBillInOut returns the actual attendance clock-in/out times for display,
-// preferring the linked attendance record over the stored night-bill times.
+// preferring the linked attendance record and normalizing in-time/out-time order.
 func nightBillInOut(b models.NightBill) (string, string) {
-	inTime, outTime := "-", "-"
+	var inT, outT *time.Time
 	if b.Attendance.ID != "" && b.Attendance.CheckIn != nil {
-		inTime = b.Attendance.CheckIn.Format("15:04")
-	} else if b.InTime != nil {
-		inTime = b.InTime.Format("15:04")
+		inT = b.Attendance.CheckIn
+	} else {
+		inT = b.InTime
 	}
 	if b.Attendance.ID != "" && b.Attendance.CheckOut != nil {
-		outTime = b.Attendance.CheckOut.Format("15:04")
-	} else if b.OutTime != nil {
-		outTime = b.OutTime.Format("15:04")
+		outT = b.Attendance.CheckOut
+	} else {
+		outT = b.OutTime
 	}
-	return inTime, outTime
+
+	if inT != nil && outT != nil && inT.After(*outT) {
+		inT, outT = outT, inT
+	}
+
+	inStr, outStr := "-", "-"
+	if inT != nil {
+		inStr = inT.Format("15:04")
+	}
+	if outT != nil {
+		outStr = outT.Format("15:04")
+	}
+	return inStr, outStr
 }
 
 // nightBillExportHeader resolves the company name/address and report period from DB for exports.

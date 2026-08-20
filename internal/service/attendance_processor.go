@@ -205,105 +205,13 @@ func (p *AttendanceProcessor) processDay(
 		}
 	}
 
-	// ── HIGHEST PRIORITY: Missing Attendance Overrides ────────────────────────
-	// If a missing_attendance record exists for an employee on this date, use
-	// it directly and skip biometric punch processing for that employee.
-	missingHandledByEmp := make(map[string]bool)
+	// ── Index Missing Attendance Overrides by EmployeeID ───────────────────────
+	missingByEmp := make(map[string]*models.MissingAttendance)
 	if p.missingAttendanceRepo != nil {
 		missingRecords, maErr := p.missingAttendanceRepo.ListByDateRange(date, date, companyID)
 		if maErr == nil {
-			for _, ma := range missingRecords {
-				missingHandledByEmp[ma.EmployeeID] = true
-
-				var emp *models.Employee
-				var shiftID *string
-				for i := range eligible {
-					if eligible[i].EmployeeID == ma.EmployeeID {
-						emp = &eligible[i]
-						if eligible[i].ShiftID != nil {
-							shiftID = eligible[i].ShiftID
-						}
-						tempKey := ma.EmployeeID + "|" + date
-						if ts, ok := tempShiftByKey[tempKey]; ok && ts.ShiftID != "" {
-							shiftID = &ts.ShiftID
-						}
-						break
-					}
-				}
-
-				checkIn := ma.CheckIn
-				checkOut := ma.CheckOut
-				totalHours := utils.CalcTotalHoursStr(checkIn, checkOut)
-				otHours := 0
-
-				if emp != nil && emp.OverTimeStatus && checkOut != nil {
-					var shift *models.Shift
-					if shiftID != nil && *shiftID != "" {
-						if s, ok := shiftCache[*shiftID]; ok {
-							shift = s
-						} else {
-							s, err := p.shiftRepo.FindByID(*shiftID)
-							if err == nil && s != nil {
-								shiftCache[*shiftID] = s
-								shift = s
-							}
-						}
-					}
-					if shift != nil && (isGovHoliday || isCompWeekend || (!isGenDuty && shift.WeekendDays != "" && utils.IsWeekend(date, shift.WeekendDays))) {
-						// Weekend/holiday: all worked hours count as OT.
-						otHours = otHoursOnSpecialDay(totalHours)
-					} else if shift != nil && shift.StartTime != "" && shift.EndTime != "" {
-						shiftEnd := utils.BuildShiftEndDatetime(attendanceDate, shift.StartTime, shift.EndTime)
-						if !shiftEnd.IsZero() {
-							otHours = utils.CalculateOvertime(*checkOut, shiftEnd, true)
-						}
-					}
-				}
-				otStr := strconv.Itoa(otHours)
-
-				_ = p.missingAttendanceRepo.UpdateFields(ma.ID, map[string]interface{}{
-					"total_hours": totalHours,
-					"over_time":   otStr,
-				})
-
-				if existing, exists := existingAttByEmp[ma.EmployeeID]; exists {
-					existing.CheckIn = checkIn
-					existing.CheckOut = checkOut
-					existing.TotalHours = totalHours
-					existing.Status = ma.Status
-					existing.LateMinutes = 0
-					existing.OverTime = &otStr
-					if shiftID != nil {
-						existing.ShiftID = shiftID
-					}
-					if err := p.attendanceRepo.UpdateFields(existing.ID, map[string]interface{}{
-						"check_in":     checkIn,
-						"check_out":    checkOut,
-						"total_hours":  totalHours,
-						"over_time":    otStr,
-						"status":       ma.Status,
-						"late_minutes": 0,
-						"shift_id":     shiftID,
-					}); err == nil {
-						dr.Updated++
-					}
-				} else {
-					att := &models.Attendance{
-						EmployeeID: ma.EmployeeID,
-						CompanyID:  ma.CompanyID,
-						Date:       date,
-						CheckIn:    checkIn,
-						CheckOut:   checkOut,
-						TotalHours: totalHours,
-						OverTime:   &otStr,
-						Status:     ma.Status,
-						ShiftID:    shiftID,
-					}
-					if err := p.attendanceRepo.Create(att); err == nil {
-						dr.Created++
-						existingAttByEmp[ma.EmployeeID] = att
-					}
-				}
+			for i := range missingRecords {
+				missingByEmp[missingRecords[i].EmployeeID] = &missingRecords[i]
 			}
 		}
 	}
@@ -317,18 +225,6 @@ func (p *AttendanceProcessor) processDay(
 	}
 
 	// ── Compute the broadest possible 24-hour window for this date ────────────
-	//
-	// For any shift starting at HH:mm on attendanceDate:
-	//   windowStart = (attendanceDate @ HH:mm) - 1h
-	//   windowEnd   = windowStart + 24h - 1s
-	//
-	// Earliest possible windowStart: shift=00:00 → 23:00 previous day
-	//   = attendanceDate - 1h
-	// Latest possible windowEnd:     shift=23:59 → next day 22:58:59
-	//   = attendanceDate + 47h (rounded up to 48h for safety)
-	//
-	// We fetch all punches in this broad window once, then per-employee we
-	// filter using the employee's actual computed window.
 	broadWindowStart := attendanceDate.Add(-1 * time.Hour)
 	broadWindowEnd := attendanceDate.Add(48 * time.Hour)
 
@@ -354,17 +250,10 @@ func (p *AttendanceProcessor) processDay(
 	for i := range eligible {
 		emp := &eligible[i]
 
-		// Skip employees handled by missing attendance override.
-		if missingHandledByEmp[emp.EmployeeID] {
-			continue
-		}
-
 		// 1. Resolve shift (temporary shift takes priority).
 		shift := p.resolveShift(emp, date, tempShiftByKey, shiftCache)
 
 		// 2. Calculate the 24-hour attendance window.
-		//    windowStart = shiftStart - 1h
-		//    windowEnd   = windowStart + 24h - 1s
 		var window utils.AttendanceWindow
 		if shift != nil && shift.StartTime != "" {
 			shiftStartDT := utils.ShiftStartOnDate(shift.StartTime, attendanceDate)
@@ -391,22 +280,61 @@ func (p *AttendanceProcessor) processDay(
 		}
 
 		// 5. Determine check-in / check-out from windowed punches.
-		checkIn, checkOut := resolveInOut(windowedPunches, shiftEndDT)
+		bioCheckIn, bioCheckOut := resolveInOut(windowedPunches, shiftEndDT)
 
-		// 6. Compute all attendance fields.
+		// 6. Merge missing attendance overrides selectively.
+		checkIn := bioCheckIn
+		checkOut := bioCheckOut
+
+		ma := missingByEmp[emp.EmployeeID]
+		if ma != nil {
+			if ma.CheckIn != nil {
+				checkIn = ma.CheckIn
+			}
+			if ma.CheckOut != nil {
+				checkOut = ma.CheckOut
+			}
+		}
+
+		// Preserve existing attendance times if biometric punch was missing and ma did not override.
+		existing, exists := existingAttByEmp[emp.EmployeeID]
+		if checkIn == nil && exists && existing.CheckIn != nil {
+			checkIn = existing.CheckIn
+		}
+		if checkOut == nil && exists && existing.CheckOut != nil {
+			checkOut = existing.CheckOut
+		}
+
+		// 7. Compute all attendance fields.
 		att := p.computeAttendance(
 			emp, date, attendanceDate,
 			shift, checkIn, checkOut,
 			onLeaveSet, isGovHoliday, isCompWeekend, isGenDuty,
 		)
 
-		// 7. Collect punch IDs to mark processed.
+		// If ma exists and has a non-present status when times are incomplete, preserve it.
+		if ma != nil && ma.Status != "" && ma.Status != "present" && (checkIn == nil || checkOut == nil) {
+			att.Status = ma.Status
+		}
+
+		// Keep missing_attendances record synced with merged values.
+		if ma != nil {
+			_ = p.missingAttendanceRepo.UpdateFields(ma.ID, map[string]interface{}{
+				"check_in":    checkIn,
+				"check_out":   checkOut,
+				"total_hours": att.TotalHours,
+				"over_time":   att.OverTime,
+				"status":      att.Status,
+			})
+		}
+
+		// 8. Collect punch IDs to mark processed.
 		for _, punch := range windowedPunches {
 			logIDsToMark = append(logIDsToMark, punch.ID)
 		}
 
-		// 6. Upsert.
-		if existing, exists := existingAttByEmp[emp.EmployeeID]; exists {
+		// 9. Upsert attendance record.
+		if exists {
 			updates := map[string]interface{}{
 				"shift_id":     att.ShiftID,
 				"check_in":     att.CheckIn,

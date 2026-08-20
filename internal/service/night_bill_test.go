@@ -84,3 +84,52 @@ func TestComputeNightBill_Hourly45MinThreshold(t *testing.T) {
 		})
 	}
 }
+
+func TestComputeNightBill_Fixed(t *testing.T) {
+	dateStr := "2026-08-18"
+
+	parseTime := func(tStr string) *time.Time {
+		tm, err := time.Parse("2006-01-02 15:04:05", dateStr+" "+tStr)
+		if err != nil {
+			t.Fatalf("failed to parse time: %v", err)
+		}
+		return &tm
+	}
+
+	shift := &models.Shift{
+		EndTime: "17:00",
+	}
+
+	checkIn := parseTime("08:00:00")
+
+	// Shift end = 17:00, Shift end + 7 hours = 24:00 (next day 00:00)
+	checkOutQualified, _ := time.Parse("2006-01-02 15:04:05", "2026-08-19 00:00:00")
+	checkOutEarly, _ := time.Parse("2006-01-02 15:04:05", "2026-08-18 23:30:00")
+
+	t.Run("Out at Shift End + 7 Hours (Qualifies Fixed)", func(t *testing.T) {
+		att := models.Attendance{
+			CheckIn:  checkIn,
+			CheckOut: &checkOutQualified,
+			Shift:    shift,
+		}
+		hours, rate, amount, qualifies := computeNightBill(att, dateStr, "fixed", 150.0, 0)
+		if !qualifies {
+			t.Errorf("qualifies = false, want true")
+		}
+		if hours != 1.0 || rate != 150.0 || amount != 150.0 {
+			t.Errorf("got hours=%v rate=%v amount=%v, want 1, 150, 150", hours, rate, amount)
+		}
+	})
+
+	t.Run("Out before Shift End + 7 Hours (Does not qualify)", func(t *testing.T) {
+		att := models.Attendance{
+			CheckIn:  checkIn,
+			CheckOut: &checkOutEarly,
+			Shift:    shift,
+		}
+		_, _, _, qualifies := computeNightBill(att, dateStr, "fixed", 150.0, 0)
+		if qualifies {
+			t.Errorf("qualifies = true, want false")
+		}
+	})
+}

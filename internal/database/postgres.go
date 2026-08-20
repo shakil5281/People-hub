@@ -87,12 +87,14 @@ func Connect(cfg *config.Config) {
 		&models.OtEarlyExitDeduction{},
 		&models.NightBill{},
 		&models.NightBillEmployeeList{},
+		&models.EmployeeMigration{},
 	)
 	// Ensure new tables were created; if not, create them explicitly.
 	db.Exec("CREATE TABLE IF NOT EXISTS punishments (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS daily_schedules (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS tiffin_bills (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS night_bills (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
+	db.Exec("CREATE TABLE IF NOT EXISTS employee_migrations (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	// Re-run AutoMigrate after ensuring tables exist so columns/indexes are added.
 	db.AutoMigrate(
 		&models.SalaryIncrement{},
@@ -103,6 +105,7 @@ func Connect(cfg *config.Config) {
 		&models.EidBonus{},
 		&models.NightBill{},
 		&models.NightBillEmployeeList{},
+		&models.EmployeeMigration{},
 	)
 
 	// Use silent session for ALTER statements to avoid noisy ERROR logs when tables don't exist yet

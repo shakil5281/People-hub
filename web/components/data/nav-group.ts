@@ -38,6 +38,7 @@ ClipboardCheckIcon,
   CalendarIcon,
   CoffeeIcon,
   GiftIcon,
+  ArrowRightLeftIcon,
 } from "lucide-react"
 
 export const monthlyReportNav = [
@@ -59,6 +60,7 @@ export const hrNav = [
   { title: "Employees", url: "/hr/employees", icon: UsersIcon },
   { title: "Requirements", url: "/hr/requirements", icon: ClipboardListIcon },
   { title: "Seperation", url: "/hr/seperation", icon: UserXIcon },
+  { title: "Migration", url: "/hr/migration", icon: ArrowRightLeftIcon },
   { title: "Id Card", url: "/hr/id-card", icon: IdCardIcon },
   { title: "Punishment", url: "/hr/punishment", icon: AlertTriangleIcon },
   { title: "Daily Schedule", url: "/hr/daily-schedule", icon: CalendarIcon },

@@ -59,6 +59,11 @@ func syncAttendanceInOut(nb *models.NightBill) {
 			nb.OutTime = nb.Attendance.CheckOut
 		}
 	}
+	if nb != nil && nb.InTime != nil && nb.OutTime != nil {
+		if nb.InTime.After(*nb.OutTime) {
+			nb.InTime, nb.OutTime = nb.OutTime, nb.InTime
+		}
+	}
 }
 
 func (r *NightBillRepository) FindByID(id string) (*models.NightBill, error) {

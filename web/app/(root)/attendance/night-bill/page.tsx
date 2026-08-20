@@ -301,12 +301,26 @@ export default function NightBillPage() {
     {
       id: "in_time",
       header: "In Time",
-      cell: ({ row }) => <span className="text-xs font-medium text-emerald-600 tabular-nums">{formatCheck(row.original.in_time)}</span>,
+      cell: ({ row }) => {
+        let inT = row.original.in_time
+        let outT = row.original.out_time
+        if (row.original.attendance?.check_in) inT = row.original.attendance.check_in
+        if (row.original.attendance?.check_out) outT = row.original.attendance.check_out
+        if (inT && outT && inT > outT) [inT, outT] = [outT, inT]
+        return <span className="text-xs font-medium text-emerald-600 tabular-nums">{formatCheck(inT)}</span>
+      },
     },
     {
       id: "out_time",
       header: "Out Time",
-      cell: ({ row }) => <span className="text-xs font-medium text-rose-500 tabular-nums">{formatCheck(row.original.out_time)}</span>,
+      cell: ({ row }) => {
+        let inT = row.original.in_time
+        let outT = row.original.out_time
+        if (row.original.attendance?.check_in) inT = row.original.attendance.check_in
+        if (row.original.attendance?.check_out) outT = row.original.attendance.check_out
+        if (inT && outT && inT > outT) [inT, outT] = [outT, inT]
+        return <span className="text-xs font-medium text-rose-500 tabular-nums">{formatCheck(outT)}</span>
+      },
     },
     { accessorKey: "bill_type", header: "Bill Type", cell: ({ row }) => billTypeBadge(row.original.bill_type) },
     {

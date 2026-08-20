@@ -27,6 +27,7 @@ interface NightBill {
   rate: number
   amount: number
   status: string
+  attendance?: { check_in?: string | null; check_out?: string | null } | null
   employee?: {
     name_en: string
     name_bn: string
@@ -111,12 +112,28 @@ export default function NightBillPage() {
     },
     { accessorKey: "attendance_date", header: "Date" },
     {
-      accessorKey: "in_time", header: "In Time",
-      cell: ({ row }) => <span className="tabular-nums text-xs">{formatCheck(row.original.in_time)}</span>,
+      accessorKey: "in_time",
+      header: "In Time",
+      cell: ({ row }) => {
+        let inT = row.original.in_time
+        let outT = row.original.out_time
+        if (row.original.attendance?.check_in) inT = row.original.attendance.check_in
+        if (row.original.attendance?.check_out) outT = row.original.attendance.check_out
+        if (inT && outT && inT > outT) [inT, outT] = [outT, inT]
+        return <span className="tabular-nums text-xs">{formatCheck(inT)}</span>
+      },
     },
     {
-      accessorKey: "out_time", header: "Out Time",
-      cell: ({ row }) => <span className="tabular-nums text-xs">{formatCheck(row.original.out_time)}</span>,
+      accessorKey: "out_time",
+      header: "Out Time",
+      cell: ({ row }) => {
+        let inT = row.original.in_time
+        let outT = row.original.out_time
+        if (row.original.attendance?.check_in) inT = row.original.attendance.check_in
+        if (row.original.attendance?.check_out) outT = row.original.attendance.check_out
+        if (inT && outT && inT > outT) [inT, outT] = [outT, inT]
+        return <span className="tabular-nums text-xs">{formatCheck(outT)}</span>
+      },
     },
     {
       accessorKey: "bill_type", header: "Type",

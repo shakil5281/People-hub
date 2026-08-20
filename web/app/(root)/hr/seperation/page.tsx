@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { UserXIcon, PlusIcon, RotateCcwIcon, Loader2, CheckCircleIcon, XCircleIcon, FilterIcon, XIcon } from "lucide-react"
+import { UserXIcon, PlusIcon, RotateCcwIcon, Loader2, CheckCircleIcon, XCircleIcon, FilterIcon, XIcon, FileSpreadsheetIcon, FileTextIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { toast } from "sonner"
@@ -37,6 +37,7 @@ export default function SeperationPage() {
   const [loading, setLoading] = React.useState(true)
   const [processing, setProcessing] = React.useState(false)
   const [processingId, setProcessingId] = React.useState<string | null>(null)
+  const [exporting, setExporting] = React.useState<"excel" | "pdf" | null>(null)
   const [filters, setFilters] = React.useState<Record<string, string>>({
     date_from: firstOfMonth,
     date_to: today,
@@ -64,24 +65,78 @@ export default function SeperationPage() {
     }
   }, [page, limit])
 
+  const loadSections = React.useCallback(async (departmentId: string) => {
+    try {
+      const res = await sectionApi.list(departmentId, { limit: "100" })
+      setSections(Array.isArray(res.data?.data) ? res.data.data : [])
+    } catch {
+      setSections([])
+    }
+  }, [])
+
+  const loadDesignations = React.useCallback(async (sectionId: string) => {
+    try {
+      const res = await designationApi.list(sectionId, { limit: "100" })
+      setDesignations(Array.isArray(res.data?.data) ? res.data.data : [])
+    } catch {
+      setDesignations([])
+    }
+  }, [])
+
+  const loadLines = React.useCallback(async (sectionId: string) => {
+    try {
+      const res = await lineApi.list(sectionId, { limit: "100" })
+      setLines(Array.isArray(res.data?.data) ? res.data.data : [])
+    } catch {
+      setLines([])
+    }
+  }, [])
+
   React.useEffect(() => {
     Promise.all([
       companyApi.list({ limit: "100" }),
       departmentApi.list({ limit: "100" }),
-      sectionApi.list(),
-      designationApi.list(),
-      lineApi.list(),
-      groupApi.list(),
-    ]).then(([cRes, dRes, sRes, desRes, lRes, gRes]) => {
+      groupApi.list({ limit: "100" }),
+    ]).then(([cRes, dRes, gRes]) => {
       setCompanies(Array.isArray(cRes.data?.data) ? cRes.data.data : [])
       setDepartments(Array.isArray(dRes.data?.data) ? dRes.data.data : [])
-      setSections(Array.isArray(sRes.data?.data) ? sRes.data.data : [])
-      setDesignations(Array.isArray(desRes.data?.data) ? desRes.data.data : [])
-      setLines(Array.isArray(lRes.data?.data) ? lRes.data.data : [])
       setGroups(Array.isArray(gRes.data?.data) ? gRes.data.data : [])
     }).catch(() => {})
     fetchData(filters)
   }, [])
+
+  React.useEffect(() => {
+    if (!filters.department_id) {
+      setSections([])
+      setDesignations([])
+      setLines([])
+      setFilters((prev) => {
+        const next = { ...prev }
+        delete next.section_id
+        delete next.designation_id
+        delete next.line_id
+        return next
+      })
+      return
+    }
+    loadSections(filters.department_id)
+  }, [filters.department_id, loadSections])
+
+  React.useEffect(() => {
+    if (!filters.section_id) {
+      setDesignations([])
+      setLines([])
+      setFilters((prev) => {
+        const next = { ...prev }
+        delete next.designation_id
+        delete next.line_id
+        return next
+      })
+      return
+    }
+    loadDesignations(filters.section_id)
+    loadLines(filters.section_id)
+  }, [filters.section_id, loadDesignations, loadLines])
 
   React.useEffect(() => {
     fetchData(filters)
@@ -101,6 +156,9 @@ export default function SeperationPage() {
   const handleReset = () => {
     setPage(1)
     setLimit(20)
+    setSections([])
+    setDesignations([])
+    setLines([])
     setFilters({ date_from: firstOfMonth, date_to: today })
     fetchData({ date_from: firstOfMonth, date_to: today }, 1, 20)
   }
@@ -161,6 +219,55 @@ export default function SeperationPage() {
     }
   }
 
+  const handleExport = async (kind: "excel" | "pdf") => {
+    setExporting(kind)
+    try {
+      const active: Record<string, string> = {}
+      for (const [k, v] of Object.entries(filters)) {
+        if (v) active[k] = v
+      }
+      const res = kind === "excel" ? await separationApi.exportExcel(active) : await separationApi.exportPdf(active)
+      const blob = new Blob([res.data], {
+        type: kind === "excel" ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" : "application/pdf",
+      })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      const ext = kind === "excel" ? "xlsx" : "pdf"
+      link.download = `separation_report_${new Date().toISOString().slice(0, 10)}.${ext}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      toast.success(`Separation report (${kind.toUpperCase()}) exported successfully`)
+    } catch (err: unknown) {
+      toast.error(`Failed to export ${kind.toUpperCase()}`)
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const handleFormExportPdf = async (s: Separation) => {
+    setProcessingId(s.id)
+    try {
+      const res = await separationApi.exportFormPdf(s.id, "en")
+      const blob = new Blob([res.data], { type: "application/pdf" })
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `separation_form_${s.employee_id || s.id}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      toast.success(`Separation form PDF generated for ${s.employee}`)
+    } catch {
+      toast.error("Failed to export separation form PDF")
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
   const columns: ColumnDef<Separation>[] = React.useMemo(() => [
     { accessorKey: "employee", header: "Employee" },
     { accessorKey: "employee_id", header: "Emp. ID" },
@@ -188,6 +295,9 @@ export default function SeperationPage() {
         if (busy) return <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
         return (
           <div className="flex items-center gap-1">
+            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleFormExportPdf(s) }} title="Export Resignation Form PDF">
+              <FileTextIcon className="h-4 w-4 text-blue-600" />
+            </Button>
             {(s.status === "Pending" || s.status === "Approved") && (
               <>
                 <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); handleProcessOne(s) }} title="Process now">
@@ -204,20 +314,38 @@ export default function SeperationPage() {
     },
   ], [processingId])
 
-  const filterDefs: FilterDef[] = [
+  const filterDefs: FilterDef[] = React.useMemo(() => [
     { key: "date_from", label: "Separation Start Date", type: "datepicker" },
     { key: "date_to", label: "Separation End Date", type: "datepicker" },
     { key: "company_id", label: "Company", type: "select", options: companies.map((c) => ({ value: c.id, label: c.company_name_en })) },
     { key: "department_id", label: "Department", type: "select", options: departments.map((d) => ({ value: d.id, label: d.name })) },
-    { key: "section_id", label: "Section", type: "select", options: sections.map((s) => ({ value: s.id, label: s.name })) },
-    { key: "designation_id", label: "Designation", type: "select", options: designations.map((d) => ({ value: d.id, label: d.name })) },
-    { key: "line_id", label: "Line", type: "select", options: lines.map((l) => ({ value: l.id, label: l.name })) },
+    {
+      key: "section_id",
+      label: "Section",
+      type: "select",
+      options: sections.map((s) => ({ value: s.id, label: s.name })),
+      disabled: !filters.department_id,
+    },
+    {
+      key: "designation_id",
+      label: "Designation",
+      type: "select",
+      options: designations.map((d) => ({ value: d.id, label: d.name })),
+      disabled: !filters.section_id,
+    },
+    {
+      key: "line_id",
+      label: "Line",
+      type: "select",
+      options: lines.map((l) => ({ value: l.id, label: l.name })),
+      disabled: !filters.section_id,
+    },
     { key: "group_id", label: "Group", type: "select", options: groups.map((g) => ({ value: g.id, label: g.name })) },
     { key: "employee", label: "Employee", type: "text", placeholder: "Filter by employee..." },
     { key: "employee_id", label: "Code", type: "text", placeholder: "Filter by code..." },
     { key: "type", label: "Separation Type", type: "select", options: separationTypeOptions.map((o) => ({ value: o.value, label: o.label })) },
     { key: "status", label: "Status", type: "select", options: separationStatusOptions.map((o) => ({ value: o.value, label: o.label })) },
-  ]
+  ], [companies, departments, sections, designations, lines, groups, filters.department_id, filters.section_id])
 
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
@@ -229,16 +357,24 @@ export default function SeperationPage() {
             <p className="text-muted-foreground mt-1">Manage employee separations</p>
           </div>
         </div>
-        <div className="hidden md:flex gap-2">
-          <Button onClick={handleProcessBatch} disabled={processing} variant="outline">
+        <ButtonGroup className="hidden md:flex">
+          <Button variant="outline" size="sm" onClick={() => handleExport("excel")} disabled={loading || !!exporting}>
+            {exporting === "excel" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-2 h-4 w-4 text-green-600" />}
+            Export Excel
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => handleExport("pdf")} disabled={loading || !!exporting}>
+            {exporting === "pdf" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileTextIcon className="mr-2 h-4 w-4 text-red-600" />}
+            Export PDF
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleProcessBatch} disabled={processing}>
             {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcwIcon className="mr-2 h-4 w-4" />}
             {processing ? "Processing..." : "Process Due"}
           </Button>
-          <Button onClick={() => router.push("/hr/seperation/create")}>
+          <Button size="sm" onClick={() => router.push("/hr/seperation/create")}>
             <PlusIcon className="mr-2 h-4 w-4" />
             Add Separation
           </Button>
-        </div>
+        </ButtonGroup>
       </div>
 
       <div className="md:hidden px-4 lg:px-6">
@@ -275,12 +411,20 @@ export default function SeperationPage() {
           </Sheet>
         </ButtonGroup>
         <ButtonGroup className="w-full mt-2">
-          <Button onClick={handleProcessBatch} disabled={processing} variant="outline" className="flex-1">
-            {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RotateCcwIcon className="mr-2 h-4 w-4" />}
-            {processing ? "Process..." : "Process Due"}
+          <Button variant="outline" size="sm" onClick={() => handleExport("excel")} disabled={loading || !!exporting} className="flex-1">
+            {exporting === "excel" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-1.5 h-4 w-4 text-green-600" />}
+            Excel
           </Button>
-          <Button onClick={() => router.push("/hr/seperation/create")} className="flex-1">
-            <PlusIcon className="mr-2 h-4 w-4" />
+          <Button variant="outline" size="sm" onClick={() => handleExport("pdf")} disabled={loading || !!exporting} className="flex-1">
+            {exporting === "pdf" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <FileTextIcon className="mr-1.5 h-4 w-4 text-red-600" />}
+            PDF
+          </Button>
+          <Button onClick={handleProcessBatch} disabled={processing} variant="outline" size="sm" className="flex-1">
+            {processing ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <RotateCcwIcon className="mr-1.5 h-4 w-4" />}
+            Process
+          </Button>
+          <Button onClick={() => router.push("/hr/seperation/create")} size="sm" className="flex-1">
+            <PlusIcon className="mr-1.5 h-4 w-4" />
             Add
           </Button>
         </ButtonGroup>

@@ -91,6 +91,53 @@ func (r *SeparationRepository) ListFiltered(employee, employeeID, departmentID, 
 	return seps, total, err
 }
 
+func (r *SeparationRepository) ListAllFiltered(employee, employeeID, departmentID, sepType, status, companyID, sectionID, designationID, lineID, groupID, dateFrom, dateTo string) ([]models.Separation, error) {
+	base := r.db.Model(&models.Separation{}).Where("separations.deleted_at IS NULL").Order("separations.date DESC, separations.created_at DESC")
+
+	base = base.Joins("LEFT JOIN employees ON employees.employee_id = separations.employee_id")
+
+	if employee != "" {
+		base = base.Where("separations.employee ILIKE ?", "%"+employee+"%")
+	}
+	if employeeID != "" {
+		base = base.Where("separations.employee_id ILIKE ?", "%"+employeeID+"%")
+	}
+	if departmentID != "" {
+		base = base.Where("separations.department_id = ?", departmentID)
+	}
+	if sepType != "" {
+		base = base.Where("separations.type = ?", sepType)
+	}
+	if status != "" {
+		base = base.Where("separations.status = ?", status)
+	}
+	if companyID != "" {
+		base = base.Where("separations.company_id = ?", companyID)
+	}
+	if sectionID != "" {
+		base = base.Where("employees.section_id = ?", sectionID)
+	}
+	if designationID != "" {
+		base = base.Where("employees.designation_id = ?", designationID)
+	}
+	if lineID != "" {
+		base = base.Where("employees.line_id = ?", lineID)
+	}
+	if groupID != "" {
+		base = base.Where("employees.group_id = ?", groupID)
+	}
+	if dateFrom != "" {
+		base = base.Where("separations.date >= ?", dateFrom)
+	}
+	if dateTo != "" {
+		base = base.Where("separations.date <= ?", dateTo)
+	}
+
+	var seps []models.Separation
+	err := base.Preload("Department").Find(&seps).Error
+	return seps, err
+}
+
 func (r *SeparationRepository) Update(sep *models.Separation) error {
 	return r.db.Save(sep).Error
 }
