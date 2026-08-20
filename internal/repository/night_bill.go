@@ -50,6 +50,17 @@ func (r *NightBillRepository) Exists(employeeID, attendanceDate, billType string
 	return count > 0, err
 }
 
+func syncAttendanceInOut(nb *models.NightBill) {
+	if nb != nil && nb.Attendance.ID != "" {
+		if nb.Attendance.CheckIn != nil {
+			nb.InTime = nb.Attendance.CheckIn
+		}
+		if nb.Attendance.CheckOut != nil {
+			nb.OutTime = nb.Attendance.CheckOut
+		}
+	}
+}
+
 func (r *NightBillRepository) FindByID(id string) (*models.NightBill, error) {
 	var nb models.NightBill
 	err := r.db.Preload("Employee.DesignationRef").
@@ -60,6 +71,9 @@ func (r *NightBillRepository) FindByID(id string) (*models.NightBill, error) {
 		Preload("Attendance").
 		Where("id = ? AND deleted_at IS NULL", id).
 		First(&nb).Error
+	if err == nil {
+		syncAttendanceInOut(&nb)
+	}
 	return &nb, err
 }
 
@@ -144,6 +158,12 @@ func (r *NightBillRepository) ListFiltered(f NightBillFilter, page, limit int) (
 		Limit(limit).
 		Find(&list).Error
 
+	if err == nil {
+		for i := range list {
+			syncAttendanceInOut(&list[i])
+		}
+	}
+
 	return list, total, err
 }
 
@@ -158,5 +178,11 @@ func (r *NightBillRepository) ListAllFiltered(f NightBillFilter) ([]models.Night
 		Preload("Attendance").
 		Order("night_bills.attendance_date DESC, LENGTH(night_bills.employee_id) ASC, night_bills.employee_id ASC").
 		Find(&list).Error
+
+	if err == nil {
+		for i := range list {
+			syncAttendanceInOut(&list[i])
+		}
+	}
 	return list, err
 }

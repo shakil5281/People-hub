@@ -494,39 +494,39 @@ func (h *AttendanceHandler) ExportCustomDailySummaryExcel(c *gin.Context) {
 	}
 
 	headerStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 10, Color: "1E3A8A", Family: "Calibri"},
+		Font:      &excelize.Font{Bold: true, Size: 11, Color: "1E3A8A", Family: "Calibri"},
 		Fill:      excelize.Fill{Type: "pattern", Color: []string{"F8FAFC"}, Pattern: 1},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border:    thinBorder,
 	})
 
 	cellNormal, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Size: 10, Color: "0F172A", Family: "Calibri"},
+		Font:      &excelize.Font{Size: 11, Color: "0F172A", Family: "Calibri"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border:    thinBorder,
 	})
 	cellNormalLeft, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Size: 10, Color: "0F172A", Family: "Calibri"},
+		Font:      &excelize.Font{Size: 11, Color: "0F172A", Family: "Calibri"},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 		Border:    thinBorder,
 	})
 
 	subtotalStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 10, Color: "0F172A", Family: "Calibri"},
+		Font:      &excelize.Font{Bold: true, Size: 11, Color: "0F172A", Family: "Calibri"},
 		Fill:      excelize.Fill{Type: "pattern", Color: []string{"E0F2FE"}, Pattern: 1},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border:    thinBorder,
 	})
 
 	workerTotalStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 10, Color: "0F172A", Family: "Calibri"},
+		Font:      &excelize.Font{Bold: true, Size: 11, Color: "0F172A", Family: "Calibri"},
 		Fill:      excelize.Fill{Type: "pattern", Color: []string{"BAE6FD"}, Pattern: 1},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border:    thinBorder,
 	})
 
 	grandTotalStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 11, Color: "FFFFFF", Family: "Calibri"},
+		Font:      &excelize.Font{Bold: true, Size: 12, Color: "FFFFFF", Family: "Calibri"},
 		Fill:      excelize.Fill{Type: "pattern", Color: []string{"00A0E9"}, Pattern: 1},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 		Border:    thinBorder,
@@ -553,7 +553,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryExcel(c *gin.Context) {
 	f.SetRowHeight(sheet, 4, 18)
 
 	// Table Header
-	headers := []string{"Section", "Section", "Present", "Abesnt", "Leave", "Others", "Total", "Remarks"}
+	headers := []string{"Section", "Section", "Present", "Absent", "Leave", "Others", "Total", "Remarks"}
 	f.SetRowHeight(sheet, 5, 22)
 	f.MergeCell(sheet, "A5", "B5")
 	f.SetCellValue(sheet, "A5", "Section")
@@ -664,14 +664,21 @@ func (h *AttendanceHandler) ExportCustomDailySummaryExcel(c *gin.Context) {
 	f.SetCellValue(sheet, fmt.Sprintf("H%d", rowIdx), "")
 	f.SetCellStyle(sheet, fmt.Sprintf("H%d", rowIdx), fmt.Sprintf("H%d", rowIdx), grandTotalStyle)
 
-	// Page setup: A4 size with custom margins
-	marginLeftRight := 0.45
-	marginTopBottom := 0.75
+	// Page setup: A4 size with exact requested margins
+	marginTop := 0.56
+	marginBottom := 0.39
+	marginLeft := 0.66
+	marginRight := 0.48
+	marginHeader := 0.26
+	marginFooter := 0.30
+
 	f.SetPageMargins(sheet, &excelize.PageLayoutMarginsOptions{
-		Left:   &marginLeftRight,
-		Right:  &marginLeftRight,
-		Top:    &marginTopBottom,
-		Bottom: &marginTopBottom,
+		Top:    &marginTop,
+		Bottom: &marginBottom,
+		Left:   &marginLeft,
+		Right:  &marginRight,
+		Header: &marginHeader,
+		Footer: &marginFooter,
 	})
 	orientation := "portrait"
 	size := 9 // A4 paper size
@@ -706,15 +713,16 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 	}
 
 	pdf := gofpdf.New("P", "mm", "A4", "")
-	pdf.SetMargins(15, 10, 15)
+	// Margins: Left=16.8mm (0.66in), Top=14.2mm (0.56in), Right=12.2mm (0.48in)
+	pdf.SetMargins(16.8, 14.2, 12.2)
 	pdf.SetAutoPageBreak(false, 0)
 	pdf.AddPage()
 
 	font := "Helvetica"
 
-	pageW := 180.0
-	x := 15.0
-	curY := 12.0
+	pageW := 181.0 // 210.0 - 16.8 - 12.2 = 181.0 mm
+	x := 16.8
+	curY := 14.2
 
 	// 1. Header
 	pdf.SetFont(font, "B", 18)
@@ -740,18 +748,18 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 	pdf.CellFormat(pageW, 4.5, fmt.Sprintf("Date:- %s", data.FormattedDate), "", 0, "R", false, 0, "")
 	curY += 6.5
 
-	// Table setup
-	colWParent := 20.0
-	colWSec := 35.0
-	colWVal := 20.0
-	colWRem := 25.0
+	// Table setup (Total width = 21 + 38 + 5*19 + 27 = 181.0 mm)
+	colWParent := 21.0
+	colWSec := 38.0
+	colWVal := 19.0
+	colWRem := 27.0
 	rowH := 7.0
 
 	// Draw Header Row
 	pdf.SetFillColor(248, 250, 252)
 	pdf.SetDrawColor(152, 160, 169)
 	pdf.SetLineWidth(0.3)
-	pdf.SetFont(font, "B", 8.5)
+	pdf.SetFont(font, "B", 9.5)
 	pdf.SetTextColor(15, 23, 42)
 
 	drawCell := func(cx, cy, cw, ch float64, txt, align string, bg bool, r, g, b int) {
@@ -772,7 +780,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 	pdf.CellFormat(colWParent+colWSec-1.0, 3.5, "Section", "", 0, "C", false, 0, "")
 
 	cx := x + colWParent + colWSec
-	headers := []string{"Present", "Abesnt", "Leave", "Others", "Total", "Remarks"}
+	headers := []string{"Present", "Absent", "Leave", "Others", "Total", "Remarks"}
 	widths := []float64{colWVal, colWVal, colWVal, colWVal, colWVal, colWRem}
 	for i, h := range headers {
 		drawCell(cx, curY, widths[i], rowH, h, "C", true, 248, 250, 252)
@@ -790,17 +798,17 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 	for _, r := range data.Rows {
 		bg := false
 		cr, cg, cb := 255, 255, 255
-		pdf.SetFont(font, "", 8.0)
+		pdf.SetFont(font, "", 9.0)
 		pdf.SetTextColor(15, 23, 42)
 
 		if r.StyleType == "subtotal" || r.StyleType == "staff_total" {
 			bg = true
 			cr, cg, cb = 224, 242, 254
-			pdf.SetFont(font, "B", 8.0)
+			pdf.SetFont(font, "B", 9.0)
 		} else if r.StyleType == "worker_total" {
 			bg = true
 			cr, cg, cb = 186, 230, 253
-			pdf.SetFont(font, "B", 8.0)
+			pdf.SetFont(font, "B", 9.0)
 		}
 
 		if r.ParentSection == "Sewing" {
@@ -834,7 +842,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 		sewingH := float64(sewingRows) * rowH
 		pdf.SetFillColor(255, 255, 255)
 		pdf.Rect(x, sewingStartY, colWParent, sewingH, "D")
-		pdf.SetFont(font, "B", 9.0)
+		pdf.SetFont(font, "B", 10.0)
 		pdf.SetTextColor(15, 23, 42)
 		pdf.SetXY(x, sewingStartY+sewingH/2.0-2.0)
 		pdf.CellFormat(colWParent, 4.0, "Sewing", "", 0, "C", false, 0, "")
@@ -842,7 +850,7 @@ func (h *AttendanceHandler) ExportCustomDailySummaryPDF(c *gin.Context) {
 
 	// Grand Total Row
 	grandH := 8.5
-	pdf.SetFont(font, "B", 8.5)
+	pdf.SetFont(font, "B", 9.5)
 	pdf.SetTextColor(255, 255, 255)
 
 	drawGrandCell := func(cx, cy, cw, ch float64, txt string) {

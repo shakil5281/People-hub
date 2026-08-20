@@ -357,18 +357,6 @@ func (h *NightBillHandler) ExportExcel(c *gin.Context) {
 		{Type: "right", Color: borderColor, Style: 1},
 	}
 
-	companyNameStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 20, Family: "Calibri", Color: "000000"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	subHeaderStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
-	reportNameStyle, _ := f.NewStyle(&excelize.Style{
-		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "DC2626"},
-		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
-	})
 	headerStyle, _ := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 10, Family: "Calibri", Color: "000000"},
 		Fill:      excelize.Fill{Type: "pattern", Color: []string{"D9E2F3"}, Pattern: 1},
@@ -397,34 +385,58 @@ func (h *NightBillHandler) ExportExcel(c *gin.Context) {
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	})
 
-
 	headers := []string{"Employee ID", "Employee Name", "Designation", "In Time", "Out Time", "Amount", "Signature"}
 	cols := []string{"A", "B", "C", "D", "E", "F", "G"}
 	lastCol := "G"
 
-	// Header: company name, address, report name, period
-	f.MergeCell(sheet, "A1", lastCol+"1")
-	f.SetCellValue(sheet, "A1", companyName)
-	f.SetCellStyle(sheet, "A1", lastCol+"1", companyNameStyle)
-	f.SetRowHeight(sheet, 1, 32)
+	// ==========================================
+	// Header - ONLY A1 Rich Text
+	// ==========================================
+	headerRuns := []excelize.RichTextRun{
+		{
+			Text: companyName,
+			Font: &excelize.Font{
+				Bold: true,
+				Size: 20,
+			},
+		},
+		{
+			Text: "\n" + companyAddress,
+			Font: &excelize.Font{
+				Size: 11,
+			},
+		},
+		{
+			Text: "\nNIGHT BILL REPORT",
+			Font: &excelize.Font{
+				Bold: true,
+				Size: 11,
+				Color: "DC2626",
+			},
+		},
+		{
+			Text: "\n" + period,
+			Font: &excelize.Font{
+				Size: 11,
+			},
+		},
+	}
 
-	f.MergeCell(sheet, "A2", lastCol+"2")
-	f.SetCellValue(sheet, "A2", companyAddress)
-	f.SetCellStyle(sheet, "A2", lastCol+"2", subHeaderStyle)
-	f.SetRowHeight(sheet, 2, 20)
+	_ = f.SetCellRichText(sheet, "A1", headerRuns)
+	_ = f.MergeCell(sheet, "A1", lastCol+"1")
 
-	f.MergeCell(sheet, "A3", lastCol+"3")
-	f.SetCellValue(sheet, "A3", "NIGHT BILL REPORT")
-	f.SetCellStyle(sheet, "A3", lastCol+"3", reportNameStyle)
-	f.SetRowHeight(sheet, 3, 22)
+	headerStyleA1, _ := f.NewStyle(&excelize.Style{
+		Alignment: &excelize.Alignment{
+			Horizontal: "center",
+			Vertical:   "center",
+			WrapText:   true,
+		},
+	})
+	_ = f.SetCellStyle(sheet, "A1", lastCol+"1", headerStyleA1)
+	_ = f.SetRowHeight(sheet, 1, 75)
 
-	f.MergeCell(sheet, "A4", lastCol+"4")
-	f.SetCellValue(sheet, "A4", period)
-	f.SetCellStyle(sheet, "A4", lastCol+"4", subHeaderStyle)
-	f.SetRowHeight(sheet, 4, 18)
-
-	// Table header
-	headerRow := 6
+	// Table header starts immediately on Row 2
+	headerRow := 2
 	f.SetRowHeight(sheet, headerRow, 30)
 	for i, h := range headers {
 		cell := fmt.Sprintf("%s%d", cols[i], headerRow)

@@ -24,34 +24,47 @@ func Connect(cfg *config.Config) {
 	}
 
 	// Night Bill: migrate legacy columns to spec names before AutoMigrate maps the new model.
-	// Guarded with information_schema checks so they are idempotent across restarts.
+	// Guarded with information_schema checks so they are idempotent across restarts and fresh DBs.
 	db.Exec(`
 		DO $$
 		BEGIN
-			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='date') THEN
-				ALTER TABLE night_bills RENAME COLUMN "date" TO attendance_date;
-			END IF;
-			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='check_in') THEN
-				ALTER TABLE night_bills RENAME COLUMN check_in TO in_time;
-			END IF;
-			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='check_out') THEN
-				ALTER TABLE night_bills RENAME COLUMN check_out TO out_time;
-			END IF;
-			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='mode') THEN
-				ALTER TABLE night_bills RENAME COLUMN mode TO bill_type;
-			END IF;
-			IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='night_bills' AND column_name='extra_hours') THEN
-				ALTER TABLE night_bills RENAME COLUMN extra_hours TO eligible_hours;
+			IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills') THEN
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='date') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='attendance_date') THEN
+					ALTER TABLE night_bills RENAME COLUMN "date" TO attendance_date;
+				END IF;
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='check_in') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='in_time') THEN
+					ALTER TABLE night_bills RENAME COLUMN check_in TO in_time;
+				END IF;
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='check_out') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='out_time') THEN
+					ALTER TABLE night_bills RENAME COLUMN check_out TO out_time;
+				END IF;
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='mode') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='bill_type') THEN
+					ALTER TABLE night_bills RENAME COLUMN mode TO bill_type;
+				END IF;
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='extra_hours') AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='eligible_hours') THEN
+					ALTER TABLE night_bills RENAME COLUMN extra_hours TO eligible_hours;
+				END IF;
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='in_time') THEN
+					ALTER TABLE night_bills ALTER COLUMN in_time TYPE timestamp WITHOUT TIME ZONE USING in_time AT TIME ZONE 'UTC';
+				END IF;
+				IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema=CURRENT_SCHEMA() AND table_name='night_bills' AND column_name='out_time') THEN
+					ALTER TABLE night_bills ALTER COLUMN out_time TYPE timestamp WITHOUT TIME ZONE USING out_time AT TIME ZONE 'UTC';
+				END IF;
 			END IF;
 		END $$;
 	`)
 	db.Exec("ALTER TABLE night_bills ADD COLUMN IF NOT EXISTS attendance_id uuid")
 	db.Exec("ALTER TABLE night_bills ADD COLUMN IF NOT EXISTS processed_at timestamp")
-	// Align in/out with attendance timestamps (timestamp without time zone) so the wall-clock
-	// values match the Job Card. Existing timestamptz instants are converted via UTC.
-	db.Exec(`ALTER TABLE night_bills ALTER COLUMN in_time TYPE timestamp WITHOUT TIME ZONE USING in_time AT TIME ZONE 'UTC'`)
-	db.Exec(`ALTER TABLE night_bills ALTER COLUMN out_time TYPE timestamp WITHOUT TIME ZONE USING out_time AT TIME ZONE 'UTC'`)
 	db.Exec("CREATE INDEX IF NOT EXISTS idx_night_bills_employee_date_type ON night_bills(employee_id, attendance_date, bill_type)")
+	db.Exec(`
+		UPDATE night_bills nb
+		SET in_time = a.check_in,
+		    out_time = a.check_out
+		FROM attendances a
+		WHERE nb.attendance_id = a.id
+		  AND a.deleted_at IS NULL
+		  AND (nb.in_time IS NULL OR nb.out_time IS NULL OR nb.in_time != a.check_in OR nb.out_time != a.check_out)
+	`)
 
 	// GORM v1.31.2 forces UUID on *_id columns, overriding type:varchar(50) tags.
 	// Use silent session for main AutoMigrate to suppress benign constraint management noise.

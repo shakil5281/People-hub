@@ -2,7 +2,6 @@ package service
 
 import (
 	"fmt"
-	"math"
 	"strings"
 	"time"
 
@@ -127,7 +126,8 @@ func computeNightBill(att models.Attendance, dateStr, billType string, fixedAmou
 		return 0, 0, 0, false
 	}
 
-	// hourly
+	// hourly: eligible hours = duration past 20:00.
+	// If remaining minutes >= 45, round UP to count +1 full hour.
 	eightPm, err := parseTimeOnDate(dateStr, "20:00:00")
 	if err != nil {
 		return 0, 0, 0, false
@@ -135,10 +135,23 @@ func computeNightBill(att models.Attendance, dateStr, billType string, fixedAmou
 	if !checkOut.After(eightPm) {
 		return 0, 0, 0, false
 	}
-	hours := math.Floor(checkOut.Sub(eightPm).Hours())
-	if hours <= 0 {
+	diff := checkOut.Sub(eightPm)
+	totalMinutes := int(diff.Minutes())
+	if totalMinutes <= 0 {
 		return 0, 0, 0, false
 	}
+
+	fullHours := totalMinutes / 60
+	remMinutes := totalMinutes % 60
+	if remMinutes >= 45 {
+		fullHours++
+	}
+
+	if fullHours <= 0 {
+		return 0, 0, 0, false
+	}
+
+	hours := float64(fullHours)
 	rate = hourlyRate
 	if rate == 0 {
 		rate = 20.0 // default 20 BDT/hr

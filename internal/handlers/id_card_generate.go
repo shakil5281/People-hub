@@ -83,9 +83,9 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 
 	const (
 		employeesPerPage = 6
-		frontW           = 55.0
-		backW            = 45.0
-		cardH            = 87.0
+		frontW           = 54.0
+		backW            = 44.0
+		cardH            = 84.0
 		startX           = 2.0
 		startY           = 5.0
 		gapPairX         = 6.0
@@ -474,6 +474,26 @@ func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fo
 	leftX := x + 3.0
 	rightX := x + w - lineWidth - 3.0
 
+	// Draw Signature Images above lines if available
+	if emp.SignatureURL != "" {
+		sigPath := resolveImagePath(emp.SignatureURL)
+		if _, err := os.Stat(sigPath); err == nil {
+			pdf.ImageOptions(sigPath, rightX+1.0, sigY-5.5, lineWidth-2.0, 5.0, false, gofpdf.ImageOptions{ReadDpi: true}, 0, "")
+			if !pdf.Ok() {
+				pdf.SetError(nil)
+			}
+		}
+	}
+	if emp.Company.Signature != "" {
+		authPath := resolveImagePath(emp.Company.Signature)
+		if _, err := os.Stat(authPath); err == nil {
+			pdf.ImageOptions(authPath, leftX+1.0, sigY-5.5, lineWidth-2.0, 5.0, false, gofpdf.ImageOptions{ReadDpi: true}, 0, "")
+			if !pdf.Ok() {
+				pdf.SetError(nil)
+			}
+		}
+	}
+
 	pdf.SetDrawColor(120, 120, 120)
 	pdf.SetLineWidth(0.3)
 	pdf.Line(leftX, sigY, leftX+lineWidth, sigY)
@@ -483,10 +503,10 @@ func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fo
 	pdf.SetTextColor(107, 114, 128)
 
 	authText := "Authorisation"
-	sigText := "Signature"
+	sigText := "Card Holder Signature"
 	if isBn {
 		authText = utils.UnicodeToBijoy("অনুমোদন")
-		sigText = utils.UnicodeToBijoy("স্বাক্ষর")
+		sigText = utils.UnicodeToBijoy("কার্ডধারীর স্বাক্ষর")
 	}
 
 	pdf.SetXY(leftX, sigY+0.6)
@@ -510,141 +530,197 @@ func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fo
 	pdf.Line(x, y+h-3.5, x+w/2, y+h-5.5)
 	pdf.Line(x+w/2, y+h-5.5, x+w, y+h-3.5)
 
-	// Bottom Footer Brand Text
-	footerText := "EKUSHE FASHIONS"
-	if isBn {
-		footerText = utils.UnicodeToBijoy("একুশে ফ্যাশনস")
-	}
+	// Bottom Footer Brand Text (Full Company Name)
+	footerText := companyDisplayName(emp.Company, isBn)
 	pdf.SetFont(font, "B", 5.8)
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetXY(x, y+h-3.2)
 	pdf.CellFormat(w, 3.0, footerText, "", 0, "C", false, 0, "")
 }
 
+func convertENToBNDigits(input string) string {
+	r := strings.NewReplacer(
+		"0", "০", "1", "১", "2", "২", "3", "৩", "4", "৪",
+		"5", "৫", "6", "৬", "7", "৭", "8", "৮", "9", "৯",
+	)
+	return r.Replace(input)
+}
+
 func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, font string, isBn bool) {
 	// Card Outer Border
-	pdf.SetDrawColor(210, 215, 220)
-	pdf.SetLineWidth(0.4)
+	pdf.SetDrawColor(200, 205, 210)
+	pdf.SetLineWidth(0.3)
 	pdf.Rect(x, y, w, h, "D")
 
-	companyName := companyDisplayName(emp.Company, isBn)
+	m := 2.0 // Fixed 2.0 mm left & right margin inside backpart card
+	textW := w - 2*m
+	cy := y + 10.0 // Top header gap adjusted for +1pt font size
 
-	cy := y + 15.0
-	m := 1.0 // Fixed 1.00 mm left & right margin inside 38mm Backpart
-
-	// 1. Top validity note (Centered, MultiCell inside w-2*m)
-	validityNote := "This card is valid until resignation/retirement"
 	if isBn {
-		validityNote = utils.UnicodeToBijoy("এই কার্ডের মেয়াদ অব্যাহতি/অবসরপর্যন্ত")
-	}
-	pdf.SetFont(font, "", 4.8)
-	pdf.SetTextColor(38, 50, 56)
-	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 2.2, validityNote, "", "C", false)
-	cy = pdf.GetY() + 1.2
+		// 1. Top validity note & Company Header (Centered, +1pt font size)
+		pdf.SetFont(font, "", 6.0)
+		pdf.SetTextColor(28, 28, 28)
+		pdf.SetXY(x+m, cy)
+		validityNote := utils.UnicodeToBijoy("এই কার্ডের মেয়াদ অব্যাহতি/অবসরপর্যন্ত")
+		pdf.CellFormat(textW, 3.0, validityNote, "", 0, "C", false, 0, "")
+		cy += 3.8
 
-	// 2. Company Header (Centered, Bold, dynamically fitted)
-	headerFontSz := fitTextFontSize(pdf, font, "B", companyName, w-2*m, 9.0, 6.0)
-	pdf.SetFont(font, "B", headerFontSz)
-	pdf.SetTextColor(18, 58, 99)
-	pdf.SetXY(x+m, cy)
-	pdf.CellFormat(w-2*m, 3.2, companyName, "", 0, "C", false, 0, "")
-	cy += 4.5
+		companyName := companyDisplayName(emp.Company, isBn)
+		pdf.SetFont(font, "B", 8.0)
+		pdf.SetTextColor(28, 28, 28)
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.6, companyName, "", 0, "C", false, 0, "")
+		cy += 6.5 // Gap after CompanyName
 
-	// 3. Factory Address & Phone
-	factoryAddr := "Factory Address: Masterbari, Gazipur Sadar, Gazipur."
-	factoryPhone := "Phone: +880 1844001141"
-	if isBn {
-		factoryAddr = utils.UnicodeToBijoy("ফ্যাক্টরির ঠিকানাঃ মাষ্টারবাড়ী, গাজীপুর সদর, গাজীপুর।")
-		factoryPhone = utils.UnicodeToBijoy("ফোনঃ- ০১৮৪৪০০১১৪১")
-	}
-	if emp.Company.Phone != "" {
-		if isBn {
-			factoryPhone = utils.UnicodeToBijoy("ফোনঃ- " + emp.Company.Phone)
-		} else {
-			factoryPhone = "Phone: " + emp.Company.Phone
+		// 2. Factory Address & Phone (Centered, +1pt font size -> 6.0pt)
+		pdf.SetFont(font, "", 6.0)
+		pdf.SetTextColor(28, 28, 28)
+		factoryAddr := utils.UnicodeToBijoy("ফ্যাক্টরির ঠিকানাঃ মাষ্টারবাড়ী, গাজীপুর সদর, গাজীপুর।")
+		pdf.SetXY(x+m, cy)
+		pdf.MultiCell(textW, 3.0, factoryAddr, "", "C", false)
+		cy = pdf.GetY() + 0.5
+
+		phoneStr := emp.Company.Phone
+		if phoneStr == "" {
+			phoneStr = "01844001141"
 		}
-	}
+		factoryPhone := utils.UnicodeToBijoy("ফোনঃ- ") + utils.UnicodeToBijoy(convertENToBNDigits(phoneStr))
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, factoryPhone, "", 0, "C", false, 0, "")
+		cy += 5.5 // Clean spacing gap
 
-	pdf.SetFont(font, "", 4.8)
-	pdf.SetTextColor(38, 50, 56)
-	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 2.2, factoryAddr, "", "L", false)
-	cy = pdf.GetY() + 0.5
-
-	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 2.2, factoryPhone, "", "L", false)
-	cy = pdf.GetY() + 2.0
-
-	// 4. Permanent Address
-	permAddr := emp.PermanentAddress
-	if permAddr == "" {
-		if isBn {
+		// 3. Employee Personal Info (Left aligned, +1pt font size -> 6.0pt)
+		permAddr := emp.PermanentAddress
+		if permAddr == "" {
 			permAddr = "ভাওয়াল মির্জাপুর,গাজীপুর সদর গাজীপুর।"
-		} else {
+		}
+		permText := utils.UnicodeToBijoy("স্থায়ী ঠিকানাঃ " + permAddr)
+		pdf.SetXY(x+m, cy)
+		pdf.MultiCell(textW, 3.0, permText, "", "L", false)
+		cy = pdf.GetY() + 1.2
+
+		blood := emp.BloodGroup
+		if blood == "" {
+			blood = "B+"
+		}
+		bloodText := utils.UnicodeToBijoy("রক্তের গ্রুপঃ  ") + blood
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, bloodText, "", 0, "L", false, 0, "")
+		cy += 3.6
+
+		emPhone := emp.EmergencyPhone
+		if emPhone == "" {
+			emPhone = emp.Phone
+		}
+		if emPhone == "" {
+			emPhone = "01632706439"
+		}
+		emText := utils.UnicodeToBijoy("ফোন নংঃ ") + utils.UnicodeToBijoy(convertENToBNDigits(emPhone))
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, emText, "", 0, "L", false, 0, "")
+		cy += 3.6
+
+		nid := emp.NID
+		if nid == "" {
+			nid = "19983313067000302"
+		}
+		nidLabel := utils.UnicodeToBijoy("জাতীয় পরিচয় পত্র নংঃ")
+		nidVal := utils.UnicodeToBijoy(convertENToBNDigits(nid))
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, nidLabel, "", 0, "L", false, 0, "")
+		cy += 3.2
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, nidVal, "", 0, "L", false, 0, "")
+		cy += 5.5 // Clean spacing gap
+
+		// 4. Bottom Instruction Loss Note (Centered, +1pt font size -> 6.0pt)
+		pdf.SetFont(font, "", 6.0)
+		pdf.SetTextColor(28, 28, 28)
+		lossLine1 := utils.UnicodeToBijoy("উক্ত পরিচয়পত্র হারাইয়া গেলে তাৎক্ষনিক")
+		lossLine2 := utils.UnicodeToBijoy("ব্যবস্থাপনা কর্তৃপক্ষকে জানাইতে হইবে।")
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, lossLine1, "", 0, "C", false, 0, "")
+		cy += 3.2
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, lossLine2, "", 0, "C", false, 0, "")
+
+	} else {
+		// English Mode (+1pt font sizes)
+		pdf.SetFont(font, "", 6.0)
+		pdf.SetTextColor(28, 28, 28)
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, "This card is valid until resignation/retirement", "", 0, "C", false, 0, "")
+		cy += 3.8
+
+		companyName := companyDisplayName(emp.Company, false)
+		pdf.SetFont(font, "B", 8.0)
+		pdf.SetTextColor(28, 28, 28)
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.6, companyName, "", 0, "C", false, 0, "")
+		cy += 6.5
+
+		pdf.SetFont(font, "", 6.0)
+		pdf.SetTextColor(28, 28, 28)
+		factoryAddr := "Factory Address: Masterbari, Gazipur Sadar, Gazipur."
+		pdf.SetXY(x+m, cy)
+		pdf.MultiCell(textW, 3.0, factoryAddr, "", "C", false)
+		cy = pdf.GetY() + 0.5
+
+		phoneStr := emp.Company.Phone
+		if phoneStr == "" {
+			phoneStr = "01844001141"
+		}
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, "Phone: "+phoneStr, "", 0, "C", false, 0, "")
+		cy += 5.5
+
+		permAddr := emp.PermanentAddress
+		if permAddr == "" {
 			permAddr = "Bhawal Mirzapur, Gazipur Sadar, Gazipur."
 		}
-	}
-	permText := "Permanent Address: " + permAddr
-	if isBn {
-		permText = utils.UnicodeToBijoy("স্থায়ী ঠিকানাঃ " + permAddr)
+		pdf.SetXY(x+m, cy)
+		pdf.MultiCell(textW, 3.0, "Permanent Address: "+permAddr, "", "L", false)
+		cy = pdf.GetY() + 1.2
+
+		blood := emp.BloodGroup
+		if blood == "" {
+			blood = "B+"
+		}
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, "Blood Group: "+blood, "", 0, "L", false, 0, "")
+		cy += 3.6
+
+		emPhone := emp.EmergencyPhone
+		if emPhone == "" {
+			emPhone = emp.Phone
+		}
+		if emPhone == "" {
+			emPhone = "01632706439"
+		}
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, "Phone No: "+emPhone, "", 0, "L", false, 0, "")
+		cy += 3.6
+
+		nid := emp.NID
+		if nid == "" {
+			nid = "19983313067000302"
+		}
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, "National ID No:", "", 0, "L", false, 0, "")
+		cy += 3.2
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, nid, "", 0, "L", false, 0, "")
+		cy += 5.5
+
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, "If this ID card is lost, report immediately", "", 0, "C", false, 0, "")
+		cy += 3.2
+		pdf.SetXY(x+m, cy)
+		pdf.CellFormat(textW, 3.0, "to management authority.", "", 0, "C", false, 0, "")
 	}
 
-	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 2.2, permText, "", "L", false)
-	cy = pdf.GetY() + 2.0
-
-	// 5. Blood Group
-	blood := emp.BloodGroup
-	if blood == "" {
-		blood = "B+"
-	}
-	bloodText := "Blood Group: " + blood
-	if isBn {
-		bloodText = utils.UnicodeToBijoy("রক্তের গ্রুপঃ ") + blood
-	}
-	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 2.2, bloodText, "", "L", false)
-	cy = pdf.GetY() + 2.0
-
-	// 6. Emergency Contact Phone No
-	emPhone := emp.EmergencyPhone
-	if emPhone == "" {
-		emPhone = emp.Phone
-	}
-	if emPhone == "" {
-		emPhone = "01786684369"
-	}
-	emText := "Emergency Contact Phone No: " + emPhone
-	if isBn {
-		emText = utils.UnicodeToBijoy("জরুরী যোগাযোগের ফোন নংঃ ") + emPhone
-	}
-	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 2.2, emText, "", "L", false)
-	cy = pdf.GetY() + 2.0
-
-	// 7. National ID No
-	nid := emp.NID
-	if nid == "" {
-		nid = "19986119447103331"
-	}
-	nidText := "National ID No: " + nid
-	if isBn {
-		nidText = utils.UnicodeToBijoy("জাতীয় পরিচয় পত্র নংঃ ") + nid
-	}
-	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 2.2, nidText, "", "L", false)
-	cy = pdf.GetY() + 3.0
-
-	// 8. Bottom Instruction Note (Centered)
-	lossNote := "If this ID card is lost, report immediately to management authority."
-	if isBn {
-		lossNote = utils.UnicodeToBijoy("উক্ত পরিচয়পত্র হারাইয়া গেলে তাৎক্ষনিক ব্যবস্থাপনা কর্তৃপক্ষকে জানাইতে হইবে।")
-	}
-	pdf.SetFont(font, "", 4.8)
-	pdf.SetTextColor(38, 50, 56)
-	pdf.SetXY(x+m, cy)
-	pdf.MultiCell(w-2*m, 2.2, lossNote, "", "C", false)
+	// Bottom Curved Dark Navy Wave Banner (#123A63)
+	pdf.SetFillColor(18, 58, 99)
 	pdf.Polygon([]gofpdf.PointType{
 		{X: x, Y: y + h - 3.5},
 		{X: x + w/2, Y: y + h - 5.5},
@@ -659,11 +735,8 @@ func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fon
 	pdf.Line(x, y+h-3.5, x+w/2, y+h-5.5)
 	pdf.Line(x+w/2, y+h-5.5, x+w, y+h-3.5)
 
-	// Bottom Footer Brand Text (+1.0 pt font size -> 5.8pt)
-	footerTextBack := "EKUSHE FASHIONS LTD."
-	if isBn {
-		footerTextBack = utils.UnicodeToBijoy("একুশে ফ্যাশনস লিঃ")
-	}
+	// Bottom Footer Brand Text (Full Company Name)
+	footerTextBack := companyDisplayName(emp.Company, isBn)
 	pdf.SetFont(font, "B", 5.8)
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetXY(x, y+h-3.2)
