@@ -1,0 +1,15 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": ["AGENTS.md", ".opencode/workflow.md"],
+  "agent": {
+    "read": {
+      "description": "Read-only agent for exploring/hunting code. Use when you need to understand the codebase, find files, or research without making any changes.",
+      "mode": "subagent",
+      "permission": {
+        "edit": "deny",
+        "bash": "allow",
+        "write": "deny"
+      }
+    }
+  }
+}

@@ -1,0 +1,319 @@
+package service
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/shakil5281/peoplehub-api/internal/models"
+	"github.com/shakil5281/peoplehub-api/internal/repository"
+)
+
+// Salary constants — fixed allowances
+const (
+	transportAllowance = 450
+	foodAllowance      = 1250
+	medicalAllowance   = 750
+)
+
+type SalaryService struct {
+	employeeRepo       *repository.EmployeeRepository
+	attendanceRepo     *repository.AttendanceRepository
+	salaryRepo         *repository.SalaryRepository
+	groupRepo          *repository.GroupRepository
+	otEarlyExitRepo    *repository.OtEarlyExitRepository
+	otEarlyExitService *OtEarlyExitService
+	advanceRepo        *repository.AdvanceSalaryRepository
+}
+
+func NewSalaryService(
+	employeeRepo *repository.EmployeeRepository,
+	attendanceRepo *repository.AttendanceRepository,
+	salaryRepo *repository.SalaryRepository,
+	groupRepo *repository.GroupRepository,
+	otEarlyExitRepo *repository.OtEarlyExitRepository,
+	otEarlyExitService *OtEarlyExitService,
+	advanceRepo *repository.AdvanceSalaryRepository,
+) *SalaryService {
+	return &SalaryService{
+		employeeRepo:       employeeRepo,
+		attendanceRepo:     attendanceRepo,
+		salaryRepo:         salaryRepo,
+		groupRepo:          groupRepo,
+		otEarlyExitRepo:    otEarlyExitRepo,
+		otEarlyExitService: otEarlyExitService,
+		advanceRepo:        advanceRepo,
+	}
+}
+
+// MonthResult holds the aggregated result of processing a month
+type MonthResult struct {
+	Processed int
+	Total     int
+	Month     int
+	Year      int
+}
+
+// ProcessMonth calculates and upserts salaries for all active employees.
+// If deductEarlyExit is true (default), early-exit shortfall hours are deducted from monthly OT.
+// If deductEarlyExit is false, shortfalls are NOT deducted from OT ("do not pay less" formula).
+func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID string, deductEarlyExit bool) (*MonthResult, error) {
+	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	endDate := startDate.AddDate(0, 1, -1)
+	startStr := startDate.Format("2006-01-02")
+	endStr := endDate.Format("2006-01-02")
+	daysInMonth := endDate.Day()
+
+	// 1. Auto-compute early exit shortfalls for the month so the table is up-to-date
+	if s.otEarlyExitService != nil {
+		_, _ = s.otEarlyExitService.ComputeEarlyExitDeductions(companyID, month, year, userID)
+	}
+
+	employees, err := s.employeeRepo.ListActiveAll(companyID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch employees: %w", err)
+	}
+
+	if len(employees) == 0 {
+		return &MonthResult{Processed: 0, Total: 0, Month: month, Year: year}, nil
+	}
+
+	groupNameByID := make(map[string]string)
+	if s.groupRepo != nil {
+		groups, gErr := s.groupRepo.ListAll()
+		if gErr == nil {
+			for _, g := range groups {
+				groupNameByID[g.ID] = g.Name
+			}
+		}
+	}
+
+	attendanceReport, err := s.attendanceRepo.MonthlyReport(startStr, endStr, companyID, "", "", "", "", "", "", "")
+	if err != nil {
+		return nil, fmt.Errorf("fetch attendance: %w", err)
+	}
+
+	attMap := make(map[string]map[string]interface{})
+	for _, r := range attendanceReport {
+		if empID, ok := r["employee_id"].(string); ok {
+			attMap[empID] = r
+		}
+	}
+
+	otHoursMap, err := s.attendanceRepo.GetMonthlyOvertimeHours(companyID, startStr, endStr)
+	if err != nil {
+		return nil, fmt.Errorf("fetch overtime: %w", err)
+	}
+
+	// 2. Early-exit shortfall deduction: net OT = raw OT - shortfall (if deductEarlyExit is true).
+	shortfallMap := make(map[string]float64)
+	if s.otEarlyExitRepo != nil && deductEarlyExit {
+		if shortfalls, sfErr := s.otEarlyExitRepo.MonthlyShortfallTotals(companyID, month, year); sfErr == nil {
+			shortfallMap = shortfalls
+		}
+	}
+
+	// 3. Advance Salary deductions
+	advanceMap := make(map[string]float64)
+	if s.advanceRepo != nil {
+		if advDeductions, advErr := s.advanceRepo.MonthlyDeductions(companyID, month, year); advErr == nil {
+			advanceMap = advDeductions
+		}
+	}
+
+	processed := 0
+
+	for _, emp := range employees {
+		groupName := ""
+		if emp.GroupID != nil {
+			groupName = groupNameByID[*emp.GroupID]
+		}
+		if groupName == "" && emp.GroupRef != nil {
+			groupName = emp.GroupRef.Name
+		}
+		netOt := otHoursMap[emp.EmployeeID]
+		if deductEarlyExit {
+			netOt = netOt - shortfallMap[emp.EmployeeID]
+		}
+		if netOt < 0 {
+			netOt = 0
+		}
+		
+		advDeduction := advanceMap[emp.EmployeeID]
+		
+		salary := s.calculateEmployeeSalary(emp, groupName, attMap[emp.EmployeeID], netOt, advDeduction, month, year, daysInMonth, userID)
+
+		if salary.NetSalary <= 1000 {
+			_ = s.salaryRepo.DeleteByEmployeeMonth(emp.EmployeeID, month, year)
+			continue
+		}
+
+		if err := s.salaryRepo.Upsert(salary); err != nil {
+			continue
+		}
+		processed++
+	}
+
+	// 4. Mark processed advances as deducted
+	if s.advanceRepo != nil {
+		_ = s.advanceRepo.MarkAsDeducted(companyID, month, year)
+	}
+
+	return &MonthResult{
+		Processed: processed,
+		Total:     len(employees),
+		Month:     month,
+		Year:      year,
+	}, nil
+}
+
+// calculateEmployeeSalary contains ALL business rules — isolated and unit-testable.
+func (s *SalaryService) calculateEmployeeSalary(
+	emp models.Employee,
+	groupName string,
+	att map[string]interface{},
+	otHours float64,
+	advanceDeduction float64,
+	month, year, daysInMonth int,
+	userID string,
+) *models.Salary {
+	gross := emp.GrossSalary
+
+	// Fixed allowances
+	transport := float64(transportAllowance)
+	food := float64(foodAllowance)
+	medical := float64(medicalAllowance)
+	other := emp.OtherAllowance
+
+	// Core = Gross - fixed allowances (OtherAllowance is kept separate)
+	core := gross - transport - food - medical
+	basic := core / 1.5
+	houseRent := core - basic
+
+	// Attendance breakdown
+	presentDays := 0
+	absentDays := 0
+	lateDays := 0
+	leaveDays := 0
+	holidayDays := 0
+	weekendDays := 0
+	totalDays := 0
+
+	// Use calendar month days for totalDays and per-day salary calculations
+	// instead of att["total_days"] which may be inflated by duplicate rows.
+	totalDays = daysInMonth
+
+	if att != nil {
+		presentDays = toInt(att["present"])
+		absentDays = toInt(att["absent"])
+		lateDays = toInt(att["late"])
+		leaveDays = toInt(att["leave"])
+		holidayDays = toInt(att["holiday"])
+		weekendDays = toInt(att["weekend"])
+	}
+
+	// Paid days in month = Present + Late + Weekend + Leave + Holiday.
+	// Any unexcused/unrecorded days in the month are treated as absent days so base salary is
+	// (Gross / totalDays) * paidDays = Gross - AbsentDeduction.
+	paidDays := presentDays + lateDays + weekendDays + leaveDays + holidayDays
+	if totalDays > 0 && paidDays < totalDays {
+		calcAbsent := totalDays - paidDays
+		if calcAbsent > absentDays {
+			absentDays = calcAbsent
+		}
+	}
+
+	// Absent deduction
+	absentDeduction := float64(0)
+	if totalDays > 0 {
+		perDaySalary := gross / float64(totalDays)
+		absentDeduction = perDaySalary * float64(absentDays)
+	}
+
+	// Late attendance salary deduction:
+	// - Every 3 late days = 1 day salary deduction (e.g. 3 late = 1 day, 6 late = 2 days)
+	// - 4 or more late days = 1 day salary deduction + Attendance Bonus = 0
+	// - Deduction is stored in OtherDeduction (absent_days / absent_deduction remain unchanged)
+	lateDeductionDays := lateDays / 3
+	lateDeductionAmount := float64(0)
+	if totalDays > 0 && lateDeductionDays > 0 {
+		perDaySalary := gross / float64(totalDays)
+		lateDeductionAmount = perDaySalary * float64(lateDeductionDays)
+	}
+	otherDeduction := lateDeductionAmount
+
+	// Overtime — only when employee over_time_status is enabled
+	otRate := float64(0)
+	if emp.OverTimeStatus && daysInMonth > 0 {
+		otRate = (basic / 208) * 2
+	}
+	otAmount := otHours * otRate
+
+	// Attendance bonus by employee group
+	// Disqualified if absentDays > 0 OR lateDays >= 4
+	attBonus := float64(0)
+	if absentDays == 0 && lateDays < 4 && presentDays > 0 {
+		switch {
+		case strings.EqualFold(groupName, "worker"):
+			attBonus = 725
+		case strings.EqualFold(groupName, "staff"):
+			attBonus = 300
+		default:
+			attBonus = 0
+		}
+	}
+
+	totalDeductions := absentDeduction + otherDeduction + advanceDeduction
+	netSalary := gross - totalDeductions + otAmount + attBonus
+	if netSalary < 0 {
+		netSalary = 0
+	}
+
+	return &models.Salary{
+		CompanyID:          emp.CompanyID,
+		EmployeeID:         emp.EmployeeID,
+		Month:              month,
+		Year:               year,
+		BasicSalary:        basic,
+		HouseRent:          houseRent,
+		MedicalAllowance:   medical,
+		TransportAllowance: transport,
+		FoodAllowance:      food,
+		OtherAllowance:     other,
+		GrossSalary:        gross,
+		ProvidentFund:      0,
+		Tax:                0,
+		LoanDeduction:      0,
+		AdvanceDeduction:   advanceDeduction,
+		AbsentDeduction:    absentDeduction,
+		OtherDeduction:     otherDeduction,
+		TotalDeductions:    totalDeductions,
+		OvertimeHours:      otHours,
+		OvertimeRate:       otRate,
+		OvertimeAmount:     otAmount,
+		AttendanceBonus:    attBonus,
+		NetSalary:          netSalary,
+		PresentDays:        presentDays,
+		AbsentDays:         absentDays,
+		LateDays:           lateDays,
+		LeaveDays:          leaveDays,
+		HolidayDays:        holidayDays,
+		WeekendDays:        weekendDays,
+		TotalDays:          totalDays,
+		Status:             "processed",
+		CreatedBy:          &userID,
+	}
+}
+
+func toInt(v interface{}) int {
+	switch val := v.(type) {
+	case int64:
+		return int(val)
+	case float64:
+		return int(val)
+	case int:
+		return val
+	default:
+		return 0
+	}
+}

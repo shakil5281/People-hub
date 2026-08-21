@@ -1,0 +1,6693 @@
+basePath: /api/v1
+definitions:
+  handlers.ApplyLeaveRequest:
+    properties:
+      company_id:
+        type: string
+      employee_id:
+        type: string
+      from_date:
+        type: string
+      leave_type_id:
+        type: string
+      reason:
+        type: string
+      to_date:
+        type: string
+    required:
+    - company_id
+    - employee_id
+    - from_date
+    - leave_type_id
+    - to_date
+    type: object
+  handlers.ApproveIncrementRequest:
+    properties:
+      effective_date:
+        type: string
+      increment_amount:
+        type: number
+    type: object
+  handlers.BulkCreateNightBillItem:
+    properties:
+      amount:
+        type: number
+      date:
+        type: string
+      employee_id:
+        type: string
+      night_hours:
+        type: number
+      rate:
+        type: number
+      remarks:
+        type: string
+    required:
+    - date
+    - employee_id
+    type: object
+  handlers.BulkCreateNightBillRequest:
+    properties:
+      company_id:
+        type: string
+      items:
+        items:
+          $ref: '#/definitions/handlers.BulkCreateNightBillItem'
+        type: array
+      month:
+        type: integer
+      year:
+        type: integer
+    required:
+    - company_id
+    - items
+    - month
+    - year
+    type: object
+  handlers.CalculateRateRequest:
+    properties:
+      date:
+        type: string
+      employee_id:
+        type: string
+    required:
+    - date
+    - employee_id
+    type: object
+  handlers.ClockInRequest:
+    properties:
+      employee_id:
+        type: string
+      shift_id:
+        type: string
+    required:
+    - employee_id
+    type: object
+  handlers.ClockOutRequest:
+    properties:
+      employee_id:
+        type: string
+    required:
+    - employee_id
+    type: object
+  handlers.CreateAttendanceRequest:
+    properties:
+      check_in:
+        type: string
+      check_out:
+        type: string
+      company_id:
+        type: string
+      date:
+        type: string
+      employee_id:
+        type: string
+      shift_id:
+        type: string
+      status:
+        type: string
+    required:
+    - company_id
+    - date
+    - employee_id
+    type: object
+  handlers.CreateCompanyRequest:
+    properties:
+      address_bn:
+        type: string
+      address_en:
+        type: string
+      company_name_bn:
+        type: string
+      company_name_en:
+        type: string
+      email:
+        type: string
+      phone:
+        type: string
+      signature:
+        type: string
+      status:
+        type: string
+    required:
+    - company_name_en
+    type: object
+  handlers.CreateDailyScheduleRequest:
+    properties:
+      company_id:
+        type: string
+      date:
+        type: string
+      employee_id:
+        type: string
+      end_time:
+        type: string
+      remarks:
+        type: string
+      schedule_type:
+        type: string
+      start_time:
+        type: string
+    required:
+    - company_id
+    - date
+    - employee_id
+    - schedule_type
+    type: object
+  handlers.CreateEmployeeRequest:
+    properties:
+      account_number:
+        type: string
+      account_type:
+        description: Account
+        type: string
+      basic_salary:
+        type: number
+      blood_group:
+        type: string
+      company_id:
+        description: Office
+        type: string
+      date_of_birth:
+        type: string
+      department_id:
+        type: string
+      designation_id:
+        type: string
+      email:
+        type: string
+      emergency_contact:
+        type: string
+      emergency_phone:
+        type: string
+      employee_id:
+        type: string
+      employee_type:
+        type: string
+      father_name:
+        type: string
+      floor_id:
+        type: string
+      food_allowance:
+        type: number
+      gender:
+        type: string
+      grade:
+        type: string
+      gross_salary:
+        description: Salary
+        type: number
+      group_id:
+        type: string
+      house_rent:
+        type: number
+      joining_date:
+        type: string
+      line_id:
+        type: string
+      marital_status:
+        type: string
+      medical_allowance:
+        type: number
+      mother_name:
+        type: string
+      name_bn:
+        type: string
+      name_en:
+        description: Personal
+        type: string
+      nationality:
+        type: string
+      nid:
+        type: string
+      number_of_dependents:
+        type: integer
+      other_allowance:
+        type: number
+      over_time_status:
+        type: boolean
+      permanent_address:
+        type: string
+      permanent_district_id:
+        type: string
+      permanent_division_id:
+        description: Address (permanent)
+        type: string
+      permanent_union_id:
+        type: string
+      permanent_upazila_id:
+        type: string
+      phone:
+        type: string
+      present_address:
+        type: string
+      present_district_id:
+        type: string
+      present_division_id:
+        description: Address (present)
+        type: string
+      present_union_id:
+        type: string
+      present_upazila_id:
+        type: string
+      punch_number:
+        type: string
+      religion:
+        type: string
+      reports_to:
+        type: string
+      section_id:
+        type: string
+      shift_id:
+        type: string
+      spouse_name:
+        description: Family
+        type: string
+      status:
+        description: Status
+        type: string
+      transport_allowance:
+        type: number
+    required:
+    - company_id
+    - employee_id
+    - joining_date
+    - punch_number
+    type: object
+  handlers.CreateFloorRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  handlers.CreateGroupRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  handlers.CreateIncrementRequest:
+    properties:
+      company_id:
+        type: string
+      effective_date:
+        type: string
+      employee_id:
+        type: string
+      increment_amount:
+        minimum: 1
+        type: number
+      remarks:
+        type: string
+    required:
+    - company_id
+    - effective_date
+    - employee_id
+    - increment_amount
+    type: object
+  handlers.CreateLeaveTypeRequest:
+    properties:
+      applicable_gender:
+        type: string
+      carry_forward_days:
+        type: integer
+      code:
+        type: string
+      company_id:
+        type: string
+      name:
+        type: string
+      total_days:
+        type: integer
+    required:
+    - code
+    - company_id
+    - name
+    - total_days
+    type: object
+  handlers.CreateNightBillRequest:
+    properties:
+      amount:
+        type: number
+      company_id:
+        type: string
+      date:
+        type: string
+      department_id:
+        type: string
+      designation_id:
+        type: string
+      employee_id:
+        type: string
+      floor_id:
+        type: string
+      group_id:
+        type: string
+      line_id:
+        type: string
+      night_hours:
+        type: number
+      rate:
+        type: number
+      remarks:
+        type: string
+      section_id:
+        type: string
+    required:
+    - company_id
+    - date
+    - employee_id
+    type: object
+  handlers.CreatePunishmentRequest:
+    properties:
+      amount:
+        type: number
+      company_id:
+        type: string
+      date:
+        type: string
+      employee_id:
+        type: string
+      reason:
+        type: string
+      remarks:
+        type: string
+      type:
+        type: string
+    required:
+    - company_id
+    - date
+    - employee_id
+    - type
+    type: object
+  handlers.CreateSeparationRequest:
+    properties:
+      date:
+        type: string
+      department_id:
+        type: string
+      employee_id:
+        type: string
+      reason:
+        type: string
+      type:
+        type: string
+    required:
+    - employee_id
+    - type
+    type: object
+  handlers.CreateShiftRequest:
+    properties:
+      company_id:
+        type: string
+      end_time:
+        type: string
+      late_grace_minutes:
+        type: integer
+      name:
+        type: string
+      shift_type:
+        type: string
+      start_time:
+        type: string
+      weekend_days:
+        type: string
+    required:
+    - company_id
+    - end_time
+    - name
+    - start_time
+    type: object
+  handlers.CreateTiffinBillRequest:
+    properties:
+      amount:
+        type: number
+      companyID:
+        type: string
+      date:
+        type: string
+      employeeID:
+        type: string
+      month:
+        type: integer
+      remarks:
+        type: string
+      year:
+        type: integer
+    type: object
+  handlers.GenerateIdCardRequest:
+    properties:
+      employee_ids:
+        items:
+          type: string
+        type: array
+    required:
+    - employee_ids
+    type: object
+  handlers.ImportRequest:
+    properties:
+      end_date:
+        description: YYYY-MM-DD, optional
+        type: string
+      file_path:
+        type: string
+      start_date:
+        description: YYYY-MM-DD, optional
+        type: string
+    type: object
+  handlers.ProcessNightBillRequest:
+    properties:
+      company_id:
+        type: string
+      date_from:
+        type: string
+      date_to:
+        type: string
+      department_id:
+        type: string
+      designation_id:
+        type: string
+      floor_id:
+        type: string
+      group_id:
+        type: string
+      line_id:
+        type: string
+      min_hours:
+        type: number
+      month:
+        type: integer
+      night_rate:
+        type: number
+      section_id:
+        type: string
+      year:
+        type: integer
+    required:
+    - company_id
+    - date_from
+    - date_to
+    - month
+    - year
+    type: object
+  handlers.ProcessRequest:
+    properties:
+      company_id:
+        type: string
+      date:
+        type: string
+      end_date:
+        type: string
+      start_date:
+        type: string
+    type: object
+  handlers.ProcessSalaryRequest:
+    properties:
+      company_id:
+        type: string
+      month:
+        type: integer
+      year:
+        type: integer
+    required:
+    - company_id
+    - month
+    - year
+    type: object
+  handlers.RegisterRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        minLength: 12
+        type: string
+    required:
+    - email
+    - name
+    - password
+    type: object
+  handlers.RejectLeaveRequest:
+    properties:
+      rejection_reason:
+        type: string
+    required:
+    - rejection_reason
+    type: object
+  handlers.UpdateCompanyRequest:
+    properties:
+      address_bn:
+        type: string
+      address_en:
+        type: string
+      company_name_bn:
+        type: string
+      company_name_en:
+        type: string
+      email:
+        type: string
+      phone:
+        type: string
+      signature:
+        type: string
+      status:
+        type: string
+    required:
+    - company_name_en
+    type: object
+  handlers.UpdateFloorRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  handlers.UpdateGroupRequest:
+    properties:
+      name:
+        type: string
+    required:
+    - name
+    type: object
+  handlers.UpdateLeaveRequest:
+    properties:
+      from_date:
+        type: string
+      leave_type_id:
+        type: string
+      reason:
+        type: string
+      to_date:
+        type: string
+      total_days:
+        type: integer
+    type: object
+  handlers.UpdateLeaveTypeRequest:
+    properties:
+      applicable_gender:
+        type: string
+      carry_forward_days:
+        type: integer
+      name:
+        type: string
+      status:
+        type: string
+      total_days:
+        type: integer
+    required:
+    - name
+    - total_days
+    type: object
+  handlers.UpdateSettingsRequest:
+    properties:
+      settings:
+        additionalProperties:
+          type: string
+        type: object
+    required:
+    - settings
+    type: object
+  handlers.UpdateShiftRequest:
+    properties:
+      company_id:
+        type: string
+      end_time:
+        type: string
+      late_grace_minutes:
+        type: integer
+      name:
+        type: string
+      shift_type:
+        type: string
+      start_time:
+        type: string
+      weekend_days:
+        type: string
+    required:
+    - company_id
+    - end_time
+    - name
+    - start_time
+    type: object
+  handlers.dashboardStats:
+    properties:
+      active_employees:
+        type: integer
+      department_counts:
+        items:
+          $ref: '#/definitions/repository.DeptCount'
+        type: array
+      gender_distribution:
+        items:
+          $ref: '#/definitions/repository.GenderCount'
+        type: array
+      monthly_attendance:
+        items:
+          $ref: '#/definitions/repository.MonthlyAttendanceCount'
+        type: array
+      new_hires_month:
+        type: integer
+      pending_leaves:
+        type: integer
+      recent_activity:
+        items:
+          $ref: '#/definitions/repository.ActivityItem'
+        type: array
+      separations_month:
+        type: integer
+      today_attendance:
+        type: integer
+      today_logs:
+        type: integer
+      total_departments:
+        type: integer
+      total_employees:
+        type: integer
+      total_sections:
+        type: integer
+    type: object
+  models.Permission:
+    properties:
+      action:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      resource:
+        type: string
+      roles:
+        items:
+          $ref: '#/definitions/models.Role'
+        type: array
+    type: object
+  models.Role:
+    properties:
+      company_id:
+        type: string
+      created_at:
+        type: string
+      created_by:
+        type: string
+      description:
+        type: string
+      id:
+        type: string
+      is_system:
+        type: boolean
+      name:
+        type: string
+      permissions:
+        items:
+          $ref: '#/definitions/models.Permission'
+        type: array
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+      users:
+        items:
+          $ref: '#/definitions/models.User'
+        type: array
+    type: object
+  models.User:
+    properties:
+      created_at:
+        type: string
+      created_by:
+        type: string
+      deleted_by:
+        type: string
+      email:
+        type: string
+      email_verified_at:
+        type: string
+      failed_attempts:
+        type: integer
+      force_password_change:
+        type: boolean
+      id:
+        type: string
+      last_login_at:
+        type: string
+      last_login_ip:
+        type: string
+      locked_at:
+        type: string
+      locked_by:
+        type: string
+      mfa_enabled:
+        type: boolean
+      name:
+        type: string
+      permissions:
+        items:
+          $ref: '#/definitions/models.Permission'
+        type: array
+      roles:
+        items:
+          $ref: '#/definitions/models.Role'
+        type: array
+      status:
+        type: string
+      updated_at:
+        type: string
+      updated_by:
+        type: string
+    type: object
+  repository.ActivityItem:
+    properties:
+      date:
+        type: string
+      description:
+        type: string
+      type:
+        type: string
+    type: object
+  repository.CustomSectionFilter:
+    properties:
+      department_names:
+        items:
+          type: string
+        type: array
+      designation_names:
+        items:
+          type: string
+        type: array
+      group_by_line:
+        type: boolean
+      group_names:
+        items:
+          type: string
+        type: array
+      line_names:
+        items:
+          type: string
+        type: array
+      name:
+        type: string
+      section_names:
+        items:
+          type: string
+        type: array
+      type:
+        description: section_group, section_line, department, etc.
+        type: string
+    type: object
+  repository.DeptCount:
+    properties:
+      count:
+        type: integer
+      name:
+        type: string
+    type: object
+  repository.GenderCount:
+    properties:
+      count:
+        type: integer
+      gender:
+        type: string
+    type: object
+  repository.MonthlyAttendanceCount:
+    properties:
+      absent:
+        type: integer
+      late:
+        type: integer
+      month:
+        type: string
+      present:
+        type: integer
+    type: object
+  service.AssignRolesRequest:
+    properties:
+      role_ids:
+        items:
+          type: string
+        type: array
+    required:
+    - role_ids
+    type: object
+  service.CreateUserRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      role_ids:
+        items:
+          type: string
+        type: array
+    required:
+    - email
+    - name
+    type: object
+  service.ForgotPasswordRequest:
+    properties:
+      email:
+        type: string
+    required:
+    - email
+    type: object
+  service.LoginRequest:
+    properties:
+      email:
+        type: string
+      mfa_code:
+        type: string
+      password:
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  service.LoginResponse:
+    properties:
+      access_token:
+        type: string
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      user:
+        $ref: '#/definitions/service.UserResponse'
+    type: object
+  service.ProfileResponse:
+    properties:
+      created_at:
+        type: string
+      email:
+        type: string
+      force_password_change:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+      roles:
+        items:
+          $ref: '#/definitions/service.RoleInfo'
+        type: array
+      status:
+        type: string
+    type: object
+  service.ResetPasswordRequest:
+    properties:
+      new_password:
+        minLength: 12
+        type: string
+      token:
+        type: string
+    required:
+    - new_password
+    - token
+    type: object
+  service.RoleInfo:
+    properties:
+      name:
+        type: string
+    type: object
+  service.UpdateProfileRequest:
+    properties:
+      name:
+        type: string
+    type: object
+  service.UpdateUserRequest:
+    properties:
+      name:
+        type: string
+      status:
+        enum:
+        - active
+        - deactivated
+        - locked
+        - pending
+        type: string
+    type: object
+  service.UserResponse:
+    properties:
+      email:
+        type: string
+      force_password_change:
+        type: boolean
+      id:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
+    type: object
+  utils.PaginatedResponse:
+    properties:
+      data: {}
+      limit:
+        type: integer
+      page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+host: localhost:5000
+info:
+  contact:
+    email: support@peoplehub.com
+    name: PeopleHub Team
+  description: Enterprise HR Management & Payroll System API.
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: PeopleHub API
+  version: "1.1"
+paths:
+  /attendance:
+    get:
+      description: 'Get attendances by date (default: today)'
+      parameters:
+      - description: Date (YYYY-MM-DD)
+        in: query
+        name: date
+        type: string
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by section
+        in: query
+        name: section_id
+        type: string
+      - description: Filter by designation
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by line
+        in: query
+        name: line_id
+        type: string
+      - description: Filter by group
+        in: query
+        name: group_id
+        type: string
+      - description: Filter by shift
+        in: query
+        name: shift_id
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by employee
+        in: query
+        name: employee_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List attendances
+      tags:
+      - Attendance
+    post:
+      consumes:
+      - application/json
+      description: Create a new attendance record
+      parameters:
+      - description: Attendance details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateAttendanceRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create attendance
+      tags:
+      - Attendance
+  /attendance/{id}:
+    delete:
+      description: Soft delete an attendance record
+      parameters:
+      - description: Attendance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete attendance
+      tags:
+      - Attendance
+    get:
+      description: Get an attendance record by its ID
+      parameters:
+      - description: Attendance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get attendance by ID
+      tags:
+      - Attendance
+    put:
+      consumes:
+      - application/json
+      description: Update an attendance record
+      parameters:
+      - description: Attendance ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated attendance details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateAttendanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update attendance
+      tags:
+      - Attendance
+  /attendance/absent:
+    get:
+      description: Get employees marked as absent for a date range
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Absent attendance
+      tags:
+      - Attendance
+  /attendance/absent/export/excel:
+    get:
+      description: Export absent employee attendance data to Excel with company header,
+        report info, and summary footer
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: Export absent attendance to Excel
+      tags:
+      - Attendance
+  /attendance/clock-in:
+    post:
+      consumes:
+      - application/json
+      description: Mark clock-in for an employee today
+      parameters:
+      - description: Clock-in details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ClockInRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Clock in
+      tags:
+      - Attendance
+  /attendance/clock-out:
+    post:
+      consumes:
+      - application/json
+      description: Mark clock-out for an employee today
+      parameters:
+      - description: Clock-out details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ClockOutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Clock out
+      tags:
+      - Attendance
+  /attendance/custom-summary:
+    post:
+      consumes:
+      - application/json
+      description: Generate a custom mixed summary report with configurable sections
+      parameters:
+      - description: Filter params
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/repository.CustomSectionFilter'
+      - description: Company ID
+        in: query
+        name: company_id
+        required: true
+        type: string
+      - description: Date (YYYY-MM-DD)
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Custom summary report
+      tags:
+      - Attendance
+  /attendance/delete-all:
+    delete:
+      description: Permanently delete all attendance records
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete all attendances
+      tags:
+      - Attendance
+  /attendance/export/excel:
+    get:
+      description: Export attendance data to Excel with company header, report info,
+        and summary footer
+      parameters:
+      - description: Date (YYYY-MM-DD)
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: Export attendances to Excel
+      tags:
+      - Attendance
+  /attendance/job-card:
+    get:
+      description: Get attendance records for job card with advanced filters
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by employee
+        in: query
+        name: employee_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by status (present|late|absent|half-day)
+        in: query
+        name: status
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      - description: Set to 'true' to get employee list only
+        in: query
+        name: list_mode
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Job card data
+      tags:
+      - Attendance
+  /attendance/missing:
+    get:
+      description: Find attendance records where check_in or check_out is missing
+      parameters:
+      - description: 'Start date (YYYY-MM-DD, default: today)'
+        in: query
+        name: start_date
+        type: string
+      - description: 'End date (YYYY-MM-DD, default: today)'
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by section
+        in: query
+        name: section_id
+        type: string
+      - description: Filter by designation
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by line
+        in: query
+        name: line_id
+        type: string
+      - description: Filter by group
+        in: query
+        name: group_id
+        type: string
+      - description: Filter by shift
+        in: query
+        name: shift_id
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Missing attendance
+      tags:
+      - Attendance
+  /attendance/monthly-report:
+    get:
+      description: Get per-employee monthly attendance summary (present, absent, leave,
+        weekend, late, half_day)
+      parameters:
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Company ID
+        in: query
+        name: company_id
+        required: true
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by section
+        in: query
+        name: section_id
+        type: string
+      - description: Filter by designation
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by line
+        in: query
+        name: line_id
+        type: string
+      - description: Filter by group
+        in: query
+        name: group_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Monthly attendance report
+      tags:
+      - Attendance
+  /attendance/overtime:
+    get:
+      description: Get employee overtime records for a date range
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Overtime sheet
+      tags:
+      - Attendance
+  /attendance/overtime-summary:
+    get:
+      description: Get department-level overtime aggregation
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Overtime summary by department
+      tags:
+      - Attendance
+  /attendance/stats:
+    get:
+      description: Get count of attendance records
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Attendance statistics
+      tags:
+      - Attendance
+  /attendance/summary:
+    get:
+      description: Get aggregated attendance summary by date/company/department
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Daily attendance summary
+      tags:
+      - Attendance
+  /attendance/summary/export/excel:
+    get:
+      description: Export attendance summary grouped by Department, Section, Designation,
+        and Line
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      tags:
+      - Attendance
+  /auth/change-password:
+    put:
+      consumes:
+      - application/json
+      description: Change user password after verifying current password
+      parameters:
+      - description: Password change request
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Change password
+      tags:
+      - Auth
+  /auth/forgot-password:
+    post:
+      consumes:
+      - application/json
+      description: Request a password reset token (public)
+      parameters:
+      - description: Email
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.ForgotPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Forgot password
+      tags:
+      - Auth
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user with email and password
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Login user
+      tags:
+      - Auth
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: Revoke refresh token to logout
+      parameters:
+      - description: Refresh token to revoke
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Logout user
+      tags:
+      - Auth
+  /auth/logout-all:
+    post:
+      description: Revoke all refresh tokens for the user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Logout all sessions
+      tags:
+      - Auth
+  /auth/me:
+    get:
+      description: Get current authenticated user profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - Auth
+  /auth/profile:
+    put:
+      consumes:
+      - application/json
+      description: Update current authenticated user's profile (name)
+      parameters:
+      - description: Profile update
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.ProfileResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update user profile
+      tags:
+      - Auth
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchange refresh token for new access token
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/service.LoginResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Refresh access token
+      tags:
+      - Auth
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Register a new user account
+      parameters:
+      - description: Registration details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Register user
+      tags:
+      - Auth
+  /auth/reset-password:
+    post:
+      consumes:
+      - application/json
+      description: Reset password using a token (public)
+      parameters:
+      - description: Token + new password
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.ResetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Reset password
+      tags:
+      - Auth
+  /auth/sessions:
+    get:
+      description: List all active sessions for the user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get active sessions
+      tags:
+      - Auth
+  /companies:
+    get:
+      description: Get all companies
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List companies
+      tags:
+      - Companies
+    post:
+      consumes:
+      - application/json
+      description: Create a new company
+      parameters:
+      - description: Company details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateCompanyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create company
+      tags:
+      - Companies
+  /companies/{id}:
+    delete:
+      description: Soft delete a company
+      parameters:
+      - description: Company ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete company
+      tags:
+      - Companies
+    get:
+      description: Get a company by its ID
+      parameters:
+      - description: Company ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get company by ID
+      tags:
+      - Companies
+    put:
+      consumes:
+      - application/json
+      description: Update an existing company
+      parameters:
+      - description: Company ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated company details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateCompanyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update company
+      tags:
+      - Companies
+  /daily-schedules:
+    get:
+      description: Get all daily schedules for a company, optionally filtered by date
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        type: string
+      - description: Date (YYYY-MM-DD)
+        in: query
+        name: date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List daily schedules
+      tags:
+      - HR
+    post:
+      consumes:
+      - application/json
+      description: Create a new daily schedule for an employee
+      parameters:
+      - description: Schedule details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateDailyScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create daily schedule
+      tags:
+      - HR
+  /daily-schedules/{id}:
+    delete:
+      description: Soft delete a daily schedule
+      parameters:
+      - description: Schedule ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete daily schedule
+      tags:
+      - HR
+    put:
+      consumes:
+      - application/json
+      description: Update an existing daily schedule
+      parameters:
+      - description: Schedule ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated fields
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.CreateDailyScheduleRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update daily schedule
+      tags:
+      - HR
+  /dashboard/stats:
+    get:
+      description: Get aggregated dashboard stats
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.dashboardStats'
+      security:
+      - BearerAuth: []
+      summary: Dashboard statistics
+      tags:
+      - Dashboard
+  /data-logs:
+    get:
+      description: Get raw punch data logs by date range
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List data logs
+      tags:
+      - Data Logs
+  /data-logs/delete-all:
+    delete:
+      description: Permanently delete all raw punch data logs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete all data logs
+      tags:
+      - Data Logs
+  /data-logs/import:
+    post:
+      consumes:
+      - application/json
+      description: Read and import raw punch data from ZKTeco Access MDB file
+      parameters:
+      - description: MDB file path (defaults to C:\\Program Files (x86)\\ZKTeco\\att2000.mdb)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.ImportRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Import data logs from ZKTeco MDB
+      tags:
+      - Data Logs
+  /data-logs/process:
+    post:
+      consumes:
+      - application/json
+      description: Convert unprocessed raw punch data into attendance records
+      parameters:
+      - description: Date to process (defaults to today)
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.ProcessRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Process data logs into attendance
+      tags:
+      - Data Logs
+  /data-logs/stats:
+    get:
+      description: Get count of imported data logs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Data log statistics
+      tags:
+      - Data Logs
+  /database/backup:
+    post:
+      description: Create a PostgreSQL dump backup file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create database backup
+      tags:
+      - Database
+  /database/backups:
+    delete:
+      description: Delete a specific backup SQL file from the backups directory
+      parameters:
+      - description: Backup filename to delete
+        in: query
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a backup file
+      tags:
+      - Database
+    get:
+      description: List all backup files in the backups directory
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: List database backups
+      tags:
+      - Database
+  /database/export:
+    get:
+      description: Download a specific backup SQL file
+      parameters:
+      - description: Backup filename
+        in: query
+        name: filename
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Download a backup file
+      tags:
+      - Database
+  /database/import:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload and execute a SQL backup file to restore the database
+      parameters:
+      - description: SQL backup file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Import database from SQL file
+      tags:
+      - Database
+  /database/reset:
+    post:
+      description: Drop all tables and re-run auto-migration
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reset database
+      tags:
+      - Database
+  /departments:
+    get:
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List departments
+      tags:
+      - Organization
+  /designations:
+    get:
+      parameters:
+      - description: Filter by section
+        in: query
+        name: section_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List designations
+      tags:
+      - Organization
+  /districts:
+    get:
+      parameters:
+      - description: Filter by division
+        in: query
+        name: division_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List districts
+      tags:
+      - Geo
+  /divisions:
+    get:
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List divisions
+      tags:
+      - Geo
+  /employees:
+    get:
+      description: Get all employees with optional filters
+      parameters:
+      - description: Filter by company ID
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department ID
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by section ID
+        in: query
+        name: section_id
+        type: string
+      - description: Filter by designation ID
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by line ID
+        in: query
+        name: line_id
+        type: string
+      - description: Filter by shift ID
+        in: query
+        name: shift_id
+        type: string
+      - description: Filter by group ID
+        in: query
+        name: group_id
+        type: string
+      - description: Filter by floor ID
+        in: query
+        name: floor_id
+        type: string
+      - description: Filter by status (active/inactive)
+        in: query
+        name: status
+        type: string
+      - description: Filter by employee ID (partial match)
+        in: query
+        name: employee_id
+        type: string
+      - description: Filter by gender
+        in: query
+        name: gender
+        type: string
+      - description: Filter by blood group
+        in: query
+        name: blood_group
+        type: string
+      - description: Filter by employee type
+        in: query
+        name: employee_type
+        type: string
+      - description: Minimum gross salary
+        in: query
+        name: min_salary
+        type: string
+      - description: Maximum gross salary
+        in: query
+        name: max_salary
+        type: string
+      - description: Page number (default 1)
+        in: query
+        name: page
+        type: integer
+      - description: Page size (default 20, max 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List employees
+      tags:
+      - Employees
+    post:
+      consumes:
+      - application/json
+      description: Create a new employee record
+      parameters:
+      - description: Employee details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateEmployeeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create employee
+      tags:
+      - Employees
+  /employees/{id}:
+    delete:
+      description: Soft delete an employee
+      parameters:
+      - description: Employee ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete employee
+      tags:
+      - Employees
+    get:
+      description: Get a single employee by ID
+      parameters:
+      - description: Employee ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get employee by ID
+      tags:
+      - Employees
+    put:
+      consumes:
+      - application/json
+      description: Update an existing employee record
+      parameters:
+      - description: Employee ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Employee details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateEmployeeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update employee
+      tags:
+      - Employees
+  /employees/by-code/{code}:
+    get:
+      description: Get a single employee by their business employee_id (e.g. "2857")
+      parameters:
+      - description: Employee business code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get employee by employee code
+      tags:
+      - Employees
+  /employees/export/excel:
+    get:
+      description: Export filtered employee list to Excel with complete details
+      parameters:
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by section
+        in: query
+        name: section_id
+        type: string
+      - description: Filter by designation
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by line
+        in: query
+        name: line_id
+        type: string
+      - description: Filter by shift
+        in: query
+        name: shift_id
+        type: string
+      - description: Filter by group
+        in: query
+        name: group_id
+        type: string
+      - description: Filter by floor
+        in: query
+        name: floor_id
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Search by employee ID
+        in: query
+        name: employee_id
+        type: string
+      - description: Filter by gender
+        in: query
+        name: gender
+        type: string
+      - description: Filter by blood group
+        in: query
+        name: blood_group
+        type: string
+      - description: Minimum gross salary
+        in: query
+        name: min_salary
+        type: string
+      - description: Maximum gross salary
+        in: query
+        name: max_salary
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: Export employees to Excel
+      tags:
+      - Employees
+  /employees/export/pdf:
+    get:
+      description: Export filtered employee list to PDF format
+      parameters:
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: Export employees to PDF
+      tags:
+      - Employees
+  /employees/import:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Bulk import employees from uploaded Excel file. Matches on employee_id
+        for upsert.
+      parameters:
+      - description: Excel file (.xlsx)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Import employees from Excel
+      tags:
+      - Employees
+  /floors:
+    get:
+      description: Get all floors
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List floors
+      tags:
+      - Floors
+    post:
+      consumes:
+      - application/json
+      description: Create a new floor
+      parameters:
+      - description: Floor details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateFloorRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create floor
+      tags:
+      - Floors
+  /floors/{id}:
+    delete:
+      description: Soft delete a floor
+      parameters:
+      - description: Floor ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete floor
+      tags:
+      - Floors
+    get:
+      description: Get a floor by its ID
+      parameters:
+      - description: Floor ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get floor by ID
+      tags:
+      - Floors
+    put:
+      consumes:
+      - application/json
+      description: Update an existing floor
+      parameters:
+      - description: Floor ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated floor details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateFloorRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update floor
+      tags:
+      - Floors
+  /groups:
+    get:
+      description: Get all groups
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List groups
+      tags:
+      - Groups
+    post:
+      consumes:
+      - application/json
+      description: Create a new group
+      parameters:
+      - description: Group details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create group
+      tags:
+      - Groups
+  /groups/{id}:
+    delete:
+      description: Soft delete a group
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete group
+      tags:
+      - Groups
+    get:
+      description: Get a group by its ID
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get group by ID
+      tags:
+      - Groups
+    put:
+      consumes:
+      - application/json
+      description: Update an existing group
+      parameters:
+      - description: Group ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated group details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateGroupRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update group
+      tags:
+      - Groups
+  /health:
+    get:
+      description: Check if the server is running
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - System
+  /id-cards:
+    get:
+      parameters:
+      - description: Filter by employee name
+        in: query
+        name: employee
+        type: string
+      - description: Filter by employee ID
+        in: query
+        name: employee_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by designation
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by card number
+        in: query
+        name: card_no
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List ID cards
+      tags:
+      - ID Cards
+  /id-cards/generate:
+    post:
+      consumes:
+      - application/json
+      description: Generate printable ID cards (front + back on same page, 6 per A4
+        portrait page). Uses SutonnyMJ or Nirmala for Bangla.
+      parameters:
+      - description: Employee IDs (business keys)
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GenerateIdCardRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Generate ID cards PDF
+      tags:
+      - ID Cards
+  /leave-balance:
+    get:
+      description: Get leave balance for employees
+      parameters:
+      - description: Filter by employee
+        in: query
+        name: employee_id
+        type: string
+      - description: 'Year (default: current)'
+        in: query
+        name: year
+        type: integer
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get leave balance
+      tags:
+      - Leave Balance
+  /leave-reports/monthly:
+    get:
+      description: Get monthly leave report grouped by department
+      parameters:
+      - description: 'Month (1-12, default: current)'
+        in: query
+        name: month
+        type: integer
+      - description: 'Year (default: current)'
+        in: query
+        name: year
+        type: integer
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              additionalProperties: true
+              type: object
+            type: array
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Monthly leave report
+      tags:
+      - Leave Reports
+  /leave-types:
+    get:
+      description: Get all leave types
+      parameters:
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List leave types
+      tags:
+      - Leave Types
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Leave type details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateLeaveTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create leave type
+      tags:
+      - Leave Types
+  /leave-types/{id}:
+    delete:
+      parameters:
+      - description: Leave Type ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete leave type
+      tags:
+      - Leave Types
+    get:
+      parameters:
+      - description: Leave Type ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get leave type by ID
+      tags:
+      - Leave Types
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Leave Type ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated leave type
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateLeaveTypeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update leave type
+      tags:
+      - Leave Types
+  /leaves:
+    get:
+      description: Get all leave applications with optional filters
+      parameters:
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by employee
+        in: query
+        name: employee_id
+        type: string
+      - description: Filter by status (pending|approved|rejected|cancelled)
+        in: query
+        name: status
+        type: string
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: from_date
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: to_date
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List leave applications
+      tags:
+      - Leaves
+    post:
+      consumes:
+      - application/json
+      description: Submit a new leave application. Validates allocation balance.
+      parameters:
+      - description: Leave application
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ApplyLeaveRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Apply for leave
+      tags:
+      - Leaves
+  /leaves/{id}:
+    delete:
+      description: Hard delete a leave regardless of status and revert related attendance
+      parameters:
+      - description: Leave ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Permanently delete leave application
+      tags:
+      - Leaves
+    get:
+      parameters:
+      - description: Leave ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get leave by ID
+      tags:
+      - Leaves
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Leave ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated leave
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateLeaveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update leave application
+      tags:
+      - Leaves
+  /leaves/{id}/approve:
+    put:
+      parameters:
+      - description: Leave ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Approve leave application
+      tags:
+      - Leaves
+  /leaves/{id}/export/pdf:
+    get:
+      description: Generate a leave application form PDF for a specific leave
+      parameters:
+      - description: Leave ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/pdf
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Export single leave application as PDF form
+      tags:
+      - Leaves
+  /leaves/{id}/reject:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Leave ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Rejection reason
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.RejectLeaveRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reject leave application
+      tags:
+      - Leaves
+  /lines:
+    get:
+      parameters:
+      - description: Filter by section
+        in: query
+        name: section_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List lines
+      tags:
+      - Organization
+  /night-bills:
+    get:
+      description: Get paginated night bills with advanced filters
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        type: string
+      - description: Department ID
+        in: query
+        name: department_id
+        type: string
+      - description: Section ID
+        in: query
+        name: section_id
+        type: string
+      - description: Designation ID
+        in: query
+        name: designation_id
+        type: string
+      - description: Line ID
+        in: query
+        name: line_id
+        type: string
+      - description: Group ID
+        in: query
+        name: group_id
+        type: string
+      - description: Floor ID
+        in: query
+        name: floor_id
+        type: string
+      - description: Employee ID
+        in: query
+        name: employee_id
+        type: string
+      - description: Status
+        in: query
+        name: status
+        type: string
+      - description: Date from (YYYY-MM-DD)
+        in: query
+        name: date_from
+        type: string
+      - description: Date to (YYYY-MM-DD)
+        in: query
+        name: date_to
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Page size
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List night bills
+      tags:
+      - Payroll
+    post:
+      consumes:
+      - application/json
+      description: Create a new night bill entry for an employee
+      parameters:
+      - description: Night bill details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateNightBillRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create night bill
+      tags:
+      - Payroll
+  /night-bills/{id}:
+    delete:
+      description: Soft delete a night bill
+      parameters:
+      - description: Night Bill ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete night bill
+      tags:
+      - Payroll
+    put:
+      consumes:
+      - application/json
+      description: Update an existing night bill
+      parameters:
+      - description: Night Bill ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated fields
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.CreateNightBillRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update night bill
+      tags:
+      - Payroll
+  /night-bills/{id}/approve:
+    put:
+      description: Approve a pending night bill
+      parameters:
+      - description: Night Bill ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Approve night bill
+      tags:
+      - Payroll
+  /night-bills/{id}/reject:
+    put:
+      description: Reject a pending night bill
+      parameters:
+      - description: Night Bill ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reject night bill
+      tags:
+      - Payroll
+  /night-bills/bulk:
+    post:
+      consumes:
+      - application/json
+      description: Create multiple night bill entries at once
+      parameters:
+      - description: Bulk night bill items
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.BulkCreateNightBillRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Bulk create night bills
+      tags:
+      - Payroll
+  /night-bills/calculate-rate:
+    post:
+      consumes:
+      - application/json
+      description: Calculate night hours, rate, and amount for an employee on a given
+        date from attendance
+      parameters:
+      - description: Employee ID and Date
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CalculateRateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Calculate night bill rate
+      tags:
+      - Payroll
+  /night-bills/eligible-employees:
+    get:
+      description: Get employees eligible for night bill based on filters
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        type: string
+      - description: Department ID
+        in: query
+        name: department_id
+        type: string
+      - description: Section ID
+        in: query
+        name: section_id
+        type: string
+      - description: Designation ID
+        in: query
+        name: designation_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List eligible employees for night bill
+      tags:
+      - Payroll
+  /night-bills/employees-with-rates:
+    get:
+      description: Get employees with night hours, rate, and amount calculated from
+        attendance for a given date
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        type: string
+      - description: Department ID
+        in: query
+        name: department_id
+        type: string
+      - description: Section ID
+        in: query
+        name: section_id
+        type: string
+      - description: Designation ID
+        in: query
+        name: designation_id
+        type: string
+      - description: Date (YYYY-MM-DD)
+        in: query
+        name: date
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List eligible employees with pre-calculated night bill rates
+      tags:
+      - Payroll
+  /night-bills/process:
+    post:
+      consumes:
+      - application/json
+      description: Auto-generate night bills based on attendance data and conditions
+      parameters:
+      - description: Process conditions
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ProcessNightBillRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Process night bills automatically
+      tags:
+      - Payroll
+  /night-bills/processes:
+    get:
+      description: Get processing history for night bills
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List night bill processes
+      tags:
+      - Payroll
+  /night-bills/summary:
+    get:
+      description: Get summary totals for night bills
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get night bill summary
+      tags:
+      - Payroll
+  /organization/import:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Bulk create/update companies, departments, sections, designations,
+        lines from Excel with flat hierarchy columns. Companies are looked up by name
+        or auto-created.
+      parameters:
+      - description: Excel file (.xlsx)
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Bulk import organization entities
+      tags:
+      - Organization
+  /organization/template:
+    get:
+      description: Download Excel template for bulk organization import with Company(En/Bn),
+        Department(En/Bn), Section(En/Bn), Designation(En/Bn), Line(En/Bn)
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+      security:
+      - BearerAuth: []
+      summary: Download organization import template
+      tags:
+      - Organization
+  /punishments:
+    get:
+      description: Get all punishments for a company
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List punishments
+      tags:
+      - HR
+    post:
+      consumes:
+      - application/json
+      description: Add a new punishment record for an employee
+      parameters:
+      - description: Punishment details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreatePunishmentRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create punishment
+      tags:
+      - HR
+  /punishments/{id}:
+    delete:
+      description: Soft delete a punishment record
+      parameters:
+      - description: Punishment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete punishment
+      tags:
+      - HR
+    put:
+      consumes:
+      - application/json
+      description: Update an existing punishment record
+      parameters:
+      - description: Punishment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated fields
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.CreatePunishmentRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update punishment
+      tags:
+      - HR
+  /requirements:
+    get:
+      parameters:
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by priority
+        in: query
+        name: priority
+        type: string
+      - description: Filter by position
+        in: query
+        name: position
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List requirements
+      tags:
+      - Requirements
+  /salary/bank-sheet:
+    get:
+      description: Get salary records filtered by account type and group for bank
+        transfer
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      - description: Filter by group ID
+        in: query
+        name: group_id
+        type: string
+      - description: Filter by account type (mCash/Card/Bank)
+        in: query
+        name: account_type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Bank sheet (salary bank transfer)
+      tags:
+      - Salary
+  /salary/bank-sheet/export-all:
+    get:
+      description: Download salary bank transfer data as multi-sheet Excel with Summary,
+        Staff-mCash, Staff-Card, Worker-mCash, Worker-Card tabs
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      - description: Staff group ID
+        in: query
+        name: staff_group_id
+        type: string
+      - description: Worker group ID
+        in: query
+        name: worker_group_id
+        type: string
+      produces:
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: file
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Export bank sheet (all tabs) to Excel
+      tags:
+      - Salary
+  /salary/daily-sheet:
+    get:
+      description: Get daily salary calculations for a specific date
+      parameters:
+      - description: Date (YYYY-MM-DD)
+        in: query
+        name: date
+        required: true
+        type: string
+      - description: Company ID (defaults to JWT company)
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by section
+        in: query
+        name: section_id
+        type: string
+      - description: Filter by designation
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by line
+        in: query
+        name: line_id
+        type: string
+      - description: Filter by group
+        in: query
+        name: group_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Daily salary sheet
+      tags:
+      - Salary
+  /salary/increments:
+    get:
+      description: Get all salary increments for a company
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List salary increments
+      tags:
+      - Salary
+    post:
+      consumes:
+      - application/json
+      description: Apply a salary increment for an employee
+      parameters:
+      - description: Increment details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateIncrementRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create salary increment
+      tags:
+      - Salary
+  /salary/increments/{id}/approve:
+    put:
+      consumes:
+      - application/json
+      description: Approve a pending increment and update employee salary
+      parameters:
+      - description: Increment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Optional override values
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.ApproveIncrementRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Approve salary increment
+      tags:
+      - Salary
+  /salary/increments/{id}/reject:
+    put:
+      consumes:
+      - application/json
+      description: Reject a pending increment request
+      parameters:
+      - description: Increment ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Rejection reason
+        in: body
+        name: request
+        schema:
+          additionalProperties:
+            type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reject salary increment
+      tags:
+      - Salary
+  /salary/list:
+    get:
+      description: Get salary records summary (grouped by department)
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List salary records
+      tags:
+      - Salary
+  /salary/payslip:
+    get:
+      description: Get salary record for a specific employee for a given month/year
+      parameters:
+      - description: Employee ID
+        in: query
+        name: employee_id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get employee payslip
+      tags:
+      - Salary
+  /salary/process:
+    post:
+      consumes:
+      - application/json
+      description: Calculate and generate salary for all active employees for a given
+        month/year
+      parameters:
+      - description: Salary process params
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.ProcessSalaryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Process monthly salary
+      tags:
+      - Salary
+  /salary/sheet:
+    get:
+      description: Get salary records for all employees for a given month/year
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List salary sheet
+      tags:
+      - Salary
+  /salary/summary:
+    get:
+      description: Get salary summary grouped by specified level with grand totals
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        required: true
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        required: true
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        required: true
+        type: integer
+      - description: 'Group by: department|section|designation|line (default: department)'
+        in: query
+        name: group_by
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by section
+        in: query
+        name: section_id
+        type: string
+      - description: Filter by designation
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by line
+        in: query
+        name: line_id
+        type: string
+      - description: Filter by group
+        in: query
+        name: group_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Salary summary by department/section/designation/line
+      tags:
+      - Salary
+  /sections:
+    get:
+      parameters:
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List sections
+      tags:
+      - Organization
+  /separations:
+    get:
+      parameters:
+      - description: Filter by employee name
+        in: query
+        name: employee
+        type: string
+      - description: Filter by employee ID
+        in: query
+        name: employee_id
+        type: string
+      - description: Filter by department
+        in: query
+        name: department_id
+        type: string
+      - description: Filter by type
+        in: query
+        name: type
+        type: string
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: Filter by section (via employee)
+        in: query
+        name: section_id
+        type: string
+      - description: Filter by designation (via employee)
+        in: query
+        name: designation_id
+        type: string
+      - description: Filter by line (via employee)
+        in: query
+        name: line_id
+        type: string
+      - description: Filter by group (via employee)
+        in: query
+        name: group_id
+        type: string
+      - description: Filter by separation start date (YYYY-MM-DD)
+        in: query
+        name: date_from
+        type: string
+      - description: Filter by separation end date (YYYY-MM-DD)
+        in: query
+        name: date_to
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List separations
+      tags:
+      - Separations
+    post:
+      consumes:
+      - application/json
+      description: Create a separation record. Auto-processes if date <= today.
+      parameters:
+      - description: Separation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateSeparationRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create separation
+      tags:
+      - Separations
+  /separations/{id}/cancel:
+    post:
+      description: Mark a pending or approved separation as cancelled
+      parameters:
+      - description: Separation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Cancel a separation
+      tags:
+      - Separations
+  /separations/{id}/process:
+    post:
+      description: Apply employee changes for a specific separation
+      parameters:
+      - description: Separation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Process a single separation
+      tags:
+      - Separations
+  /separations/{id}/reactivate:
+    post:
+      description: Revert a processed separation, restoring employee to active/Regular
+        status
+      parameters:
+      - description: Separation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Reactivate a processed separation
+      tags:
+      - Separations
+  /separations/process:
+    post:
+      description: Process all pending/approved separations with date <= given date
+      parameters:
+      - description: 'Process separations due on or before this date (default: today)'
+        in: query
+        name: date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Batch process separations
+      tags:
+      - Separations
+  /settings:
+    get:
+      description: Get all system settings as key-value pairs
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List all system settings
+      tags:
+      - Settings
+    put:
+      consumes:
+      - application/json
+      description: Bulk update system settings (key-value pairs)
+      parameters:
+      - description: Settings map
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateSettingsRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update system settings
+      tags:
+      - Settings
+  /shifts:
+    get:
+      description: Get all shifts
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List shifts
+      tags:
+      - Shifts
+    post:
+      consumes:
+      - application/json
+      description: Create a new shift
+      parameters:
+      - description: Shift details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateShiftRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create shift
+      tags:
+      - Shifts
+  /shifts/{id}:
+    delete:
+      description: Soft delete a shift
+      parameters:
+      - description: Shift ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete shift
+      tags:
+      - Shifts
+    get:
+      description: Get a shift by its ID
+      parameters:
+      - description: Shift ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get shift by ID
+      tags:
+      - Shifts
+    put:
+      consumes:
+      - application/json
+      description: Update an existing shift
+      parameters:
+      - description: Shift ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated shift details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateShiftRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update shift
+      tags:
+      - Shifts
+  /temporary-shifts:
+    get:
+      parameters:
+      - description: Filter by company
+        in: query
+        name: company_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List temporary shifts
+      tags:
+      - Temporary Shifts
+  /tiffin-bills:
+    get:
+      description: Get all tiffin bills for a company, optionally filtered by month/year
+      parameters:
+      - description: Company ID
+        in: query
+        name: company_id
+        type: string
+      - description: Month (1-12)
+        in: query
+        name: month
+        type: integer
+      - description: Year
+        in: query
+        name: year
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List tiffin bills
+      tags:
+      - Payroll
+    post:
+      consumes:
+      - application/json
+      description: Create a new tiffin bill entry for an employee
+      parameters:
+      - description: Tiffin bill details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.CreateTiffinBillRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create tiffin bill
+      tags:
+      - Payroll
+  /tiffin-bills/{id}:
+    delete:
+      description: Soft delete a tiffin bill
+      parameters:
+      - description: Tiffin Bill ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete tiffin bill
+      tags:
+      - Payroll
+    put:
+      consumes:
+      - application/json
+      description: Update an existing tiffin bill
+      parameters:
+      - description: Tiffin Bill ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Updated fields
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handlers.CreateTiffinBillRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update tiffin bill
+      tags:
+      - Payroll
+  /unions:
+    get:
+      parameters:
+      - description: Filter by upazila
+        in: query
+        name: upazila_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List unions
+      tags:
+      - Geo
+  /upazilas:
+    get:
+      parameters:
+      - description: Filter by district
+        in: query
+        name: district_id
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Page size (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+      security:
+      - BearerAuth: []
+      summary: List upazilas
+      tags:
+      - Geo
+  /upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload an image or signature file
+      parameters:
+      - description: File to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Upload file
+      tags:
+      - Upload
+  /users:
+    get:
+      description: List all users with pagination and filters
+      parameters:
+      - description: Page number
+        in: query
+        name: page
+        type: integer
+      - description: Items per page
+        in: query
+        name: limit
+        type: integer
+      - description: Filter by status
+        in: query
+        name: status
+        type: string
+      - description: Search by email or name
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/utils.PaginatedResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List users
+      tags:
+      - Users
+    post:
+      consumes:
+      - application/json
+      description: Create a new user and return the generated password
+      parameters:
+      - description: User creation data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.CreateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create user
+      tags:
+      - Users
+  /users/{id}:
+    delete:
+      description: Soft-delete a user (status set to deleted)
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete user
+      tags:
+      - Users
+    get:
+      description: Get a single user with assigned roles
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user by ID
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Update user name or status
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Update data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.UpdateUserRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Update user
+      tags:
+      - Users
+  /users/{id}/reset-password:
+    post:
+      description: Force reset a user's password and return the new one
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Admin reset password
+      tags:
+      - Users
+  /users/{id}/roles:
+    get:
+      description: Get roles assigned to a user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/models.Role'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user roles
+      tags:
+      - Users
+    put:
+      consumes:
+      - application/json
+      description: Replace all roles for a user
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Role IDs
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/service.AssignRolesRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Assign roles to user
+      tags:
+      - Users
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

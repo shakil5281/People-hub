@@ -1,0 +1,36 @@
+import { AppSidebar } from "@/components/layout/app-sidebar"
+import { SiteHeader } from "@/components/layout/site-header"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
+import { SearchProvider } from "@/contexts/search-context"
+import { SearchDialog } from "@/components/layout/search-dialog"
+
+export default function DashboardLayout({
+  children,
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <SearchProvider>
+      <SidebarProvider
+        style={
+          {
+            "--sidebar-width": "calc(var(--spacing) * 72)",
+            "--header-height": "calc(var(--spacing) * 12)",
+          } as React.CSSProperties
+        }
+      >
+        <AppSidebar variant="inset" />
+        <SidebarInset>
+          <SiteHeader />
+          <div className="flex flex-1 flex-col">
+            <div className="@container/main flex flex-1 flex-col gap-2 p-2 md:p-8">
+              {children}
+            </div>
+          </div>
+        </SidebarInset>
+      </SidebarProvider>
+
+      <SearchDialog />
+    </SearchProvider>
+  )
+}

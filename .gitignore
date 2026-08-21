@@ -1,0 +1,55 @@
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go build output
+/peoplehub
+/peoplehub-gateway
+/server
+
+# Test binary
+*.test
+
+# Go coverage
+*.out
+*.prof
+
+# Dependencies
+web/node_modules/
+
+# Build directories
+web/dist/
+web/build/
+web/.next/
+
+# Environment and config
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Swagger generated docs (optional - uncomment if you want to regenerate)
+# docs/
+
+# Log files
+*.log
+
+# Temporary files
+*.tmp
+*.bak
+
+
