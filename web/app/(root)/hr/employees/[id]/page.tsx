@@ -188,7 +188,8 @@ export default function EmployeeProfilePage() {
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState("")
   const [activeTab, setActiveTab] = React.useState("info")
-  const [exporting, setExporting] = React.useState<"excel" | "pdf" | null>(null)
+	const [exporting, setExporting] = React.useState<"excel" | "pdf" | null>(null)
+	const [isImageOpen, setIsImageOpen] = React.useState(false)
 
   React.useEffect(() => {
     async function fetchProfile() {
@@ -290,7 +291,10 @@ export default function EmployeeProfilePage() {
             {/* Avatar */}
             <div className="shrink-0 self-start sm:self-center">
               {fullImageUrl ? (
-                <div className="relative h-20 w-20 overflow-hidden rounded-2xl border-2 border-primary/20 shadow-sm lg:h-24 lg:w-24 bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
+                <div 
+                  className="relative h-20 w-20 overflow-hidden rounded-2xl border-2 border-primary/20 shadow-sm lg:h-24 lg:w-24 bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center cursor-pointer hover:opacity-90 transition-opacity" 
+                  onClick={() => setIsImageOpen(true)}
+                >
                   <img
                     src={fullImageUrl}
                     alt={employee.name_en}
@@ -708,6 +712,37 @@ export default function EmployeeProfilePage() {
             </div>
           </TabsContent>
         </Tabs>
+      </div>
+
+      {/* Lightbox Overlay */}
+      <div 
+        className={cn(
+          "fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 transition-all duration-300 ease-out",
+          isImageOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+        )}
+        onClick={() => setIsImageOpen(false)}
+      >
+        <div 
+          className={cn(
+            "relative max-w-3xl w-full max-h-[90vh] flex items-center justify-center transition-transform duration-300 ease-out",
+            isImageOpen ? "scale-100 translate-y-0" : "scale-95 translate-y-4"
+          )}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {fullImageUrl && (
+             <img 
+               src={fullImageUrl} 
+               alt={employee?.name_en || "Profile"} 
+               className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
+             />
+          )}
+          <button 
+            className="absolute -top-12 right-0 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors"
+            onClick={() => setIsImageOpen(false)}
+          >
+            <X className="w-6 h-6" />
+          </button>
+        </div>
       </div>
     </div>
   )

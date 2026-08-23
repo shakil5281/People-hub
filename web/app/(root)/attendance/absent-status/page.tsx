@@ -208,7 +208,9 @@ export default function AbsentStatusPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `absent_report_${filters.start_date || today}.xlsx`
+      const dateStr = filters.start_date || today
+      const formattedDate = dateStr.split('-').reverse().join('-')
+      a.download = `Absent List ${formattedDate}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
     } catch {

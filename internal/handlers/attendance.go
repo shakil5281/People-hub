@@ -2097,7 +2097,8 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 	})
 
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=attendance_%s.xlsx", date))
+	formattedDate := parsedDate.Format("02-01-2006")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"Attendance %s.xlsx\"", formattedDate))
 	f.Write(c.Writer)
 }
 
@@ -2350,7 +2351,9 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	}
 
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=absent_report_%s.xlsx", startDate))
+	parsedDate, _ := time.Parse("2006-01-02", startDate)
+	formattedDate := parsedDate.Format("02-01-2006")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"Absent List %s.xlsx\"", formattedDate))
 	f.Write(c.Writer)
 }
 
@@ -2396,6 +2399,7 @@ func (h *AttendanceHandler) ExportMissingAttendanceExcel(c *gin.Context) {
 		Preload("Employee.Department").
 		Preload("Employee.SectionRef").
 		Preload("Employee.LineRef").
+		Preload("Employee.GroupRef").
 		Preload("Employee").
 		Where(`(
 			(attendances.check_in IS NULL AND attendances.check_out IS NOT NULL)
@@ -2454,16 +2458,18 @@ func (h *AttendanceHandler) ExportMissingAttendanceExcel(c *gin.Context) {
 	f.SetActiveSheet(index)
 	f.SetSheetName("Sheet1", sheet)
 
-	nCols := 5
+	nCols := 7
 	cols := []struct {
 		header string
 		width  float64
 	}{
-		{"Employee ID", 15},
-		{"Name", 25},
-		{"Designation", 25},
-		{"Check In", 14},
-		{"Check Out", 14},
+		{"Employee ID", 10},
+		{"Name", 20},
+		{"Section", 11},
+		{"Designation", 13},
+		{"Group", 9},
+		{"Check In", 15},
+		{"Check Out", 15},
 	}
 
 	borderColor := "808080"
@@ -2554,11 +2560,23 @@ func (h *AttendanceHandler) ExportMissingAttendanceExcel(c *gin.Context) {
 		svc(1, a.EmployeeID)
 		svl(2, a.Employee.NameEn)
 
+		section := ""
+		if a.Employee.SectionRef != nil {
+			section = a.Employee.SectionRef.Name
+		}
+		svl(3, section)
+
 		designation := ""
 		if a.Employee.DesignationRef != nil {
 			designation = a.Employee.DesignationRef.Name
 		}
-		svl(3, designation)
+		svl(4, designation)
+
+		groupName := ""
+		if a.Employee.GroupRef != nil {
+			groupName = a.Employee.GroupRef.Name
+		}
+		svl(5, groupName)
 
 		checkIn := "-"
 		if a.CheckIn != nil {
@@ -2566,13 +2584,13 @@ func (h *AttendanceHandler) ExportMissingAttendanceExcel(c *gin.Context) {
 		} else if a.CheckOut != nil {
 			checkIn = "07:55"
 		}
-		svc(4, checkIn)
+		svc(6, checkIn)
 
 		checkOut := "-"
 		if a.CheckOut != nil {
 			checkOut = a.CheckOut.Format("15:04")
 		}
-		svc(5, checkOut)
+		svc(7, checkOut)
 
 		f.SetRowHeight(sheet, row, 30)
 	}
@@ -2615,7 +2633,9 @@ func (h *AttendanceHandler) ExportMissingAttendanceExcel(c *gin.Context) {
 	}
 
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=missing_attendance_%s.xlsx", startDate))
+	parsedDate2, _ := time.Parse("2006-01-02", startDate)
+	formattedDate2 := parsedDate2.Format("02-01-2006")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"Missing report %s.xlsx\"", formattedDate2))
 	f.Write(c.Writer)
 }
 

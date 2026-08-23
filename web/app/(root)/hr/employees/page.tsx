@@ -300,7 +300,7 @@ export default function EmployeesPage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `employees_export_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.download = `ManPower list.xlsx`
       a.click()
       URL.revokeObjectURL(url)
     } catch {

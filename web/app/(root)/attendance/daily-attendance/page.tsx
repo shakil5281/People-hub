@@ -280,7 +280,9 @@ export default function DailyAttendancePage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `attendance_${filters.date || today}.xlsx`
+      const dateStr = filters.date || today
+      const formattedDate = dateStr.split('-').reverse().join('-')
+      a.download = `Attendance ${formattedDate}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -303,7 +305,9 @@ export default function DailyAttendancePage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `absent_report_${filters.date || today}.xlsx`
+      const dateStr = filters.date || today
+      const formattedDate = dateStr.split('-').reverse().join('-')
+      a.download = `Absent List ${formattedDate}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -326,7 +330,9 @@ export default function DailyAttendancePage() {
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
-      a.download = `missing_attendance_${filters.date || today}.xlsx`
+      const dateStr = filters.date || today
+      const formattedDate = dateStr.split('-').reverse().join('-')
+      a.download = `Missing report ${formattedDate}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
     } catch {
@@ -436,7 +442,7 @@ export default function DailyAttendancePage() {
       )}
 
       <div className="px-4 lg:px-6">
-        <h2 className="text-lg font-semibold mb-2">
+        <h2 className="text-lg font-semibold mb-2" suppressHydrationWarning>
           Attendance for{" "}
           {filters.date
             ? (() => {

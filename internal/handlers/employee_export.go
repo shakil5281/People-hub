@@ -433,7 +433,7 @@ func (h *EmployeeHandler) ExportExcel(c *gin.Context) {
 	})
 
 	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-	c.Header("Content-Disposition", "attachment; filename=employees_export.xlsx")
+	c.Header("Content-Disposition", "attachment; filename=\"ManPower list.xlsx\"")
 	f.Write(c.Writer)
 }
 

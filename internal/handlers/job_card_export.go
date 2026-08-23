@@ -777,16 +777,16 @@ func fillJobCardSheet(f *excelize.File, sheet string, labels jobCardLabels, lang
 		header string
 		width  float64
 	}{
-		{labels.Sl, 5},
-		{labels.Date, 14},
-		{labels.Day, 10},
-		{labels.Shift, 16},
-		{labels.InTime, 12},
-		{labels.OutTime, 12},
-		{labels.Hours, 10},
-		{labels.OT, 10},
-		{labels.LateMinutes, 12},
-		{labels.Status, 16},
+		{labels.Sl, 10},
+		{labels.Date, 12},
+		{labels.Day, 8},
+		{labels.Shift, 11},
+		{labels.InTime, 9},
+		{labels.OutTime, 9},
+		{labels.Hours, 9},
+		{labels.OT, 7},
+		{labels.LateMinutes, 10},
+		{labels.Status, 8},
 	}
 	nCols := len(cols)
 
@@ -975,14 +975,14 @@ func fillJobCardSheet(f *excelize.File, sheet string, labels jobCardLabels, lang
 		row := 7 + i
 		f.SetCellValue(sheet, "A"+strconv.Itoa(row), r[0])
 		f.SetCellValue(sheet, "B"+strconv.Itoa(row), r[1])
-		f.SetCellValue(sheet, "C"+strconv.Itoa(row), r[2])
-		f.SetCellValue(sheet, "D"+strconv.Itoa(row), r[3])
-		f.MergeCell(sheet, "B"+strconv.Itoa(row), "B"+strconv.Itoa(row))
-		f.MergeCell(sheet, "D"+strconv.Itoa(row), endCol+strconv.Itoa(row))
+		f.SetCellValue(sheet, "D"+strconv.Itoa(row), r[2])
+		f.SetCellValue(sheet, "E"+strconv.Itoa(row), r[3])
+		f.MergeCell(sheet, "B"+strconv.Itoa(row), "C"+strconv.Itoa(row))
+		f.MergeCell(sheet, "E"+strconv.Itoa(row), endCol+strconv.Itoa(row))
 		f.SetCellStyle(sheet, "A"+strconv.Itoa(row), "A"+strconv.Itoa(row), infoLabelStyle)
-		f.SetCellStyle(sheet, "B"+strconv.Itoa(row), "B"+strconv.Itoa(row), infoValueStyle)
-		f.SetCellStyle(sheet, "C"+strconv.Itoa(row), "C"+strconv.Itoa(row), infoLabelStyle)
-		f.SetCellStyle(sheet, "D"+strconv.Itoa(row), endCol+strconv.Itoa(row), infoValueStyle)
+		f.SetCellStyle(sheet, "B"+strconv.Itoa(row), "C"+strconv.Itoa(row), infoValueStyle)
+		f.SetCellStyle(sheet, "D"+strconv.Itoa(row), "D"+strconv.Itoa(row), infoLabelStyle)
+		f.SetCellStyle(sheet, "E"+strconv.Itoa(row), endCol+strconv.Itoa(row), infoValueStyle)
 		f.SetRowHeight(sheet, row, 18)
 	}
 
@@ -1073,7 +1073,7 @@ func fillJobCardSheet(f *excelize.File, sheet string, labels jobCardLabels, lang
 	f.SetCellStyle(sheet, "A"+strconv.Itoa(footerRow+1), endCol+strconv.Itoa(footerRow+1), footerStyle)
 
 	f.SetPanes(sheet, &excelize.Panes{
-		Freeze:      true,
+		Freeze:      false,
 		XSplit:      0,
 		YSplit:      dataStart - 1,
 		TopLeftCell: "A" + strconv.Itoa(dataStart),
