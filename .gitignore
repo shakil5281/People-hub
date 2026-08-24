@@ -9,6 +9,7 @@
 /peoplehub
 /peoplehub-gateway
 /server
+/uploads
 
 # Test binary
 *.test

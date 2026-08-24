@@ -503,7 +503,7 @@ func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fo
 	pdf.SetTextColor(107, 114, 128)
 
 	authText := "Authorisation"
-	sigText := "Card Holder Signature"
+	sigText := "Holder Signature"
 	if isBn {
 		authText = utils.UnicodeToBijoy("অনুমোদন")
 		sigText = utils.UnicodeToBijoy("কার্ডধারীর স্বাক্ষর")
