@@ -50,9 +50,11 @@ type EmployeeRow struct {
 	SignatureURL  string  `json:"signature_url"`
 
 	PresentAddress     string `json:"present_address"`
+	PresentAddressBn   string `json:"present_address_bn"`
 	PresentPostOffice  string `json:"present_post_office"`
 	PresentPostCode    string `json:"present_post_code"`
 	PermanentAddress   string `json:"permanent_address"`
+	PermanentAddressBn string `json:"permanent_address_bn"`
 	PermanentPostOffice string `json:"permanent_post_office"`
 	PermanentPostCode  string `json:"permanent_post_code"`
 
@@ -87,7 +89,9 @@ func toEmployeeRow(e models.Employee) EmployeeRow {
 		ImageURL:      e.ImageURL,
 		SignatureURL:  e.SignatureURL,
 		PresentAddress: e.PresentAddress,
+		PresentAddressBn: e.PresentAddressBn,
 		PermanentAddress: e.PermanentAddress,
+		PermanentAddressBn: e.PermanentAddressBn,
 	}
 	if e.PresentPostOffice != nil {
 		r.PresentPostOffice = *e.PresentPostOffice
@@ -160,8 +164,10 @@ type CreateEmployeeRequest struct {
 	NID              string `json:"nid"`
 	Phone            string `json:"phone"`
 	Email            string `json:"email"`
-	PresentAddress   string `json:"present_address"`
-	PermanentAddress string `json:"permanent_address"`
+	PresentAddress     string `json:"present_address"`
+	PresentAddressBn   string `json:"present_address_bn"`
+	PermanentAddress   string `json:"permanent_address"`
+	PermanentAddressBn string `json:"permanent_address_bn"`
 
 	// Family
 	SpouseName         string `json:"spouse_name"`
@@ -190,11 +196,15 @@ type CreateEmployeeRequest struct {
 	PresentDistrictID string `json:"present_district_id"`
 	PresentUpazilaID  string `json:"present_upazila_id"`
 	PresentUnionID    string `json:"present_union_id"`
+	PresentPostOffice string `json:"present_post_office"`
+	PresentPostCode   string `json:"present_post_code"`
 	// Address (permanent)
 	PermanentDivisionID string `json:"permanent_division_id"`
 	PermanentDistrictID string `json:"permanent_district_id"`
 	PermanentUpazilaID  string `json:"permanent_upazila_id"`
 	PermanentUnionID    string `json:"permanent_union_id"`
+	PermanentPostOffice string `json:"permanent_post_office"`
+	PermanentPostCode   string `json:"permanent_post_code"`
 
 	// Salary
 	GrossSalary        float64 `json:"gross_salary"`
@@ -237,7 +247,9 @@ func bindEmployeeFields(req *CreateEmployeeRequest, emp *models.Employee) {
 	emp.Phone = req.Phone
 	emp.Email = req.Email
 	emp.PresentAddress = req.PresentAddress
+	emp.PresentAddressBn = req.PresentAddressBn
 	emp.PermanentAddress = req.PermanentAddress
+	emp.PermanentAddressBn = req.PermanentAddressBn
 
 	// Family
 	emp.SpouseName = req.SpouseName
@@ -269,10 +281,14 @@ func bindEmployeeFields(req *CreateEmployeeRequest, emp *models.Employee) {
 	emp.PresentDistrictID = setPtr(req.PresentDistrictID)
 	emp.PresentUpazilaID = setPtr(req.PresentUpazilaID)
 	emp.PresentUnionID = setPtr(req.PresentUnionID)
+	emp.PresentPostOffice = setPtr(req.PresentPostOffice)
+	emp.PresentPostCode = setPtr(req.PresentPostCode)
 	emp.PermanentDivisionID = setPtr(req.PermanentDivisionID)
 	emp.PermanentDistrictID = setPtr(req.PermanentDistrictID)
 	emp.PermanentUpazilaID = setPtr(req.PermanentUpazilaID)
 	emp.PermanentUnionID = setPtr(req.PermanentUnionID)
+	emp.PermanentPostOffice = setPtr(req.PermanentPostOffice)
+	emp.PermanentPostCode = setPtr(req.PermanentPostCode)
 
 	// Salary
 	emp.GrossSalary = req.GrossSalary
@@ -403,10 +419,18 @@ func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 	if v := c.Query("max_salary"); v != "" {
 		query = query.Where("gross_salary <= ?", v)
 	}
-	if v := c.Query("joining_from"); v != "" {
+	if v := c.Query("joining_date_from"); v != "" {
+		query = query.Where("joining_date >= ?", v)
+	} else if v := c.Query("joining_from"); v != "" {
+		query = query.Where("joining_date >= ?", v)
+	} else if v := c.Query("start_date"); v != "" {
 		query = query.Where("joining_date >= ?", v)
 	}
-	if v := c.Query("joining_to"); v != "" {
+	if v := c.Query("joining_date_to"); v != "" {
+		query = query.Where("joining_date <= ?", v)
+	} else if v := c.Query("joining_to"); v != "" {
+		query = query.Where("joining_date <= ?", v)
+	} else if v := c.Query("end_date"); v != "" {
 		query = query.Where("joining_date <= ?", v)
 	}
 
@@ -544,7 +568,10 @@ func (h *EmployeeHandler) UpdateEmployee(c *gin.Context) {
 		return
 	}
 
-	database.DB.Preload("User").Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").First(&emp, "id = ?", emp.ID)
+	database.DB.Preload("User").Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").
+		Preload("PresentDivision").Preload("PresentDistrict").Preload("PresentUpazila").Preload("PresentUnion").
+		Preload("PermanentDivision").Preload("PermanentDistrict").Preload("PermanentUpazila").Preload("PermanentUnion").
+		First(&emp, "id = ?", emp.ID)
 	c.JSON(http.StatusOK, emp)
 }
 
@@ -562,7 +589,10 @@ func (h *EmployeeHandler) UpdateEmployee(c *gin.Context) {
 func (h *EmployeeHandler) GetEmployee(c *gin.Context) {
 	id := c.Param("id")
 	var emp models.Employee
-	if err := database.DB.Preload("User").Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").First(&emp, "id = ?", id).Error; err != nil {
+	if err := database.DB.Preload("User").Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").
+		Preload("PresentDivision").Preload("PresentDistrict").Preload("PresentUpazila").Preload("PresentUnion").
+		Preload("PermanentDivision").Preload("PermanentDistrict").Preload("PermanentUpazila").Preload("PermanentUnion").
+		First(&emp, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
 		return
 	}
@@ -583,8 +613,11 @@ func (h *EmployeeHandler) GetEmployee(c *gin.Context) {
 func (h *EmployeeHandler) GetEmployeeByCode(c *gin.Context) {
 	code := c.Param("code")
 	var emp models.Employee
-	if err := database.DB.Preload("Department").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").Preload("Shift").Preload("Company").Where("employee_id = ?", code).First(&emp).Error; err != nil {
-		if err2 := database.DB.Preload("Department").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").Preload("Shift").Preload("Company").Where("punch_number = ?", code).First(&emp).Error; err2 != nil {
+	query := database.DB.Preload("Department").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").Preload("Shift").Preload("Company").
+		Preload("PresentDivision").Preload("PresentDistrict").Preload("PresentUpazila").Preload("PresentUnion").
+		Preload("PermanentDivision").Preload("PermanentDistrict").Preload("PermanentUpazila").Preload("PermanentUnion")
+	if err := query.Where("employee_id = ?", code).First(&emp).Error; err != nil {
+		if err2 := query.Where("punch_number = ?", code).First(&emp).Error; err2 != nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
 			return
 		}
@@ -615,7 +648,10 @@ func (h *EmployeeHandler) GetEmployeeProfile(c *gin.Context) {
 	id := c.Param("id")
 
 	var emp models.Employee
-	if err := database.DB.Preload("User").Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").First(&emp, "id = ?", id).Error; err != nil {
+	if err := database.DB.Preload("User").Preload("Company").Preload("Department").Preload("Shift").Preload("SectionRef").Preload("DesignationRef").Preload("LineRef").Preload("GroupRef").Preload("FloorRef").
+		Preload("PresentDivision").Preload("PresentDistrict").Preload("PresentUpazila").Preload("PresentUnion").
+		Preload("PermanentDivision").Preload("PermanentDistrict").Preload("PermanentUpazila").Preload("PermanentUnion").
+		First(&emp, "id = ?", id).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
 		return
 	}
@@ -637,9 +673,133 @@ func (h *EmployeeHandler) GetEmployeeProfile(c *gin.Context) {
 	var salary models.Salary
 	salaryErr := database.DB.Where("employee_id = ? AND month = ? AND year = ?", emp.EmployeeID, month, year).First(&salary).Error
 
+	// Generate all months from joining date to current month
+	startYear := now.Year()
+	startMonth := int(now.Month())
+	if !emp.JoiningDate.IsZero() {
+		startYear = emp.JoiningDate.Year()
+		startMonth = int(emp.JoiningDate.Month())
+	}
+	if startYear > now.Year() || (startYear == now.Year() && startMonth > int(now.Month())) {
+		startYear = now.Year()
+		startMonth = int(now.Month())
+	}
+	if startYear < 1990 {
+		startYear = 2020
+		startMonth = 1
+	}
+
+	type ymPair struct {
+		Year  int
+		Month int
+	}
+	var allMonths []ymPair
+	currY, currM := now.Year(), int(now.Month())
+	for {
+		allMonths = append(allMonths, ymPair{Year: currY, Month: currM})
+		if currY == startYear && currM == startMonth {
+			break
+		}
+		currM--
+		if currM < 1 {
+			currM = 12
+			currY--
+		}
+		if currY < startYear {
+			break
+		}
+	}
+
+	// 1. All Salary History
+	var allSalaries []models.Salary
+	database.DB.Where("employee_id = ?", emp.EmployeeID).Find(&allSalaries)
+	salaryMap := make(map[string]models.Salary)
+	for _, s := range allSalaries {
+		k := fmt.Sprintf("%d-%d", s.Year, s.Month)
+		salaryMap[k] = s
+	}
+
+	var salaryHistory []gin.H
+	for _, m := range allMonths {
+		k := fmt.Sprintf("%d-%d", m.Year, m.Month)
+		mName := time.Month(m.Month).String()
+		item := gin.H{
+			"month":      m.Month,
+			"year":       m.Year,
+			"month_name": mName,
+			"salary":     nil,
+		}
+		if s, ok := salaryMap[k]; ok {
+			item["salary"] = s
+		}
+		salaryHistory = append(salaryHistory, item)
+	}
+
+	// 2. All Attendance History
+	type attCountRow struct {
+		Year   int    `gorm:"column:year"`
+		Month  int    `gorm:"column:month"`
+		Status string `gorm:"column:status"`
+		Count  int    `gorm:"column:count"`
+	}
+	var attCountRows []attCountRow
+	database.DB.Model(&models.Attendance{}).
+		Select("EXTRACT(YEAR FROM date::date)::int as year, EXTRACT(MONTH FROM date::date)::int as month, status, count(*) as count").
+		Where("employee_id = ? AND deleted_at IS NULL", emp.EmployeeID).
+		Group("EXTRACT(YEAR FROM date::date), EXTRACT(MONTH FROM date::date), status").
+		Find(&attCountRows)
+
+	attMap := make(map[string]map[string]int)
+	for _, ac := range attCountRows {
+		k := fmt.Sprintf("%d-%d", ac.Year, ac.Month)
+		if _, ok := attMap[k]; !ok {
+			attMap[k] = make(map[string]int)
+		}
+		attMap[k][ac.Status] = ac.Count
+	}
+
+	var attendanceHistory []gin.H
+	for _, m := range allMonths {
+		k := fmt.Sprintf("%d-%d", m.Year, m.Month)
+		mName := time.Month(m.Month).String()
+		statusMap := attMap[k]
+		if statusMap == nil {
+			statusMap = make(map[string]int)
+		}
+
+		present := statusMap["present"]
+		absent := statusMap["absent"]
+		late := statusMap["late"]
+		leave := statusMap["on_leave"] + statusMap["leave"]
+		weekend := statusMap["weekend"]
+		halfDay := statusMap["half_day"]
+		total := 0
+		var breakdown []AttendanceCount
+		for s, c := range statusMap {
+			total += c
+			breakdown = append(breakdown, AttendanceCount{Status: s, Count: c})
+		}
+
+		attendanceHistory = append(attendanceHistory, gin.H{
+			"month":        m.Month,
+			"year":         m.Year,
+			"month_name":   mName,
+			"total_days":   total,
+			"present_days": present,
+			"absent_days":  absent,
+			"late_days":    late,
+			"leave_days":   leave,
+			"weekend_days": weekend,
+			"half_days":    halfDay,
+			"breakdown":    breakdown,
+		})
+	}
+
 	response := gin.H{
-		"employee":   emp,
-		"attendance": attendanceCounts,
+		"employee":           emp,
+		"attendance":         attendanceCounts,
+		"salary_history":     salaryHistory,
+		"attendance_history": attendanceHistory,
 	}
 
 	if salaryErr == nil {

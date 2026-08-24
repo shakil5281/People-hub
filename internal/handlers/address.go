@@ -371,3 +371,114 @@ func (h *UnionHandler) Delete(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
 }
+
+// --- PostOffice ---
+
+type PostOfficeHandler struct {
+	repo *repository.PostOfficeRepository
+}
+
+func NewPostOfficeHandler(repo *repository.PostOfficeRepository) *PostOfficeHandler {
+	return &PostOfficeHandler{repo: repo}
+}
+
+func (h *PostOfficeHandler) List(c *gin.Context) {
+	p := utils.ParsePagination(c)
+	upazilaID := c.Query("upazila_id")
+	districtID := c.Query("district_id")
+	list, total, err := h.repo.List(upazilaID, districtID, p.Page, p.Limit)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, utils.NewPaginatedResponse(list, total, p))
+}
+
+func (h *PostOfficeHandler) GetByID(c *gin.Context) {
+	m, err := h.repo.FindByID(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	c.JSON(http.StatusOK, m)
+}
+
+func (h *PostOfficeHandler) GetByCode(c *gin.Context) {
+	m, err := h.repo.FindByCode(c.Param("code"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	
+	// Also fetch the district to get the division ID
+	// Since PostOfficeHandler only has PostOfficeRepository, we can cheat a little and use the DB from the repo context if exposed, 
+	// or we can just fetch the division ID by relying on a separate call from the frontend, but we can do it cleanly here.
+	// We will just return the PostOffice object which has DistrictID and UpazilaID.
+	// The frontend can then fetch the District to get its DivisionID.
+	c.JSON(http.StatusOK, m)
+}
+
+func (h *PostOfficeHandler) Create(c *gin.Context) {
+	var req struct {
+		Name       string `json:"name" binding:"required"`
+		NameBn     string `json:"name_bn"`
+		PostalCode string `json:"postal_code"`
+		DistrictID string `json:"district_id"`
+		UpazilaID  string `json:"upazila_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	m := &models.PostOffice{Name: req.Name, NameBn: req.NameBn, PostalCode: req.PostalCode, DistrictID: req.DistrictID, UpazilaID: req.UpazilaID}
+	if err := h.repo.Create(m); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusCreated, m)
+}
+
+func (h *PostOfficeHandler) Update(c *gin.Context) {
+	m, err := h.repo.FindByID(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	var req struct {
+		Name       string `json:"name" binding:"required"`
+		NameBn     string `json:"name_bn"`
+		PostalCode string `json:"postal_code"`
+		DistrictID string `json:"district_id"`
+		UpazilaID  string `json:"upazila_id"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	m.Name = req.Name
+	m.NameBn = req.NameBn
+	m.PostalCode = req.PostalCode
+	if req.DistrictID != "" {
+		m.DistrictID = req.DistrictID
+	}
+	if req.UpazilaID != "" {
+		m.UpazilaID = req.UpazilaID
+	}
+	if err := h.repo.Update(m); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, m)
+}
+
+func (h *PostOfficeHandler) Delete(c *gin.Context) {
+	if _, err := h.repo.FindByID(c.Param("id")); err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
+		return
+	}
+	if err := h.repo.Delete(c.Param("id")); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "deleted"})
+}

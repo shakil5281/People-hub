@@ -19,7 +19,9 @@ export interface Employee {
   phone: string
   email: string
   present_address: string
+  present_address_bn: string
   permanent_address: string
+  permanent_address_bn: string
   // Family
   spouse_name: string
   emergency_contact: string
@@ -96,7 +98,9 @@ export const employeeSchema = z.object({
   phone: z.string().optional(),
   email: z.string().optional(),
   present_address: z.string().optional(),
+  present_address_bn: z.string().optional(),
   permanent_address: z.string().optional(),
+  permanent_address_bn: z.string().optional(),
   // Family
   spouse_name: z.string().optional(),
   emergency_contact: z.string().optional(),

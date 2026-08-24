@@ -25,8 +25,10 @@ type Employee struct {
 	NID              string `json:"nid" gorm:"type:varchar(50)"`
 	Phone            string `json:"phone" gorm:"type:varchar(20)"`
 	Email            string `json:"email" gorm:"type:varchar(255)"`
-	PresentAddress   string `json:"present_address" gorm:"type:text"`
-	PermanentAddress string `json:"permanent_address" gorm:"type:text"`
+	PresentAddress     string `json:"present_address" gorm:"type:text"`
+	PresentAddressBn   string `json:"present_address_bn" gorm:"type:text"`
+	PermanentAddress   string `json:"permanent_address" gorm:"type:text"`
+	PermanentAddressBn string `json:"permanent_address_bn" gorm:"type:text"`
 
 	// Family Information
 	SpouseName         string `json:"spouse_name" gorm:"type:varchar(255)"`

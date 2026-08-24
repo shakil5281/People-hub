@@ -30,6 +30,8 @@ type importLookups struct {
 	districts    map[string]string
 	upazilas     map[string]string
 	unions       map[string]string
+	postOffices  map[string]*models.PostOffice
+	distToDiv    map[string]string
 	employees    map[string]string // employee_id (business key) → UUID
 }
 
@@ -47,6 +49,8 @@ func loadImportLookups(db *gorm.DB) *importLookups {
 		districts:    make(map[string]string),
 		upazilas:     make(map[string]string),
 		unions:       make(map[string]string),
+		postOffices:  make(map[string]*models.PostOffice),
+		distToDiv:    make(map[string]string),
 		employees:    make(map[string]string),
 	}
 
@@ -138,6 +142,7 @@ func loadImportLookups(db *gorm.DB) *importLookups {
 		if name != "" {
 			l.districts[name] = d.ID
 		}
+		l.distToDiv[d.ID] = d.DivisionID
 	}
 
 	var upazilas []models.Upazila
@@ -146,6 +151,16 @@ func loadImportLookups(db *gorm.DB) *importLookups {
 		name := strings.TrimSpace(strings.ToLower(u.Name))
 		if name != "" {
 			l.upazilas[name] = u.ID
+			if u.DistrictID != "" {
+				l.upazilas[u.DistrictID+"|"+name] = u.ID
+			}
+		}
+		if u.NameBn != "" {
+			nameBn := strings.TrimSpace(strings.ToLower(u.NameBn))
+			l.upazilas[nameBn] = u.ID
+			if u.DistrictID != "" {
+				l.upazilas[u.DistrictID+"|"+nameBn] = u.ID
+			}
 		}
 	}
 
@@ -155,6 +170,25 @@ func loadImportLookups(db *gorm.DB) *importLookups {
 		name := strings.TrimSpace(strings.ToLower(u.Name))
 		if name != "" {
 			l.unions[name] = u.ID
+			if u.UpazilaID != "" {
+				l.unions[u.UpazilaID+"|"+name] = u.ID
+			}
+		}
+		if u.NameBn != "" {
+			nameBn := strings.TrimSpace(strings.ToLower(u.NameBn))
+			l.unions[nameBn] = u.ID
+			if u.UpazilaID != "" {
+				l.unions[u.UpazilaID+"|"+nameBn] = u.ID
+			}
+		}
+	}
+
+	var postOffices []models.PostOffice
+	db.Find(&postOffices)
+	for i := range postOffices {
+		p := &postOffices[i]
+		if p.PostalCode != "" {
+			l.postOffices[p.PostalCode] = p
 		}
 	}
 
@@ -186,8 +220,8 @@ var importHeaders = []string{
 	"date_of_birth", "Gender", "Blood_group", "MaritalStatus", "Religion", "Nationality",
 	"NidNumber", "Phone", "Email",
 	"EmergencyContact", "EmergencyPhone", "NumberOfDependents",
-	"Present_Division", "Present_District", "Present_Upazila", "Present_Union", "Present_Address",
-	"Permanent_Division", "Permanent_District", "Permanent_Upazila", "Permanent_Union", "Permanent_Address",
+	"Present_PostCode", "Present_Division", "Present_District", "Present_Upazila", "Present_Union", "Present_Address", "Present_Address_Bn",
+	"Permanent_PostCode", "Permanent_Division", "Permanent_District", "Permanent_Upazila", "Permanent_Union", "Permanent_Address", "Permanent_Address_Bn",
 	"CompanyName", "EmployeeType", "JoiningDate",
 	"shiftName", "Department", "Section", "Designation", "ReportsTo", "Line", "Group", "Floor",
 	"Grade", "Status", "OverTimeStatus",
@@ -203,8 +237,8 @@ var importDescriptions = []string{
 	"Date of birth (YYYY-MM-DD)", "Male/Female/Other", "A+/A-/B+/B-/AB+/AB-/O+/O-", "Marital status", "Religion", "Nationality",
 	"National ID number", "Phone number", "Email address",
 	"Emergency contact person", "Emergency phone", "Number of dependents",
-	"Present division name", "Present district name", "Present upazila name", "Present union name", "Present address",
-	"Permanent division name", "Permanent district name", "Permanent upazila name", "Permanent union name", "Permanent address",
+	"Present post code", "Present division name", "Present district name", "Present upazila name", "Present union name", "Present address", "Present address in Bangla",
+	"Permanent post code", "Permanent division name", "Permanent district name", "Permanent upazila name", "Permanent union name", "Permanent address", "Permanent address in Bangla",
 	"Company name *", "Regular/Lefty/Close/Resign", "Joining date (YYYY-MM-DD) *",
 	"Shift name", "Department name", "Section name", "Designation name", "Manager employee ID", "Line name", "Group name", "Floor name",
 	"Grade", "active/inactive", "true/false",
@@ -274,8 +308,8 @@ func (h *EmployeeImportHandler) DownloadTemplate(c *gin.Context) {
 			"1995-06-15", "Male", "B+", "Married", "Islam", "Bangladeshi",
 			"1995123456", "01711111111", "shakil@example.com",
 			"Karim Ahmed", "01711111112", "2",
-			"Dhaka", "Dhaka", "Uttara", "Uttara West", "House 12, Road 5, Sector 3, Uttara",
-			"Dhaka", "Gazipur", "Gazipur Sadar", "Bason", "Village: Uttarpara",
+			"1230", "Dhaka", "Dhaka", "Uttara", "Uttara West", "House 12, Road 5, Sector 3, Uttara", "হাউজ ১২, রাস্তা ৫, সেক্টর ৩, উত্তরা",
+			"1700", "Dhaka", "Gazipur", "Gazipur Sadar", "Bason", "Village: Uttarpara", "গ্রাম: উত্তরপাড়া",
 			"Ekushe Fashions", "Regular", "2023-01-01",
 			"General", "IT", "Software", "Jr. Executive", "", "Line-2", "Group-A", "Floor-1",
 			"Grade-5", "active", "true",
@@ -289,8 +323,8 @@ func (h *EmployeeImportHandler) DownloadTemplate(c *gin.Context) {
 			"1998-09-22", "Female", "O+", "Unmarried", "Islam", "Bangladeshi",
 			"1998123456", "01722222222", "fatima@example.com",
 			"Mohammad Ali", "01722222223", "0",
-			"Dhaka", "Dhaka", "Tejgaon", "Tejgaon Ind. Area", "Flat 3B, 45 Elephant Road",
-			"Chattogram", "Cumilla", "Cumilla Sadar", "Jhawtala", "23/1 Old Town",
+			"1215", "Dhaka", "Dhaka", "Tejgaon", "Tejgaon Ind. Area", "Flat 3B, 45 Elephant Road", "ফ্ল্যাট ৩বি, ৪৫ এলিফ্যান্ট রোড",
+			"3500", "Chattogram", "Cumilla", "Cumilla Sadar", "Jhawtala", "23/1 Old Town", "২৩/১ পুরান শহর",
 			"Ekushe Fashions", "Regular", "2023-06-01",
 			"General", "HR", "Recruitment", "Jr. Executive", "DEMO001", "Line-1", "Group-B", "Floor-2",
 			"Grade-3", "active", "false",
@@ -604,6 +638,82 @@ func rowToEmployee(row []string, colMap map[string]int, companyID, userID string
 		}
 	}
 
+	lookupUpazila := func(distID *string, upaName string) *string {
+		if upaName == "" {
+			return nil
+		}
+		normName := strings.TrimSpace(strings.ToLower(upaName))
+		if distID != nil && *distID != "" {
+			key := *distID + "|" + normName
+			if id, ok := lookups.upazilas[key]; ok {
+				return &id
+			}
+		}
+		if id, ok := lookups.upazilas[normName]; ok {
+			return &id
+		}
+		return nil
+	}
+
+	lookupUnion := func(upaID *string, unionName string) *string {
+		if unionName == "" {
+			return nil
+		}
+		normName := strings.TrimSpace(strings.ToLower(unionName))
+		if upaID != nil && *upaID != "" {
+			key := *upaID + "|" + normName
+			if id, ok := lookups.unions[key]; ok {
+				return &id
+			}
+		}
+		if id, ok := lookups.unions[normName]; ok {
+			return &id
+		}
+		return nil
+	}
+
+	presentDivID := lookupID(lookups.divisions, getCell(row, colMap, "Present_Division"))
+	presentDistID := lookupID(lookups.districts, getCell(row, colMap, "Present_District"))
+	presentUpaID := lookupUpazila(presentDistID, getCell(row, colMap, "Present_Upazila"))
+	var presentPostOfficeName *string
+	presentPostCode := getCell(row, colMap, "Present_PostCode")
+	var presentPostCodePtr *string
+	if presentPostCode != "" {
+		presentPostCodePtr = &presentPostCode
+		if po, ok := lookups.postOffices[presentPostCode]; ok {
+			presentPostOfficeName = &po.Name
+			distIDStr := po.DistrictID
+			upaIDStr := po.UpazilaID
+			presentDistID = &distIDStr
+			presentUpaID = &upaIDStr
+			if divID, ok := lookups.distToDiv[distIDStr]; ok {
+				presentDivID = &divID
+			}
+		}
+	}
+	presentUnionID := lookupUnion(presentUpaID, getCell(row, colMap, "Present_Union"))
+
+	permDivID := lookupID(lookups.divisions, getCell(row, colMap, "Permanent_Division"))
+	permDistID := lookupID(lookups.districts, getCell(row, colMap, "Permanent_District"))
+	permUpaID := lookupUpazila(permDistID, getCell(row, colMap, "Permanent_Upazila"))
+	var permPostOfficeName *string
+	permPostCode := getCell(row, colMap, "Permanent_PostCode")
+	var permPostCodePtr *string
+	if permPostCode != "" {
+		permPostCodePtr = &permPostCode
+		if po, ok := lookups.postOffices[permPostCode]; ok {
+			permPostOfficeName = &po.Name
+			distIDStr := po.DistrictID
+			upaIDStr := po.UpazilaID
+			permDistID = &distIDStr
+			permUpaID = &upaIDStr
+			if divID, ok := lookups.distToDiv[distIDStr]; ok {
+				permDivID = &divID
+			}
+		}
+	}
+	permUnionID := lookupUnion(permUpaID, getCell(row, colMap, "Permanent_Union"))
+
 	return models.Employee{
 		CompanyID:           companyID,
 		EmployeeID:          getCell(row, colMap, "EmployeeId"),
@@ -625,15 +735,21 @@ func rowToEmployee(row []string, colMap map[string]int, companyID, userID string
 		EmergencyPhone:      getCell(row, colMap, "EmergencyPhone"),
 		NumberOfDependents:  dependents,
 		PresentAddress:      getCell(row, colMap, "Present_Address"),
+		PresentAddressBn:    getCell(row, colMap, "Present_Address_Bn"),
 		PermanentAddress:    getCell(row, colMap, "Permanent_Address"),
-		PresentDivisionID:   lookupID(lookups.divisions, getCell(row, colMap, "Present_Division")),
-		PresentDistrictID:   lookupID(lookups.districts, getCell(row, colMap, "Present_District")),
-		PresentUpazilaID:    lookupID(lookups.upazilas, getCell(row, colMap, "Present_Upazila")),
-		PresentUnionID:      lookupID(lookups.unions, getCell(row, colMap, "Present_Union")),
-		PermanentDivisionID: lookupID(lookups.divisions, getCell(row, colMap, "Permanent_Division")),
-		PermanentDistrictID: lookupID(lookups.districts, getCell(row, colMap, "Permanent_District")),
-		PermanentUpazilaID:  lookupID(lookups.upazilas, getCell(row, colMap, "Permanent_Upazila")),
-		PermanentUnionID:    lookupID(lookups.unions, getCell(row, colMap, "Permanent_Union")),
+		PermanentAddressBn:  getCell(row, colMap, "Permanent_Address_Bn"),
+		PresentPostCode:     presentPostCodePtr,
+		PresentPostOffice:   presentPostOfficeName,
+		PresentDivisionID:   presentDivID,
+		PresentDistrictID:   presentDistID,
+		PresentUpazilaID:    presentUpaID,
+		PresentUnionID:      presentUnionID,
+		PermanentPostCode:   permPostCodePtr,
+		PermanentPostOffice: permPostOfficeName,
+		PermanentDivisionID: permDivID,
+		PermanentDistrictID: permDistID,
+		PermanentUpazilaID:  permUpaID,
+		PermanentUnionID:    permUnionID,
 		PunchNumber:         getCell(row, colMap, "PunchNumber"),
 		EmployeeType:        getCell(row, colMap, "EmployeeType"),
 		Grade:               getCell(row, colMap, "Grade"),

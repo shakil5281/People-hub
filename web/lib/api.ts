@@ -364,6 +364,20 @@ export const unionApi = {
   delete: (id: string) => api.delete(`/unions/${id}`),
 }
 
+export const postOfficeApi = {
+  list: (upazilaId?: string, districtId?: string, params?: Record<string, string>) => {
+    const q: Record<string, string> = { ...params }
+    if (upazilaId) q.upazila_id = upazilaId
+    if (districtId) q.district_id = districtId
+    return api.get("/post-offices", { params: q })
+  },
+  get: (id: string) => api.get(`/post-offices/${id}`),
+  getByCode: (code: string) => api.get(`/post-offices/by-code/${code}`),
+  create: (data: Record<string, unknown>) => api.post("/post-offices", data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/post-offices/${id}`, data),
+  delete: (id: string) => api.delete(`/post-offices/${id}`),
+}
+
 export const requirementApi = {
   list: (params?: Record<string, string>) => api.get("/requirements", { params }),
   get: (id: string) => api.get(`/requirements/${id}`),

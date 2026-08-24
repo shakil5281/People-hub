@@ -15,5 +15,6 @@ type Upazila struct {
 	UpdatedAt  time.Time      `json:"updated_at"`
 	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
 	District   District       `json:"district,omitempty" gorm:"foreignKey:DistrictID"`
-	Unions     []Union        `json:"unions,omitempty" gorm:"foreignKey:UpazilaID"`
+	Unions      []Union        `json:"unions,omitempty" gorm:"foreignKey:UpazilaID"`
+	PostOffices []PostOffice   `json:"post_offices,omitempty" gorm:"foreignKey:UpazilaID"`
 }

@@ -137,3 +137,50 @@ func (r *UnionRepository) Update(m *models.Union) error { return r.db.Save(m).Er
 func (r *UnionRepository) Delete(id string) error {
 	return r.db.Where("id = ?", id).Delete(&models.Union{}).Error
 }
+
+type PostOfficeRepository struct{ db *gorm.DB }
+
+func NewPostOfficeRepository(db *gorm.DB) *PostOfficeRepository {
+	return &PostOfficeRepository{db: db}
+}
+
+func (r *PostOfficeRepository) Create(m *models.PostOffice) error { return r.db.Create(m).Error }
+
+func (r *PostOfficeRepository) FindByID(id string) (*models.PostOffice, error) {
+	var m models.PostOffice
+	if err := r.db.Where("id = ?", id).First(&m).Error; err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+func (r *PostOfficeRepository) FindByCode(code string) (*models.PostOffice, error) {
+	var m models.PostOffice
+	if err := r.db.Where("postal_code = ?", code).First(&m).Error; err != nil {
+		return nil, err
+	}
+	return &m, nil
+}
+
+func (r *PostOfficeRepository) List(upazilaID string, districtID string, page, limit int) ([]models.PostOffice, int64, error) {
+	base := r.db.Model(&models.PostOffice{}).Where("deleted_at IS NULL")
+	if upazilaID != "" {
+		base = base.Where("upazila_id = ?", upazilaID)
+	}
+	if districtID != "" {
+		base = base.Where("district_id = ?", districtID)
+	}
+	var total int64
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var list []models.PostOffice
+	err := base.Order("name ASC").Offset((page - 1) * limit).Limit(limit).Find(&list).Error
+	return list, total, err
+}
+
+func (r *PostOfficeRepository) Update(m *models.PostOffice) error { return r.db.Save(m).Error }
+
+func (r *PostOfficeRepository) Delete(id string) error {
+	return r.db.Where("id = ?", id).Delete(&models.PostOffice{}).Error
+}

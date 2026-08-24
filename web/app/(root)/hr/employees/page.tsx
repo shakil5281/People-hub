@@ -294,8 +294,11 @@ export default function EmployeesPage() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const active = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""))
-      const res = await employeeApi.exportExcel(active)
+      const active: Record<string, string> = { ...filters }
+      if (joiningFromDate) active.joining_from = format(joiningFromDate, "yyyy-MM-dd")
+      if (joiningToDate) active.joining_to = format(joiningToDate, "yyyy-MM-dd")
+      const cleaned = Object.fromEntries(Object.entries(active).filter(([, v]) => v !== ""))
+      const res = await employeeApi.exportExcel(cleaned)
       const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")

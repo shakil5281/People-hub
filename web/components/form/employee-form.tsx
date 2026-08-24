@@ -19,7 +19,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { ImageUpload } from "@/components/image-upload"
 import { DatePicker } from "@/components/ui/date-picker"
 import { employeeSchema, EmployeeFormData, genderOptions, bloodGroupOptions, maritalStatusOptions, statusOptionsEmployee, religionOptions, employeeTypeOptions } from "../data/employee-data"
-import { employeeApi, companyApi, shiftApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, floorApi, divisionApi, districtApi, upazilaApi, unionApi } from "@/lib/api"
+import { employeeApi, companyApi, shiftApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, floorApi, divisionApi, districtApi, upazilaApi, unionApi, postOfficeApi } from "@/lib/api"
 import type { Company } from "@/components/data/company-data"
 import type { Shift } from "@/components/data/shift-data"
 import type { Department } from "@/components/data/organization-data"
@@ -52,11 +52,13 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
   const [presentDistricts, setPresentDistricts] = React.useState<District[]>([])
   const [presentUpazilas, setUpPresentUpazilas] = React.useState<Upazila[]>([])
   const [presentUnions, setPresentUnions] = React.useState<Union[]>([])
+  const [presentPostOffices, setPresentPostOffices] = React.useState<NamedItem[]>([])
   // Permanent address
   const [permDivisions, setPermDivisions] = React.useState<Division[]>([])
   const [permDistricts, setPermDistricts] = React.useState<District[]>([])
   const [permUpazilas, setPermUpazilas] = React.useState<Upazila[]>([])
   const [permUnions, setPermUnions] = React.useState<Union[]>([])
+  const [permPostOffices, setPermPostOffices] = React.useState<NamedItem[]>([])
 
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
@@ -71,14 +73,18 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
       name_en: "", name_bn: "", father_name: "", mother_name: "", date_of_birth: "",
       gender: "", blood_group: "", marital_status: "", religion: "", nationality: "Bangladeshi",
       nid: "",
-      phone: "", email: "", present_address: "", permanent_address: "",
+      phone: "", email: "",
+      present_address: "", present_address_bn: "",
+      permanent_address: "", permanent_address_bn: "",
       spouse_name: "", emergency_contact: "", emergency_phone: "", number_of_dependents: 0,
       grade: "",
       department_id: null, section_id: null, designation_id: null, line_id: null,
       group_id: null, floor_id: null,
       reports_to: null,
       present_division_id: null, present_district_id: null, present_upazila_id: null, present_union_id: null,
+      present_post_office: "", present_post_code: "",
       permanent_division_id: null, permanent_district_id: null, permanent_upazila_id: null, permanent_union_id: null,
+      permanent_post_office: "", permanent_post_code: "",
       gross_salary: 0, basic_salary: 0, house_rent: 0,
       transport_allowance: 450, food_allowance: 1250,
       medical_allowance: 750, other_allowance: 0,
@@ -111,6 +117,84 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
     floorApi.list().then(({ data }) => setFloors(Array.isArray(data.data) ? data.data : [])).catch((err) => console.error("Failed to fetch reference data", err))
     divisionApi.list().then(({ data }) => { const d = Array.isArray(data.data) ? data.data : []; setPresentDivisions(d); setPermDivisions(d) }).catch((err) => console.error("Failed to fetch reference data", err))
   }, [])
+
+  // Seed cascading dropdown lists when editing (pre-populate district/upazila/union/post-office options)
+  React.useEffect(() => {
+    if (!initialData) return
+    // Present address chain
+    if (initialData.present_division_id) {
+      districtApi.list(initialData.present_division_id)
+        .then(({ data }) => setPresentDistricts(Array.isArray(data.data) ? data.data : []))
+        .catch(() => {})
+    }
+    if (initialData.present_district_id) {
+      upazilaApi.list(initialData.present_district_id)
+        .then(({ data }) => setUpPresentUpazilas(Array.isArray(data.data) ? data.data : []))
+        .catch(() => {})
+    }
+    if (initialData.present_upazila_id) {
+      unionApi.list(initialData.present_upazila_id)
+        .then(({ data }) => {
+          setPresentUnions(Array.isArray(data.data) ? data.data : [])
+          // Re-assert value after list loads to avoid race condition clearing it
+          if (initialData.present_union_id) {
+            setValue("present_union_id", initialData.present_union_id)
+          }
+        })
+        .catch(() => {})
+      postOfficeApi.list(initialData.present_upazila_id)
+        .then(({ data }) => {
+          setPresentPostOffices(Array.isArray(data.data) ? data.data : [])
+          if (initialData.present_post_office) {
+            setValue("present_post_office", initialData.present_post_office)
+          }
+        })
+        .catch(() => {})
+    }
+    // Permanent address chain
+    if (initialData.permanent_division_id) {
+      districtApi.list(initialData.permanent_division_id)
+        .then(({ data }) => setPermDistricts(Array.isArray(data.data) ? data.data : []))
+        .catch(() => {})
+    }
+    if (initialData.permanent_district_id) {
+      upazilaApi.list(initialData.permanent_district_id)
+        .then(({ data }) => setPermUpazilas(Array.isArray(data.data) ? data.data : []))
+        .catch(() => {})
+    }
+    if (initialData.permanent_upazila_id) {
+      unionApi.list(initialData.permanent_upazila_id)
+        .then(({ data }) => {
+          setPermUnions(Array.isArray(data.data) ? data.data : [])
+          if (initialData.permanent_union_id) {
+            setValue("permanent_union_id", initialData.permanent_union_id)
+          }
+        })
+        .catch(() => {})
+      postOfficeApi.list(initialData.permanent_upazila_id)
+        .then(({ data }) => {
+          setPermPostOffices(Array.isArray(data.data) ? data.data : [])
+          if (initialData.permanent_post_office) {
+            setValue("permanent_post_office", initialData.permanent_post_office)
+          }
+        })
+        .catch(() => {})
+    }
+    // Section chain (for designations/lines)
+    if (initialData.department_id) {
+      sectionApi.list(initialData.department_id)
+        .then(({ data }) => setSections(Array.isArray(data.data) ? data.data : []))
+        .catch(() => {})
+    }
+    if (initialData.section_id) {
+      designationApi.list(initialData.section_id)
+        .then(({ data }) => setDesignations(Array.isArray(data.data) ? data.data : []))
+        .catch(() => {})
+      lineApi.list(initialData.section_id)
+        .then(({ data }) => setLines(Array.isArray(data.data) ? data.data : []))
+        .catch(() => {})
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Track previous values to avoid clearing on initial mount
   const prevDept = React.useRef(watchDept)
@@ -153,6 +237,69 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
     }
   }, [watchSection])
 
+  const watchPresentPostCode = watch("present_post_code")
+  const isMountedPresent = React.useRef(true)
+  React.useEffect(() => {
+    if (isMountedPresent.current) {
+      // Skip auto-fill on first render (value comes from initialData, not user input)
+      isMountedPresent.current = false
+      return
+    }
+    if (watchPresentPostCode && watchPresentPostCode.length === 4) {
+      postOfficeApi.getByCode(watchPresentPostCode).then(({ data: po }) => {
+        if (po && po.district_id && po.upazila_id) {
+          districtApi.get(po.district_id).then(({ data: dist }) => {
+            if (dist && dist.division_id) {
+              prevPresentDiv.current = dist.division_id
+              setValue("present_division_id", dist.division_id)
+              prevPresentDist.current = po.district_id
+              setValue("present_district_id", po.district_id)
+              prevPresentUpa.current = po.upazila_id
+              setValue("present_upazila_id", po.upazila_id)
+              setValue("present_post_office", po.name)
+              
+              districtApi.list(dist.division_id).then(({ data }) => setPresentDistricts(Array.isArray(data.data) ? data.data : []))
+              upazilaApi.list(po.district_id).then(({ data }) => setUpPresentUpazilas(Array.isArray(data.data) ? data.data : []))
+              unionApi.list(po.upazila_id).then(({ data }) => setPresentUnions(Array.isArray(data.data) ? data.data : []))
+              postOfficeApi.list(po.upazila_id).then(({ data }) => setPresentPostOffices(Array.isArray(data.data) ? data.data : []))
+            }
+          }).catch(() => {})
+        }
+      }).catch(() => {})
+    }
+  }, [watchPresentPostCode])
+
+  const watchPermPostCode = watch("permanent_post_code")
+  const isMountedPerm = React.useRef(true)
+  React.useEffect(() => {
+    if (isMountedPerm.current) {
+      isMountedPerm.current = false
+      return
+    }
+    if (watchPermPostCode && watchPermPostCode.length === 4) {
+      postOfficeApi.getByCode(watchPermPostCode).then(({ data: po }) => {
+        if (po && po.district_id && po.upazila_id) {
+          districtApi.get(po.district_id).then(({ data: dist }) => {
+            if (dist && dist.division_id) {
+              prevPermDiv.current = dist.division_id
+              setValue("permanent_division_id", dist.division_id)
+              prevPermDist.current = po.district_id
+              setValue("permanent_district_id", po.district_id)
+              prevPermUpa.current = po.upazila_id
+              setValue("permanent_upazila_id", po.upazila_id)
+              setValue("permanent_post_office", po.name)
+              
+              districtApi.list(dist.division_id).then(({ data }) => setPermDistricts(Array.isArray(data.data) ? data.data : []))
+              upazilaApi.list(po.district_id).then(({ data }) => setPermUpazilas(Array.isArray(data.data) ? data.data : []))
+              unionApi.list(po.upazila_id).then(({ data }) => setPermUnions(Array.isArray(data.data) ? data.data : []))
+              postOfficeApi.list(po.upazila_id).then(({ data }) => setPermPostOffices(Array.isArray(data.data) ? data.data : []))
+            }
+          }).catch(() => {})
+        }
+      }).catch(() => {})
+    }
+  }, [watchPermPostCode])
+
   // Cascading: present address
   React.useEffect(() => {
     const changed = watchPresentDiv !== prevPresentDiv.current
@@ -179,10 +326,13 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
     prevPresentUpa.current = watchPresentUpa
     if (watchPresentUpa) {
       unionApi.list(watchPresentUpa).then(({ data }) => setPresentUnions(Array.isArray(data.data) ? data.data : [])).catch((err) => console.error("Failed to fetch reference data", err))
+      postOfficeApi.list(watchPresentUpa).then(({ data }) => setPresentPostOffices(Array.isArray(data.data) ? data.data : [])).catch((err) => console.error("Failed to fetch reference data", err))
       if (changed) {
         setValue("present_union_id", null)
+        setValue("present_post_office", null)
+        setValue("present_post_code", null)
       }
-    } else { setPresentUnions([]) }
+    } else { setPresentUnions([]); setPresentPostOffices([]) }
   }, [watchPresentUpa])
 
   // Cascading: permanent address
@@ -211,10 +361,13 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
     prevPermUpa.current = watchPermUpa
     if (watchPermUpa) {
       unionApi.list(watchPermUpa).then(({ data }) => setPermUnions(Array.isArray(data.data) ? data.data : [])).catch((err) => console.error("Failed to fetch reference data", err))
+      postOfficeApi.list(watchPermUpa).then(({ data }) => setPermPostOffices(Array.isArray(data.data) ? data.data : [])).catch((err) => console.error("Failed to fetch reference data", err))
       if (changed) {
         setValue("permanent_union_id", null)
+        setValue("permanent_post_office", null)
+        setValue("permanent_post_code", null)
       }
-    } else { setPermUnions([]) }
+    } else { setPermUnions([]); setPermPostOffices([]) }
   }, [watchPermUpa])
 
   // Auto-calculate salary from gross
@@ -379,7 +532,7 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
       <Card>
         <CardHeader><CardTitle className="flex items-center text-neutral-600 gap-2 text-lg"><MapPinned className="h-4 w-4" /> Present Address</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label>Division</Label>
               <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={watchPresentDiv || ""} onChange={(e) => setValue("present_division_id", e.target.value || null)}>
@@ -408,10 +561,54 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
                 {presentUnions.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
+            <div className="space-y-2">
+              <Label>Post Office</Label>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={watch("present_post_office") || ""} onChange={(e) => {
+                const val = e.target.value || null
+                setValue("present_post_office", val)
+                const po = presentPostOffices.find(p => p.name === val)
+                if (po) setValue("present_post_code", (po as any).postal_code || null)
+              }}>
+                <option value="">Select</option>
+                {presentPostOffices.map((p, i) => <option key={i} value={p.name}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Post Code</Label>
+              <Input size='md' placeholder="e.g. 1212" {...register("present_post_code")} />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="present_address" className="flex items-center text-neutral-600 gap-1.5 px-2"><MapPin className="h-3.5 w-3.5" /> Address Details</Label>
-            <Input size='md' id="present_address" placeholder="House, road, village etc." {...register("present_address")} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="present_address" className="flex items-center text-neutral-600 gap-1.5 px-2"><MapPin className="h-3.5 w-3.5" /> Address Details (En)</Label>
+              <Input size='md' id="present_address" placeholder="House, road, village etc." {...register("present_address")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="present_address_bn" className="flex items-center text-neutral-600 gap-1.5 px-2"><MapPin className="h-3.5 w-3.5" /> Address Details (Bn)</Label>
+              <Input size='md' id="present_address_bn" placeholder="House, road, village etc. (Bangla)" className="bangla-input" {...register("present_address_bn")} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2 pt-2">
+            <input 
+              type="checkbox" 
+              id="same_as_permanent" 
+              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              onChange={(e) => {
+                if (e.target.checked) {
+                  setValue("present_division_id", watch("permanent_division_id"))
+                  setValue("present_district_id", watch("permanent_district_id"))
+                  setValue("present_upazila_id", watch("permanent_upazila_id"))
+                  setValue("present_union_id", watch("permanent_union_id"))
+                  setValue("present_post_office", watch("permanent_post_office"))
+                  setValue("present_post_code", watch("permanent_post_code"))
+                  setValue("present_address", watch("permanent_address"))
+                  setValue("present_address_bn", watch("permanent_address_bn"))
+                }
+              }}
+            />
+            <Label htmlFor="same_as_permanent" className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">
+              Same as Permanent Address
+            </Label>
           </div>
         </CardContent>
       </Card>
@@ -420,7 +617,7 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
       <Card>
         <CardHeader><CardTitle className="flex items-center text-neutral-600 gap-2 text-lg"><MapPinned className="h-4 w-4" /> Permanent Address</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-2">
               <Label>Division</Label>
               <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={watchPermDiv || ""} onChange={(e) => setValue("permanent_division_id", e.target.value || null)}>
@@ -449,10 +646,32 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
                 {permUnions.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
+            <div className="space-y-2">
+              <Label>Post Office</Label>
+              <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={watch("permanent_post_office") || ""} onChange={(e) => {
+                const val = e.target.value || null
+                setValue("permanent_post_office", val)
+                const po = permPostOffices.find(p => p.name === val)
+                if (po) setValue("permanent_post_code", (po as any).postal_code || null)
+              }}>
+                <option value="">Select</option>
+                {permPostOffices.map((p, i) => <option key={i} value={p.name}>{p.name}</option>)}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label>Post Code</Label>
+              <Input size='md' placeholder="e.g. 1212" {...register("permanent_post_code")} />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="permanent_address" className="flex items-center text-neutral-600 gap-1.5 px-2"><MapPin className="h-3.5 w-3.5" /> Address Details</Label>
-            <Input size='md' id="permanent_address" placeholder="House, road, village etc." {...register("permanent_address")} />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="permanent_address" className="flex items-center text-neutral-600 gap-1.5 px-2"><MapPin className="h-3.5 w-3.5" /> Address Details (En)</Label>
+              <Input size='md' id="permanent_address" placeholder="House, road, village etc." {...register("permanent_address")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="permanent_address_bn" className="flex items-center text-neutral-600 gap-1.5 px-2"><MapPin className="h-3.5 w-3.5" /> Address Details (Bn)</Label>
+              <Input size='md' id="permanent_address_bn" placeholder="House, road, village etc. (Bangla)" className="bangla-input" {...register("permanent_address_bn")} />
+            </div>
           </div>
         </CardContent>
       </Card>

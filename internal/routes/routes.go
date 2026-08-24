@@ -27,6 +27,7 @@ func Setup(
 	districtHandler *handlers.DistrictHandler,
 	upazilaHandler *handlers.UpazilaHandler,
 	unionHandler *handlers.UnionHandler,
+	postOfficeHandler *handlers.PostOfficeHandler,
 	requirementHandler *handlers.RequirementHandler,
 	separationHandler *handlers.SeparationHandler,
 	idCardHandler *handlers.IdCardHandler,
@@ -261,6 +262,17 @@ func Setup(
 		union.POST("", unionHandler.Create)
 		union.PUT("/:id", unionHandler.Update)
 		union.DELETE("/:id", unionHandler.Delete)
+	}
+
+	postOffice := api.Group("/post-offices")
+	postOffice.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		postOffice.GET("", postOfficeHandler.List)
+		postOffice.GET("/by-code/:code", postOfficeHandler.GetByCode)
+		postOffice.GET("/:id", postOfficeHandler.GetByID)
+		postOffice.POST("", postOfficeHandler.Create)
+		postOffice.PUT("/:id", postOfficeHandler.Update)
+		postOffice.DELETE("/:id", postOfficeHandler.Delete)
 	}
 
 	// Protected shift routes

@@ -130,9 +130,9 @@
   }
 }
 
-.bangla-input {
-  font-family: "SutonnyMJ";
-  font-size: 18px;
+.bangla-input, .sutonnymj {
+  font-family: "SutonnyMJ", sans-serif;
+  font-size: 17px;
 }
 
 @utility scrollbar-none {

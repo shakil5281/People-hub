@@ -82,7 +82,7 @@ func Connect(cfg *config.Config) {
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
 		&models.SystemSetting{}, &models.SalaryIncrement{}, &models.AdvanceSalary{},
 		&models.Punishment{}, &models.DailySchedule{}, &models.TiffinBill{},
-		&models.Holiday{},
+		&models.Holiday{}, &models.PostOffice{},
 		&models.MissingAttendance{},
 		&models.OtEarlyExitDeduction{},
 		&models.NightBill{},

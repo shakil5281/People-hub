@@ -26,3 +26,12 @@ export interface Union {
   name_bn: string
   upazila_id: string
 }
+
+export interface PostOffice {
+  id: string
+  name: string
+  name_bn: string
+  postal_code: string
+  district_id: string
+  upazila_id: string
+}
