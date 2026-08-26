@@ -8,13 +8,21 @@ import (
 
 type SalaryIncrement struct {
 	ID         string `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	CompanyID  string `json:"company_id" gorm:"type:uuid;not null"`
-	EmployeeID string `json:"employee_id" gorm:"type:varchar(50);not null"`
+	CompanyID        string  `json:"company_id" gorm:"type:uuid;not null"`
+	EmployeeID       string  `json:"employee_id" gorm:"type:varchar(50);not null"`
+	IncrementType    string  `json:"increment_type" gorm:"type:varchar(50);default:'increment'"`
+	CalculationType  string  `json:"calculation_type" gorm:"type:varchar(20);default:'fixed'"`
+	CalculationValue float64 `json:"calculation_value" gorm:"type:decimal(12,2);default:0"`
 
 	PreviousGross   float64 `json:"previous_gross" gorm:"type:decimal(12,2);default:0"`
 	PreviousBasic   float64 `json:"previous_basic" gorm:"type:decimal(12,2);default:0"`
 	PreviousHouse   float64 `json:"previous_house_rent" gorm:"type:decimal(12,2);default:0"`
 	PreviousMedical float64 `json:"previous_medical" gorm:"type:decimal(12,2);default:0"`
+
+	PreviousDesignationID *string      `json:"previous_designation_id" gorm:"type:uuid"`
+	PreviousDesignation   *Designation `json:"previous_designation,omitempty" gorm:"foreignKey:PreviousDesignationID"`
+	NewDesignationID      *string      `json:"new_designation_id" gorm:"type:uuid"`
+	NewDesignation        *Designation `json:"new_designation,omitempty" gorm:"foreignKey:NewDesignationID"`
 
 	IncrementAmount float64 `json:"increment_amount" gorm:"type:decimal(12,2);not null"`
 	NewGross        float64 `json:"new_gross" gorm:"type:decimal(12,2);default:0"`

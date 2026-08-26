@@ -111,6 +111,44 @@ export const employeeApi = {
   downloadTemplate: () => api.get("/employees/import/template", { responseType: "blob" }),
   exportExcel: (params?: Record<string, string>) => api.get("/employees/export/excel", { params, responseType: "blob" }),
   exportPdf: (params?: Record<string, string>) => api.get("/employees/export/pdf", { params, responseType: "blob" }),
+  updateSalaryAccount: (id: string, data: { account_type: string; account_number: string }) =>
+    api.put(`/employees/${id}/salary-account`, data),
+  downloadSalaryAccountTemplate: () =>
+    api.get("/employees/salary-account/template", { responseType: "blob" }),
+  importSalaryAccountExcel: (file: File) => {
+    const formData = new FormData()
+    formData.append("file", file)
+    return api.post<{
+      success: boolean
+      message: string
+      total_rows: number
+      updated: number
+      skipped: number
+      errors: string[]
+    }>("/employees/salary-account/import", formData)
+  },
+}
+
+export const salaryAccountApi = {
+  list: (params?: Record<string, string>) => api.get("/employees", { params }),
+  update: (id: string, data: { account_type: string; account_number: string }) =>
+    api.put(`/employees/${id}/salary-account`, data),
+  downloadTemplate: () =>
+    api.get("/employees/salary-account/template", { responseType: "blob" }),
+  exportExcel: (params?: Record<string, string>) =>
+    api.get("/employees/salary-account/export", { params, responseType: "blob" }),
+  importExcel: (file: File) => {
+    const formData = new FormData()
+    formData.append("file", file)
+    return api.post<{
+      success: boolean
+      message: string
+      total_rows: number
+      updated: number
+      skipped: number
+      errors: string[]
+    }>("/employees/salary-account/import", formData)
+  },
 }
 
 export const groupApi = {

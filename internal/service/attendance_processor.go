@@ -312,13 +312,13 @@ func (p *AttendanceProcessor) processDay(
 			onLeaveSet, isGovHoliday, isCompWeekend, isGenDuty,
 		)
 
-		// If ma exists and has a non-present status when times are incomplete, preserve it.
-		if ma != nil && ma.Status != "" && ma.Status != "present" && (checkIn == nil || checkOut == nil) {
+		// Missing attendance explicit status has highest priority (e.g. absent, leave, or custom override).
+		if ma != nil && ma.Status != "" {
 			att.Status = ma.Status
 		}
 
-		// Keep missing_attendances record synced with merged values.
-		if ma != nil {
+		// Keep missing_attendances record synced with merged values only if not explicitly marked absent.
+		if ma != nil && ma.Status != "absent" {
 			_ = p.missingAttendanceRepo.UpdateFields(ma.ID, map[string]interface{}{
 				"check_in":    checkIn,
 				"check_out":   checkOut,

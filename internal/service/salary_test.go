@@ -74,7 +74,7 @@ func TestCalculateEmployeeSalary_LateDeductions(t *testing.T) {
 				"absent":  tt.absentDays,
 				"late":    tt.lateDays,
 			}
-			res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 8, 2026, daysInMonth, "user-1")
+			res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 0, 8, 2026, daysInMonth, "user-1")
 
 			if res.OtherDeduction != tt.expectedOtherDeduct {
 				t.Errorf("OtherDeduction got = %v, want = %v", res.OtherDeduction, tt.expectedOtherDeduct)
@@ -106,7 +106,7 @@ func TestCalculateEmployeeSalary_PartialMonthPaidDays(t *testing.T) {
 		"weekend": 1,
 	}
 
-	res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 7, 2026, daysInMonth, "user-1")
+	res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 0, 7, 2026, daysInMonth, "user-1")
 
 	expectedAbsentDays := 17 // 31 - (12 + 1 + 1)
 	if res.AbsentDays != expectedAbsentDays {

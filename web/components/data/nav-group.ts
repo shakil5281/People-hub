@@ -65,6 +65,7 @@ export const hrNav = [
   { title: "Id Card", url: "/hr/id-card", icon: IdCardIcon },
   { title: "Punishment", url: "/hr/punishment", icon: AlertTriangleIcon },
   { title: "Daily Schedule", url: "/hr/daily-schedule", icon: CalendarIcon },
+  { title: "Salary Account", url: "/hr/salary-account", icon: BanknoteIcon },
   { title: "mCash", url: "/hr/mcash", icon: DollarSignIcon },
 ] as const satisfies { title: string; url: string; icon: LucideIcon }[]
 

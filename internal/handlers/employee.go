@@ -2,8 +2,11 @@ package handlers
 
 import (
 	"fmt"
+	"math"
 	"net/http"
 	"regexp"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -34,10 +37,17 @@ type EmployeeRow struct {
 	Group         string  `json:"group"`
 	Floor         string  `json:"floor"`
 	JoiningDate   string  `json:"joining_date"`
-	GrossSalary   float64 `json:"gross_salary"`
+	GrossSalary        float64 `json:"gross_salary"`
+	BasicSalary        float64 `json:"basic_salary"`
+	HouseRent          float64 `json:"house_rent"`
+	MedicalAllowance   float64 `json:"medical_allowance"`
+	TransportAllowance float64 `json:"transport_allowance"`
+	FoodAllowance      float64 `json:"food_allowance"`
 	Status        string  `json:"status"`
 	EmployeeType  string  `json:"employee_type"`
 	Gender        string  `json:"gender"`
+	AccountType   string  `json:"account_type"`
+	AccountNumber string  `json:"account_number"`
 	CompanyID     string  `json:"company_id"`
 	ShiftID       *string `json:"shift_id"`
 	DepartmentID  *string `json:"department_id"`
@@ -65,32 +75,61 @@ type EmployeeRow struct {
 }
 
 func toEmployeeRow(e models.Employee) EmployeeRow {
+	basic := e.BasicSalary
+	house := e.HouseRent
+	medical := e.MedicalAllowance
+	transport := e.TransportAllowance
+	food := e.FoodAllowance
+	if medical == 0 {
+		medical = 750
+	}
+	if transport == 0 {
+		transport = 450
+	}
+	if food == 0 {
+		food = 1250
+	}
+	if (basic <= 0 || house <= 0) && e.GrossSalary > 0 {
+		core := e.GrossSalary - medical - transport - food
+		if core > 0 {
+			basic = math.Round(core / 1.5)
+			house = core - basic
+		}
+	}
+
 	r := EmployeeRow{
-		ID:            e.ID,
-		EmployeeID:    e.EmployeeID,
-		PunchNumber:   e.PunchNumber,
-		NameEn:        e.NameEn,
-		NameBn:        e.NameBn,
-		Phone:         e.Phone,
-		NID:           e.NID,
-		DateOfBirth:   e.DateOfBirth,
-		GrossSalary:   e.GrossSalary,
-		Status:        e.Status,
-		EmployeeType:  e.EmployeeType,
-		Gender:        e.Gender,
-		CompanyID:     e.CompanyID,
-		ShiftID:       e.ShiftID,
-		DepartmentID:  e.DepartmentID,
-		SectionID:     e.SectionID,
-		DesignationID: e.DesignationID,
-		LineID:        e.LineID,
-		GroupID:       e.GroupID,
-		FloorID:       e.FloorID,
-		ImageURL:      e.ImageURL,
-		SignatureURL:  e.SignatureURL,
-		PresentAddress: e.PresentAddress,
-		PresentAddressBn: e.PresentAddressBn,
-		PermanentAddress: e.PermanentAddress,
+		ID:                 e.ID,
+		EmployeeID:         e.EmployeeID,
+		PunchNumber:        e.PunchNumber,
+		NameEn:             e.NameEn,
+		NameBn:             e.NameBn,
+		Phone:              e.Phone,
+		NID:                e.NID,
+		DateOfBirth:        e.DateOfBirth,
+		GrossSalary:        e.GrossSalary,
+		BasicSalary:        basic,
+		HouseRent:          house,
+		MedicalAllowance:   medical,
+		TransportAllowance: transport,
+		FoodAllowance:      food,
+		Status:             e.Status,
+		EmployeeType:       e.EmployeeType,
+		Gender:             e.Gender,
+		AccountType:        e.AccountType,
+		AccountNumber:      e.AccountNumber,
+		CompanyID:          e.CompanyID,
+		ShiftID:            e.ShiftID,
+		DepartmentID:       e.DepartmentID,
+		SectionID:          e.SectionID,
+		DesignationID:      e.DesignationID,
+		LineID:             e.LineID,
+		GroupID:            e.GroupID,
+		FloorID:            e.FloorID,
+		ImageURL:           e.ImageURL,
+		SignatureURL:       e.SignatureURL,
+		PresentAddress:     e.PresentAddress,
+		PresentAddressBn:   e.PresentAddressBn,
+		PermanentAddress:   e.PermanentAddress,
 		PermanentAddressBn: e.PermanentAddressBn,
 	}
 	if e.PresentPostOffice != nil {
@@ -413,6 +452,13 @@ func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 	if v := c.Query("employee_type"); v != "" {
 		query = query.Where("employee_type = ?", v)
 	}
+	if v := c.Query("account_type"); v != "" {
+		if strings.EqualFold(v, "none") || strings.EqualFold(v, "unassigned") || strings.EqualFold(v, "hold") {
+			query = query.Where("account_type IS NULL OR TRIM(account_type) = '' OR LOWER(account_type) IN ('none', 'hold')")
+		} else {
+			query = query.Where("LOWER(account_type) = LOWER(?)", v)
+		}
+	}
 	if v := c.Query("min_salary"); v != "" {
 		query = query.Where("gross_salary >= ?", v)
 	}
@@ -432,6 +478,60 @@ func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 		query = query.Where("joining_date <= ?", v)
 	} else if v := c.Query("end_date"); v != "" {
 		query = query.Where("joining_date <= ?", v)
+	}
+
+	// Filter by joining month anniversary (e.g. for Govt policy increment: joined after 2024 matching selected month)
+	// Example: month=8 (Aug), year=2026 -> finds employees with joining_date in August for years >= 2024 and < 2026
+	if monthStr := c.Query("joining_month"); monthStr != "" {
+		if m, err := strconv.Atoi(monthStr); err == nil && m >= 1 && m <= 12 {
+			targetYear := time.Now().Year()
+			if yrStr := c.Query("joining_year"); yrStr != "" {
+				if yr, err := strconv.Atoi(yrStr); err == nil && yr > 2000 {
+					targetYear = yr
+				}
+			} else if yrStr := c.Query("target_year"); yrStr != "" {
+				if yr, err := strconv.Atoi(yrStr); err == nil && yr > 2000 {
+					targetYear = yr
+				}
+			} else if yrStr := c.Query("year"); yrStr != "" {
+				if yr, err := strconv.Atoi(yrStr); err == nil && yr > 2000 {
+					targetYear = yr
+				}
+			}
+
+			startYear := 2024
+			if afterYrStr := c.Query("joining_after_year"); afterYrStr != "" {
+				if ay, err := strconv.Atoi(afterYrStr); err == nil {
+					startYear = ay
+				}
+			}
+
+			query = query.Where("EXTRACT(MONTH FROM joining_date) = ? AND joining_date >= ? AND EXTRACT(YEAR FROM joining_date) < ?",
+				m, fmt.Sprintf("%04d-01-01", startYear), targetYear)
+		}
+	} else if monthStr := c.Query("increment_month"); monthStr != "" {
+		if m, err := strconv.Atoi(monthStr); err == nil && m >= 1 && m <= 12 {
+			targetYear := time.Now().Year()
+			if yrStr := c.Query("increment_year"); yrStr != "" {
+				if yr, err := strconv.Atoi(yrStr); err == nil && yr > 2000 {
+					targetYear = yr
+				}
+			} else if yrStr := c.Query("year"); yrStr != "" {
+				if yr, err := strconv.Atoi(yrStr); err == nil && yr > 2000 {
+					targetYear = yr
+				}
+			}
+
+			startYear := 2024
+			if afterYrStr := c.Query("joining_after_year"); afterYrStr != "" {
+				if ay, err := strconv.Atoi(afterYrStr); err == nil {
+					startYear = ay
+				}
+			}
+
+			query = query.Where("EXTRACT(MONTH FROM joining_date) = ? AND joining_date >= ? AND EXTRACT(YEAR FROM joining_date) < ?",
+				m, fmt.Sprintf("%04d-01-01", startYear), targetYear)
+		}
 	}
 
 	var total int64
@@ -845,4 +945,69 @@ func (h *EmployeeHandler) DeleteEmployee(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "employee deleted"})
+}
+
+type UpdateSalaryAccountRequest struct {
+	AccountType   string `json:"account_type"`
+	AccountNumber string `json:"account_number"`
+}
+
+// UpdateSalaryAccount godoc
+//
+// @Summary      Update employee salary account
+// @Description  Update only the account_type and account_number for an employee
+// @Tags         Employees
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        id      path     string true "Employee ID or UUID"
+// @Param        request body     UpdateSalaryAccountRequest true "Salary account details"
+// @Success      200     {object} map[string]interface{}
+// @Failure      400     {object} map[string]string
+// @Failure      404     {object} map[string]string
+// @Failure      500     {object} map[string]string
+// @Router       /employees/{id}/salary-account [put]
+func (h *EmployeeHandler) UpdateSalaryAccount(c *gin.Context) {
+	id := c.Param("id")
+	var emp models.Employee
+	if err := database.DB.Where("id = ? OR employee_id = ?", id, id).First(&emp).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "employee not found"})
+		return
+	}
+
+	var req UpdateSalaryAccountRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	accType := strings.TrimSpace(req.AccountType)
+	accNum := strings.TrimSpace(req.AccountNumber)
+
+	if msg := validateAccount(accType, accNum); msg != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": msg})
+		return
+	}
+
+	userID := c.GetString("user_id")
+	updates := map[string]interface{}{
+		"account_type":   accType,
+		"account_number": accNum,
+		"updated_at":     time.Now(),
+	}
+	if userID != "" {
+		updates["updated_by"] = userID
+	}
+
+	if err := database.DB.Model(&models.Employee{}).Where("id = ?", emp.ID).Updates(updates).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":        "Salary account updated successfully",
+		"employee_id":    emp.EmployeeID,
+		"account_type":   accType,
+		"account_number": accNum,
+	})
 }

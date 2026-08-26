@@ -34,9 +34,12 @@ interface Group { id: string; name: string }
 interface IncrementRecord {
   id: string
   employee_id: string
+  increment_type?: string
   previous_gross: number
   increment_amount: number
   new_gross: number
+  previous_designation?: { name: string }
+  new_designation?: { name: string }
   increment_date: string
   effective_date: string
   status: string
@@ -77,6 +80,7 @@ export default function IncrementPage() {
   const [designationId, setDesignationId] = React.useState("")
   const [lineId, setLineId] = React.useState("")
   const [groupId, setGroupId] = React.useState("")
+  const [incrementType, setIncrementType] = React.useState("")
   const [month, setMonth] = React.useState(new Date().getMonth() + 1)
   const [year, setYear] = React.useState(new Date().getFullYear())
   const [status, setStatus] = React.useState("")
@@ -98,6 +102,7 @@ export default function IncrementPage() {
     if (designationId) params.designation_id = designationId
     if (lineId) params.line_id = lineId
     if (groupId) params.group_id = groupId
+    if (incrementType) params.increment_type = incrementType
     if (month > 0) params.month = String(month)
     if (year > 0) params.year = String(year)
     if (status) params.status = status
@@ -290,25 +295,60 @@ export default function IncrementPage() {
     }
   }
 
+  const renderTypeBadge = (type?: string) => {
+    switch (type) {
+      case "gov_policy":
+        return <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs">Gov Policy</Badge>
+      case "promotion":
+        return <Badge className="bg-amber-600 hover:bg-amber-700 text-white text-xs">Promotion</Badge>
+      case "promotion_with_increment":
+        return <Badge className="bg-purple-600 hover:bg-purple-700 text-white text-xs">Promotion + Inc</Badge>
+      default:
+        return <Badge variant="secondary" className="text-xs">Increment</Badge>
+    }
+  }
+
   const columns: ColumnDef<IncrementRecord>[] = React.useMemo(() => [
     { accessorKey: "employee.name_en", header: "Employee" },
     { accessorKey: "employee_id", header: "Code" },
-    { id: "designation", header: "Designation", accessorFn: (r) => r.employee?.designation_ref?.name || "-" },
+    {
+      accessorKey: "increment_type",
+      header: "Type",
+      cell: ({ row }) => renderTypeBadge(row.original.increment_type),
+    },
+    {
+      id: "designation",
+      header: "Designation",
+      cell: ({ row }) => {
+        const cur = row.original.employee?.designation_ref?.name || row.original.previous_designation?.name || "-"
+        const next = row.original.new_designation?.name
+        if (next && next !== cur) {
+          return (
+            <div className="text-xs">
+              <span className="text-muted-foreground">{cur}</span>
+              <span className="mx-1 text-primary">→</span>
+              <span className="font-semibold text-foreground">{next}</span>
+            </div>
+          )
+        }
+        return cur
+      },
+    },
     { id: "department", header: "Department", accessorFn: (r) => r.employee?.department?.name || "-" },
     {
       accessorKey: "previous_gross",
       header: "Current",
-      cell: ({ row }) => row.original.previous_gross.toLocaleString(),
+      cell: ({ row }) => `৳${row.original.previous_gross.toLocaleString()}`,
     },
     {
       accessorKey: "increment_amount",
       header: "Increment",
-      cell: ({ row }) => <span className="text-green-600 font-semibold">+{row.original.increment_amount.toLocaleString()}</span>,
+      cell: ({ row }) => <span className="text-green-600 font-semibold">+৳{row.original.increment_amount.toLocaleString()}</span>,
     },
     {
       accessorKey: "new_gross",
       header: "New Salary",
-      cell: ({ row }) => row.original.new_gross.toLocaleString(),
+      cell: ({ row }) => `৳${row.original.new_gross.toLocaleString()}`,
     },
     {
       accessorKey: "increment_date",
@@ -338,6 +378,7 @@ export default function IncrementPage() {
     setDesignationId("")
     setLineId("")
     setGroupId("")
+    setIncrementType("")
     setMonth(new Date().getMonth() + 1)
     setYear(new Date().getFullYear())
     setStatus("")
@@ -350,7 +391,7 @@ export default function IncrementPage() {
           <TrendingUpIcon className="h-6 w-6 text-muted-foreground" />
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Increment</h1>
-            <p className="text-muted-foreground mt-1">Manage salary increments</p>
+            <p className="text-muted-foreground mt-1">Manage salary increments and promotions</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -382,6 +423,16 @@ export default function IncrementPage() {
                 <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={selectCls}>
                   <option value="">Select</option>
                   {companies.map(c => <option key={c.id} value={c.id}>{c.company_name_en}</option>)}
+                </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Increment Type</label>
+                <select value={incrementType} onChange={e => setIncrementType(e.target.value)} className={selectCls}>
+                  <option value="">All Types</option>
+                  <option value="increment">Increment</option>
+                  <option value="gov_policy">As per gov policy</option>
+                  <option value="promotion">Promotion</option>
+                  <option value="promotion_with_increment">Promotion with increment</option>
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">

@@ -25,15 +25,21 @@ type IncrementFilter struct {
 	Month         int
 	Year          int
 	Status        string
+	IncrementType string
 }
 
 func (r *SalaryIncrementRepository) List(f IncrementFilter) ([]models.SalaryIncrement, error) {
 	query := r.db.Preload("Employee.Department").
 		Preload("Employee.DesignationRef").
+		Preload("NewDesignation").
+		Preload("PreviousDesignation").
 		Where("salary_increments.company_id = ? AND salary_increments.deleted_at IS NULL", f.CompanyID)
 
 	if f.Status != "" {
 		query = query.Where("salary_increments.status = ?", f.Status)
+	}
+	if f.IncrementType != "" {
+		query = query.Where("salary_increments.increment_type = ?", f.IncrementType)
 	}
 
 	if f.DepartmentID != "" {
@@ -77,6 +83,8 @@ func (r *SalaryIncrementRepository) FindByID(id string) (*models.SalaryIncrement
 	var inc models.SalaryIncrement
 	err := r.db.Preload("Employee.Department").
 		Preload("Employee.DesignationRef").
+		Preload("NewDesignation").
+		Preload("PreviousDesignation").
 		Where("id = ? AND deleted_at IS NULL", id).
 		First(&inc).Error
 	return &inc, err

@@ -53,6 +53,7 @@ func Setup(
 	nightBillEmployeeListHandler *handlers.NightBillEmployeeListHandler,
 	migrationHandler *handlers.MigrationHandler,
 	zktecoSyncHandler *handlers.ZKTecoSyncHandler,
+	salaryAccountImportHandler *handlers.SalaryAccountImportHandler,
 	jwtSecret string,
 ) {
 	r.GET("/health", handlers.HealthCheck)
@@ -123,6 +124,10 @@ func Setup(
 		employee.GET("/by-code/:code", employeeHandler.GetEmployeeByCode)
 		employee.GET("/import/template", employeeImportHandler.DownloadTemplate)
 		employee.POST("/import", employeeImportHandler.ImportExcel)
+		employee.GET("/salary-account/template", salaryAccountImportHandler.DownloadSalaryAccountTemplate)
+		employee.GET("/salary-account/export", salaryAccountImportHandler.ExportSalaryAccountExcel)
+		employee.POST("/salary-account/import", salaryAccountImportHandler.ImportSalaryAccountExcel)
+		employee.PUT("/:id/salary-account", employeeHandler.UpdateSalaryAccount)
 		employee.GET("/export/excel", employeeHandler.ExportExcel)
 		employee.GET("/export/pdf", employeeHandler.ExportPDF)
 	}
