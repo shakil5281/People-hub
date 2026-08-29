@@ -60,6 +60,18 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
   const [permUnions, setPermUnions] = React.useState<Union[]>([])
   const [permPostOffices, setPermPostOffices] = React.useState<NamedItem[]>([])
 
+  // Present address defaults when DB has no data (user request)
+  const presentDefaults = {
+    present_division_id: "eef15913-1996-4ece-99a3-729ca18cb6ed", // Dhaka
+    present_district_id: "ebf0c21d-6657-4897-91c7-f205d0bb1e6f", // Gazipur
+    present_upazila_id: "5858f4ab-1bf2-4eae-8b58-b7a862d92bca", // Gazipur Sadar
+    present_union_id: "b0bbacd8-0377-45c8-8ecf-28d7f88bba8c", // Kayaltia
+    present_post_office: "B.O.F",
+    present_post_code: "1703",
+    present_address: "Masterbari",
+    present_address_bn: "gv÷vievox",
+  }
+
   const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<EmployeeFormData>({
     resolver: zodResolver(employeeSchema),
     defaultValues: {
@@ -74,15 +86,12 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
       gender: "", blood_group: "", marital_status: "", religion: "", nationality: "Bangladeshi",
       nid: "",
       phone: "", email: "",
-      present_address: "", present_address_bn: "",
       permanent_address: "", permanent_address_bn: "",
       spouse_name: "", emergency_contact: "", emergency_phone: "", number_of_dependents: 0,
       grade: "",
       department_id: null, section_id: null, designation_id: null, line_id: null,
       group_id: null, floor_id: null,
       reports_to: null,
-      present_division_id: null, present_district_id: null, present_upazila_id: null, present_union_id: null,
-      present_post_office: "", present_post_code: "",
       permanent_division_id: null, permanent_district_id: null, permanent_upazila_id: null, permanent_union_id: null,
       permanent_post_office: "", permanent_post_code: "",
       gross_salary: 0, basic_salary: 0, house_rent: 0,
@@ -91,6 +100,15 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
       account_type: "", account_number: "",
       image_url: "", signature_url: "",
       ...initialData,
+      // If DB has no present address data, fall back to defaults (create) or keep DB data (edit) — after spread to avoid duplicate keys
+      present_address: (initialData as unknown as Record<string, unknown>)?.["present_address"] as string || presentDefaults.present_address,
+      present_address_bn: (initialData as unknown as Record<string, unknown>)?.["present_address_bn"] as string || presentDefaults.present_address_bn,
+      present_division_id: ((initialData as unknown as Record<string, unknown>)?.["present_division_id"] as string) ?? presentDefaults.present_division_id,
+      present_district_id: ((initialData as unknown as Record<string, unknown>)?.["present_district_id"] as string) ?? presentDefaults.present_district_id,
+      present_upazila_id: ((initialData as unknown as Record<string, unknown>)?.["present_upazila_id"] as string) ?? presentDefaults.present_upazila_id,
+      present_union_id: ((initialData as unknown as Record<string, unknown>)?.["present_union_id"] as string) ?? presentDefaults.present_union_id,
+      present_post_office: ((initialData as unknown as Record<string, unknown>)?.["present_post_office"] as string) || presentDefaults.present_post_office,
+      present_post_code: ((initialData as unknown as Record<string, unknown>)?.["present_post_code"] as string) || presentDefaults.present_post_code,
     },
   })
 
@@ -116,6 +134,14 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
     groupApi.list().then(({ data }) => setGroups(Array.isArray(data.data) ? data.data : [])).catch((err) => console.error("Failed to fetch reference data", err))
     floorApi.list().then(({ data }) => setFloors(Array.isArray(data.data) ? data.data : [])).catch((err) => console.error("Failed to fetch reference data", err))
     divisionApi.list().then(({ data }) => { const d = Array.isArray(data.data) ? data.data : []; setPresentDivisions(d); setPermDivisions(d) }).catch((err) => console.error("Failed to fetch reference data", err))
+    // Pre-load present address defaults dropdowns (for create, or when DB has no data)
+    const needsDefaults = !initialData || !(initialData as any).present_division_id
+    if (needsDefaults) {
+      districtApi.list(presentDefaults.present_division_id).then(({ data }) => setPresentDistricts(Array.isArray(data.data) ? data.data : [])).catch(() => {})
+      upazilaApi.list(presentDefaults.present_district_id).then(({ data }) => setUpPresentUpazilas(Array.isArray(data.data) ? data.data : [])).catch(() => {})
+      unionApi.list(presentDefaults.present_upazila_id).then(({ data }) => setPresentUnions(Array.isArray(data.data) ? data.data : [])).catch(() => {})
+      postOfficeApi.list(presentDefaults.present_upazila_id).then(({ data }) => setPresentPostOffices(Array.isArray(data.data) ? data.data : [])).catch(() => {})
+    }
   }, [])
 
   // Seed cascading dropdown lists when editing (pre-populate district/upazila/union/post-office options)
@@ -241,27 +267,38 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
   const isMountedPresent = React.useRef(true)
   React.useEffect(() => {
     if (isMountedPresent.current) {
-      // Skip auto-fill on first render (value comes from initialData, not user input)
       isMountedPresent.current = false
       return
     }
     if (watchPresentPostCode && watchPresentPostCode.length === 4) {
       postOfficeApi.getByCode(watchPresentPostCode).then(({ data: po }) => {
-        if (po && po.district_id && po.upazila_id) {
+        if (po && po.district_id) {
           districtApi.get(po.district_id).then(({ data: dist }) => {
             if (dist && dist.division_id) {
               prevPresentDiv.current = dist.division_id
               setValue("present_division_id", dist.division_id)
               prevPresentDist.current = po.district_id
               setValue("present_district_id", po.district_id)
-              prevPresentUpa.current = po.upazila_id
-              setValue("present_upazila_id", po.upazila_id)
+              // upazila may be empty for some post offices (e.g., Gulshan 1212)
+              if (po.upazila_id) {
+                prevPresentUpa.current = po.upazila_id
+                setValue("present_upazila_id", po.upazila_id)
+                unionApi.list(po.upazila_id).then(({ data }) => setPresentUnions(Array.isArray(data.data) ? data.data : []))
+                postOfficeApi.list(po.upazila_id).then(({ data }) => setPresentPostOffices(Array.isArray(data.data) ? data.data : []))
+              } else {
+                // still set post office even without upazila
+                setValue("present_upazila_id", null)
+                setPresentUnions([])
+                setPresentPostOffices([])
+              }
               setValue("present_post_office", po.name)
-              
               districtApi.list(dist.division_id).then(({ data }) => setPresentDistricts(Array.isArray(data.data) ? data.data : []))
-              upazilaApi.list(po.district_id).then(({ data }) => setUpPresentUpazilas(Array.isArray(data.data) ? data.data : []))
-              unionApi.list(po.upazila_id).then(({ data }) => setPresentUnions(Array.isArray(data.data) ? data.data : []))
-              postOfficeApi.list(po.upazila_id).then(({ data }) => setPresentPostOffices(Array.isArray(data.data) ? data.data : []))
+              if (po.upazila_id) {
+                upazilaApi.list(po.district_id).then(({ data }) => setUpPresentUpazilas(Array.isArray(data.data) ? data.data : []))
+              } else {
+                // ensure upazila list for district is loaded so user can pick
+                upazilaApi.list(po.district_id).then(({ data }) => setUpPresentUpazilas(Array.isArray(data.data) ? data.data : []))
+              }
             }
           }).catch(() => {})
         }
@@ -278,21 +315,30 @@ export function EmployeeForm({ initialData, onSuccess, onCancel, isEditing = fal
     }
     if (watchPermPostCode && watchPermPostCode.length === 4) {
       postOfficeApi.getByCode(watchPermPostCode).then(({ data: po }) => {
-        if (po && po.district_id && po.upazila_id) {
+        if (po && po.district_id) {
           districtApi.get(po.district_id).then(({ data: dist }) => {
             if (dist && dist.division_id) {
               prevPermDiv.current = dist.division_id
               setValue("permanent_division_id", dist.division_id)
               prevPermDist.current = po.district_id
               setValue("permanent_district_id", po.district_id)
-              prevPermUpa.current = po.upazila_id
-              setValue("permanent_upazila_id", po.upazila_id)
+              if (po.upazila_id) {
+                prevPermUpa.current = po.upazila_id
+                setValue("permanent_upazila_id", po.upazila_id)
+                unionApi.list(po.upazila_id).then(({ data }) => setPermUnions(Array.isArray(data.data) ? data.data : []))
+                postOfficeApi.list(po.upazila_id).then(({ data }) => setPermPostOffices(Array.isArray(data.data) ? data.data : []))
+              } else {
+                setValue("permanent_upazila_id", null)
+                setPermUnions([])
+                setPermPostOffices([])
+              }
               setValue("permanent_post_office", po.name)
-              
               districtApi.list(dist.division_id).then(({ data }) => setPermDistricts(Array.isArray(data.data) ? data.data : []))
-              upazilaApi.list(po.district_id).then(({ data }) => setPermUpazilas(Array.isArray(data.data) ? data.data : []))
-              unionApi.list(po.upazila_id).then(({ data }) => setPermUnions(Array.isArray(data.data) ? data.data : []))
-              postOfficeApi.list(po.upazila_id).then(({ data }) => setPermPostOffices(Array.isArray(data.data) ? data.data : []))
+              if (po.upazila_id) {
+                upazilaApi.list(po.district_id).then(({ data }) => setPermUpazilas(Array.isArray(data.data) ? data.data : []))
+              } else {
+                upazilaApi.list(po.district_id).then(({ data }) => setPermUpazilas(Array.isArray(data.data) ? data.data : []))
+              }
             }
           }).catch(() => {})
         }

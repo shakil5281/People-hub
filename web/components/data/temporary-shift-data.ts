@@ -18,8 +18,7 @@ export interface TempShift {
 export const tempShiftSchema = z.object({
   employee_id: z.string().min(1, "Employee is required"),
   shift_id: z.string().min(1, "Shift is required"),
-  from_date: z.string().min(1, "From date is required"),
-  to_date: z.string().optional(),
+  from_date: z.string().min(1, "Date is required"),
   reason: z.string().min(1, "Reason is required"),
   status: z.string().min(1),
   company_id: z.string().optional(),
@@ -50,5 +49,10 @@ export async function updateTempShift(id: string, data: Record<string, unknown>)
 
 export async function deleteTempShift(id: string): Promise<boolean> {
   const res = await temporaryShiftApi.delete(id)
+  return res.status === 200
+}
+
+export async function bulkCreateTempShift(data: Record<string, unknown>): Promise<boolean> {
+  const res = await temporaryShiftApi.bulkCreate(data)
   return res.status === 200
 }

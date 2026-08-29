@@ -8,6 +8,7 @@ import (
 
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type SalaryRepository struct {
@@ -201,6 +202,30 @@ func (r *SalaryRepository) DeleteByMonth(companyID string, month, year int) erro
 func (r *SalaryRepository) DeleteByEmployeeMonth(employeeID string, month, year int) error {
 	return r.db.Unscoped().Where("employee_id = ? AND month = ? AND year = ?", employeeID, month, year).
 		Delete(&models.Salary{}).Error
+}
+
+func (r *SalaryRepository) BulkDeleteByEmployeeMonth(companyID string, employeeIDs []string, month, year int) error {
+	if len(employeeIDs) == 0 {
+		return nil
+	}
+	return r.db.Unscoped().Where("company_id = ? AND employee_id IN ? AND month = ? AND year = ?", companyID, employeeIDs, month, year).
+		Delete(&models.Salary{}).Error
+}
+
+func (r *SalaryRepository) BulkUpsert(salaries []*models.Salary) error {
+	if len(salaries) == 0 {
+		return nil
+	}
+	return r.db.Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "company_id"}, {Name: "employee_id"}, {Name: "month"}, {Name: "year"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"basic_salary", "house_rent", "medical_allowance", "transport_allowance", "food_allowance", "other_allowance",
+			"gross_salary", "provident_fund", "tax", "loan_deduction", "advance_deduction", "absent_deduction", "other_deduction", "total_deductions",
+			"overtime_hours", "overtime_rate", "overtime_amount", "attendance_bonus", "net_salary",
+			"present_days", "absent_days", "late_days", "leave_days", "holiday_days", "weekend_days", "total_days",
+			"status", "updated_at",
+		}),
+	}).Create(&salaries).Error
 }
 
 type DailySalaryRecord struct {

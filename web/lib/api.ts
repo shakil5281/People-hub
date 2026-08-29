@@ -277,6 +277,8 @@ export const attendanceApi = {
 export const otEarlyExitApi = {
   process: (data: { company_id: string; month: number; year: number }) => api.post("/attendance/ot-early-exit/process", data),
   list: (params: Record<string, string>) => api.get("/attendance/ot-early-exit", { params }),
+  remove: (id: string, params?: { reason?: string }) => api.delete(`/attendance/ot-early-exit/${id}`, { params }),
+  exemptEmployee: (data: { company_id: string; employee_id: string; month: number; year: number; reason?: string }) => api.post("/attendance/ot-early-exit/exempt-employee", data),
   exportExcel: (params?: Record<string, string>) => api.get("/attendance/ot-early-exit/export/excel", { params, responseType: "blob" }),
 }
 
@@ -474,6 +476,8 @@ export const leaveApi = {
   approve: (id: string) => api.put(`/leaves/${id}/approve`),
   reject: (id: string, reason: string) => api.put(`/leaves/${id}/reject`, { rejection_reason: reason }),
   exportFormPdf: (id: string, lang?: string) => api.get(`/leaves/${id}/export/pdf`, { params: { lang }, responseType: "blob" }),
+  exportExcel: (params?: Record<string, string>) => api.get("/leaves/export/excel", { params, responseType: "blob" }),
+  exportPdf: (params?: Record<string, string>) => api.get("/leaves/export/pdf", { params, responseType: "blob" }),
 }
 
 export const leaveBalanceApi = {
@@ -484,12 +488,19 @@ export const leaveReportApi = {
   monthly: (params?: Record<string, string>) => api.get("/leave-reports/monthly", { params }),
 }
 
+export const leaveDetailsApi = {
+  get: (params?: Record<string, string>) => api.get("/leave-details", { params }),
+}
+
 export const holidayApi = {
   list: (params?: Record<string, string>) => api.get("/holidays", { params }),
   get: (id: string) => api.get(`/holidays/${id}`),
   create: (data: Record<string, unknown>) => api.post("/holidays", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/holidays/${id}`, data),
   delete: (id: string) => api.delete(`/holidays/${id}`),
+  bulkAdvance: (data: Record<string, unknown>) => api.post("/holidays/bulk-advance", data),
+  advancePreview: (params: Record<string, string>) => api.get("/holidays/advance-preview", { params }),
+  bulkDelete: (ids: string[]) => api.post("/holidays/bulk-delete", { ids }),
 }
 
 export const salaryApi = {
@@ -515,6 +526,7 @@ export const salaryApi = {
 
 export const salaryIncrementApi = {
   list: (params?: Record<string, string>) => api.get("/salary/increments", { params }),
+  getDetails: (params?: Record<string, string>) => api.get("/salary/increments/details", { params }),
   exportExcel: (params?: Record<string, string>) => api.get("/salary/increments/export/excel", { params, responseType: "blob" }),
   exportPdf: (params?: Record<string, string>) => api.get("/salary/increments/export/pdf", { params, responseType: "blob" }),
   create: (data: Record<string, unknown>) => api.post("/salary/increments", data),
@@ -562,8 +574,19 @@ export const temporaryShiftApi = {
   list: (params?: Record<string, string>) => api.get("/temporary-shifts", { params }),
   get: (id: string) => api.get(`/temporary-shifts/${id}`),
   create: (data: Record<string, unknown>) => api.post("/temporary-shifts", data),
+  bulkCreate: (data: Record<string, unknown>) => api.post("/temporary-shifts/bulk", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/temporary-shifts/${id}`, data),
   delete: (id: string) => api.delete(`/temporary-shifts/${id}`),
+}
+
+export const rosterApi = {
+  list: (params?: Record<string, string>) => api.get("/rosters", { params }),
+  get: (id: string) => api.get(`/rosters/${id}`),
+  create: (data: Record<string, unknown>) => api.post("/rosters", data),
+  bulkCreate: (data: Record<string, unknown>) => api.post("/rosters/bulk", data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/rosters/${id}`, data),
+  delete: (id: string) => api.delete(`/rosters/${id}`),
+  bulkDelete: (ids: string[]) => api.post("/rosters/bulk-delete", { ids }),
 }
 
 export const zktecoSyncApi = {

@@ -55,7 +55,7 @@ interface IncrementRecord {
 
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 const currentYear = new Date().getFullYear()
-const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
+const YEARS = Array.from({length: currentYear - 2020 + 6}, (_,i)=>2020+i)
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
 const labelCls = "text-xs font-medium text-muted-foreground"
@@ -405,6 +405,12 @@ export default function IncrementPage() {
               Export PDF
             </Button>
           </ButtonGroup>
+          <Link href="/payroll/increment/details">
+            <Button variant="outline" className="h-10">
+              <TrendingUpIcon className="mr-2 h-4 w-4 text-primary" />
+              Increment Details
+            </Button>
+          </Link>
           <Link href="/payroll/increment/create">
             <Button className="h-10">
               <PlusIcon className="mr-2 h-4 w-4" />

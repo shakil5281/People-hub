@@ -75,7 +75,7 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ]
 const currentYear = new Date().getFullYear()
-const YEARS = Array.from({ length: 8 }, (_, i) => 2024 + i) // 2024, 2025, 2026, 2027...
+const YEARS = Array.from({ length: 12 }, (_, i) => 2020 + i) // 2020..2031
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 const labelCls = "text-xs font-medium text-muted-foreground"

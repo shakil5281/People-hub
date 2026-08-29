@@ -1,13 +1,14 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 import { TimerIcon, PlusIcon } from "lucide-react"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { TempShift, getTempShifts, createTempShift, updateTempShift, deleteTempShift, TempShiftFormData } from "@/components/data/temporary-shift-data"
+import { TempShift, getTempShifts, updateTempShift, deleteTempShift, TempShiftFormData } from "@/components/data/temporary-shift-data"
 import { TempShiftForm } from "@/components/form/temporary-shift-form"
 import { companyApi } from "@/lib/api"
 
@@ -45,6 +46,7 @@ const columns: ColumnDef<TempShift>[] = [
 ]
 
 export default function TemporaryShiftPage() {
+  const router = useRouter()
   const [data, setData] = React.useState<TempShift[]>([])
   const [dialogOpen, setDialogOpen] = React.useState(false)
   const [editing, setEditing] = React.useState<TempShift | null>(null)
@@ -81,18 +83,15 @@ export default function TemporaryShiftPage() {
     }
   }, [page, limit])
 
-  const handleAdd = () => { setEditing(null); setDialogOpen(true) }
+  const handleAdd = () => { router.push("/information/temporary-shift/create") }
   const handleEdit = (item: TempShift) => { setEditing(item); setDialogOpen(true) }
   const handleDelete = async (item: TempShift) => {
     await deleteTempShift(item.id)
     refreshData()
   }
   const handleFormSuccess = async (formData: TempShiftFormData) => {
-    if (editing) {
-      await updateTempShift(editing.id, formData)
-    } else {
-      await createTempShift({ ...formData, company_id: companyId })
-    }
+    // Only Edit uses dialog now; Add goes to /create page (single-day bulk)
+    await updateTempShift(editing!.id, formData)
     refreshData()
     setDialogOpen(false)
     setEditing(null)

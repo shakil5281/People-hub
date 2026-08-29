@@ -341,8 +341,8 @@ export default function SeperationPage() {
       disabled: !filters.section_id,
     },
     { key: "group_id", label: "Group", type: "select", options: groups.map((g) => ({ value: g.id, label: g.name })) },
-    { key: "employee", label: "Employee", type: "text", placeholder: "Filter by employee..." },
-    { key: "employee_id", label: "Code", type: "text", placeholder: "Filter by code..." },
+    { key: "employee", label: "Employee Name", type: "text", placeholder: "Filter by name..." },
+    { key: "employee_id", label: "Emp. ID", type: "text", placeholder: "Filter by Emp. ID (e.g. 1)..." },
     { key: "type", label: "Separation Type", type: "select", options: separationTypeOptions.map((o) => ({ value: o.value, label: o.label })) },
     { key: "status", label: "Status", type: "select", options: separationStatusOptions.map((o) => ({ value: o.value, label: o.label })) },
   ], [companies, departments, sections, designations, lines, groups, filters.department_id, filters.section_id])

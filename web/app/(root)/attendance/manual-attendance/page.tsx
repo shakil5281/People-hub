@@ -28,8 +28,9 @@ interface EmployeeItem {
   company_id: string
   status: string
   employee_type: string
-  department?: { id: string; name: string }
-  designation_ref?: { id: string; name: string }
+  department: string
+  designation: string
+  section: string
 }
 
 export default function ManualAttendancePage() {
@@ -170,16 +171,15 @@ export default function ManualAttendancePage() {
   const columns: ColumnDef<EmployeeItem>[] = React.useMemo(() => [
     { accessorKey: "employee_id", header: "Emp. ID" },
     { accessorKey: "name_en", header: "Name" },
-    { accessorKey: "punch_number", header: "Punch No." },
     {
-      accessorKey: "department.name",
+      accessorKey: "department",
       header: "Department",
-      cell: ({ row }) => <span>{row.original.department?.name || "-"}</span>,
+      cell: ({ row }) => <span>{row.original.department || "-"}</span>,
     },
     {
-      accessorKey: "designation_ref.name",
+      accessorKey: "designation",
       header: "Designation",
-      cell: ({ row }) => <span>{row.original.designation_ref?.name || "-"}</span>,
+      cell: ({ row }) => <span>{row.original.designation || "-"}</span>,
     },
     {
       accessorKey: "status",

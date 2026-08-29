@@ -897,6 +897,53 @@ func (r *AttendanceRepository) MonthlyReport(startDate, endDate, companyID, depa
 	return results, err
 }
 
+// AttendanceSalarySummary holds per-employee attendance counts + OT for salary processing.
+type AttendanceSalarySummary struct {
+	EmployeeID    string  `gorm:"column:employee_id"`
+	Present       int     `gorm:"column:present"`
+	Absent        int     `gorm:"column:absent"`
+	Late          int     `gorm:"column:late"`
+	Leave         int     `gorm:"column:leave"`
+	Weekend       int     `gorm:"column:weekend"`
+	Holiday       int     `gorm:"column:holiday"`
+	HalfDay       int     `gorm:"column:half_day"`
+	OvertimeHours float64 `gorm:"column:overtime_hours"`
+}
+
+// GetSalarySummary returns per-employee attendance counts AND overtime hours in a
+// single query — replacing the two separate MonthlyReport + GetMonthlyOvertimeHours
+// calls. No unnecessary JOINs to departments/designations/shifts.
+func (r *AttendanceRepository) GetSalarySummary(companyID, startDate, endDate string, employeeIDs []string) ([]AttendanceSalarySummary, error) {
+	query := r.db.Table("attendances a").
+		Select(`
+			a.employee_id,
+			COUNT(*) FILTER (WHERE a.status = 'present') AS present,
+			COUNT(*) FILTER (WHERE a.status = 'absent') AS absent,
+			COUNT(*) FILTER (WHERE a.status = 'late') AS late,
+			COUNT(*) FILTER (WHERE a.status = 'on_leave') AS leave,
+			COUNT(*) FILTER (WHERE a.status = 'weekend') AS weekend,
+			COUNT(*) FILTER (WHERE a.status = 'holiday') AS holiday,
+			COUNT(*) FILTER (WHERE a.status = 'half_day') AS half_day,
+			COALESCE(SUM(
+				CASE
+					WHEN e.over_time_status = false THEN 0
+					ELSE COALESCE(NULLIF(a.over_time, '')::decimal, 0)
+				END
+			), 0) AS overtime_hours
+		`).
+		Joins("JOIN employees e ON e.employee_id = a.employee_id").
+		Where("a.company_id = ? AND a.date BETWEEN ? AND ? AND a.deleted_at IS NULL",
+			companyID, startDate, endDate)
+
+	if len(employeeIDs) > 0 {
+		query = query.Where("a.employee_id IN ?", employeeIDs)
+	}
+
+	var results []AttendanceSalarySummary
+	err := query.Group("a.employee_id").Find(&results).Error
+	return results, err
+}
+
 func (r *AttendanceRepository) ListByStatus(startDate, endDate, status, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID string, page, limit int) ([]models.Attendance, int64, error) {
 	base := r.db.Model(&models.Attendance{}).Where("date BETWEEN ? AND ? AND status = ? AND deleted_at IS NULL", startDate, endDate, status)
 	if companyID != "" {

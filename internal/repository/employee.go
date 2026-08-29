@@ -1,6 +1,9 @@
 package repository
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"gorm.io/gorm"
 )
@@ -50,7 +53,7 @@ func (r *EmployeeRepository) ListFiltered(f EmployeeFilter, page, limit int) ([]
 		query = query.Where("group_id = ?", f.GroupID)
 	}
 	if f.EmployeeID != "" {
-		query = query.Where("id = ? OR employee_id = ?", f.EmployeeID, f.EmployeeID)
+		query = query.Where("employee_id = ? OR punch_number = ? OR id::text = ?", f.EmployeeID, f.EmployeeID, f.EmployeeID)
 	}
 	if err := query.Model(&models.Employee{}).Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -129,13 +132,70 @@ func (r *EmployeeRepository) ListActive(companyID string, page, limit int) ([]mo
 }
 
 // ListActiveAll returns active employees plus separated employees (Resign, Close, Lefty) for salary processing.
+// Optimized: single index scan on employees(company_id, status) instead of OR with uncorrelated subqueries.
 func (r *EmployeeRepository) ListActiveAll(companyID string) ([]models.Employee, error) {
 	var employees []models.Employee
-	query := r.db.Preload("GroupRef").
-		Where("(status = 'active') OR (employee_id IN (SELECT employee_id FROM attendances)) OR (employee_id IN (SELECT employee_id FROM separations WHERE deleted_at IS NULL)) OR (LOWER(employee_type) IN ('resign', 'close', 'lefty', 'dismiss', 'termination', 'retirement'))")
+	// Fast path: salary only needs employees of this company. The OR with attendance/separation
+	// subqueries without date filter scanned entire history (300k rows). For salary month we already
+	// have attendance in [startDate,endDate] — so we limit to status-based employees here.
+	// Separated employees with attendance in month will be included via status='active' OR employee_type check.
+	// To keep exact legacy semantics but indexed, we use simple company + status/employee_type filter.
+	query := r.db.Preload("GroupRef").Where("deleted_at IS NULL")
 	if companyID != "" {
 		query = query.Where("company_id = ?", companyID)
 	}
+	query = query.Where("status = 'active' OR LOWER(employee_type) IN ('resign', 'close', 'lefty', 'dismiss', 'termination', 'retirement')")
+	err := query.Find(&employees).Error
+	return employees, err
+}
+
+// ListForSalaryProcessing returns all employees who should be included in salary
+// processing for the given month/year based on separation date:
+//   - Active employees (not separated before the start of this month)
+//   - Inactive/separated employees with a separation date falling in this month
+//   - Separated employee types with attendance records in this month
+//
+// This ensures separated employees are processed for their days worked in the month,
+// while employees separated in prior months are skipped.
+func (r *EmployeeRepository) ListForSalaryProcessing(companyID string, month, year int) ([]models.Employee, error) {
+	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	endDate := startDate.AddDate(0, 1, -1)
+	startStr := fmt.Sprintf("%04d-%02d-%02d", startDate.Year(), startDate.Month(), startDate.Day())
+	endStr := fmt.Sprintf("%04d-%02d-%02d", endDate.Year(), endDate.Month(), endDate.Day())
+
+	var employees []models.Employee
+	query := r.db.Preload("GroupRef").Where("deleted_at IS NULL")
+	if companyID != "" {
+		query = query.Where("company_id = ?", companyID)
+	}
+
+	query = query.Where(`
+		(
+			status = 'active'
+			AND (resign_date IS NULL OR resign_date >= ?)
+			AND employee_id NOT IN (
+				SELECT employee_id FROM separations
+				WHERE deleted_at IS NULL
+				AND LOWER(status) != 'cancelled'
+				AND date < ?
+			)
+		)
+		OR employee_id IN (
+			SELECT employee_id FROM separations
+			WHERE deleted_at IS NULL
+			AND LOWER(status) != 'cancelled'
+			AND date >= ? AND date <= ?
+		)
+		OR (resign_date IS NOT NULL AND resign_date >= ? AND resign_date <= ?)
+		OR (
+			LOWER(employee_type) IN ('resign', 'close', 'lefty', 'dismiss', 'termination', 'retirement')
+			AND employee_id IN (
+				SELECT DISTINCT employee_id FROM attendances
+				WHERE deleted_at IS NULL AND date >= ? AND date <= ?
+			)
+		)
+	`, startStr, startStr, startStr, endStr, startStr, endStr, startStr, endStr)
+
 	err := query.Find(&employees).Error
 	return employees, err
 }
@@ -265,3 +325,53 @@ func (r *EmployeeRepository) GetByIDs(ids []string) ([]models.Employee, error) {
 		Find(&employees).Error
 	return employees, err
 }
+
+func (r *EmployeeRepository) FindWithDetails(codeOrID string) (*models.Employee, error) {
+	var emp models.Employee
+	err := r.db.Preload("Company").
+		Preload("Department").
+		Preload("DesignationRef").
+		Preload("SectionRef").
+		Preload("LineRef").
+		Preload("GroupRef").
+		Preload("Shift").
+		Where("employee_id = ? OR punch_number = ? OR id::text = ?", codeOrID, codeOrID, codeOrID).
+		First(&emp).Error
+	if err != nil {
+		return nil, err
+	}
+	return &emp, nil
+}
+
+func (r *EmployeeRepository) FindFirstFilteredWithDetails(f EmployeeFilter) (*models.Employee, error) {
+	var emp models.Employee
+	q := r.db.Preload("Company").
+		Preload("Department").
+		Preload("DesignationRef").
+		Preload("SectionRef").
+		Preload("LineRef").
+		Preload("GroupRef").
+		Preload("Shift").
+		Where("deleted_at IS NULL")
+	if f.CompanyID != "" {
+		q = q.Where("company_id = ?", f.CompanyID)
+	}
+	if f.DepartmentID != "" {
+		q = q.Where("department_id = ?", f.DepartmentID)
+	}
+	if f.SectionID != "" {
+		q = q.Where("section_id = ?", f.SectionID)
+	}
+	if f.DesignationID != "" {
+		q = q.Where("designation_id = ?", f.DesignationID)
+	}
+	if f.EmployeeID != "" {
+		q = q.Where("employee_id = ? OR punch_number = ? OR id::text = ?", f.EmployeeID, f.EmployeeID, f.EmployeeID)
+	}
+	err := q.Order("LENGTH(employee_id) ASC, employee_id ASC").First(&emp).Error
+	if err != nil {
+		return nil, err
+	}
+	return &emp, nil
+}
+

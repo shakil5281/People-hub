@@ -8,7 +8,7 @@ import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ButtonGroup } from "@/components/ui/button-group"
 import {
@@ -144,9 +144,9 @@ export default function EmployeesPage() {
   const [error, setError] = React.useState("")
 
   const [filters, setFilters] = React.useState<Record<string, string>>({ employee_type: "Regular", status: "active" })
+  const [appliedFilters, setAppliedFilters] = React.useState<Record<string, string>>({ employee_type: "Regular", status: "active" })
   const [joiningFromDate, setJoiningFromDate] = React.useState<Date | undefined>(undefined)
   const [joiningToDate, setJoiningToDate] = React.useState<Date | undefined>(undefined)
-
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [departments, setDepartments] = React.useState<Department[]>([])
   const [sections, setSections] = React.useState<Section[]>([])
@@ -160,12 +160,15 @@ export default function EmployeesPage() {
   const [limit, setLimit] = React.useState(20)
   const [total, setTotal] = React.useState(0)
   const [totalPages, setTotalPages] = React.useState(0)
+  const isFirstMountRef = React.useRef(true)
 
   const fetchEmployees = async (f?: Record<string, string>, p?: number, l?: number) => {
     setError("")
     setLoading(true)
     try {
       const params = { ...(f || {}), page: String(p ?? page), limit: String(l ?? limit) }
+      // ensure join dates are always included if applied
+      console.log("[Employees] fetch with params", params)
       const { data: res } = await employeeApi.list(params)
       setData(Array.isArray(res.data) ? res.data : [])
       setTotal(res.total ?? 0)
@@ -176,6 +179,63 @@ export default function EmployeesPage() {
       setLoading(false)
     }
   }
+
+  // Restore from sessionStorage + URL on mount
+  React.useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem("employees_advanced_filters_v2")
+      if (raw) {
+        const saved = JSON.parse(raw)
+        if (saved.filters && typeof saved.filters === "object") setFilters(saved.filters)
+        if (saved.appliedFilters && typeof saved.appliedFilters === "object") setAppliedFilters(saved.appliedFilters)
+        if (saved.joiningFromDate) {
+          const d = new Date(saved.joiningFromDate)
+          if (!isNaN(d.getTime())) setJoiningFromDate(d)
+        }
+        if (saved.joiningToDate) {
+          const d = new Date(saved.joiningToDate)
+          if (!isNaN(d.getTime())) setJoiningToDate(d)
+        }
+        if (typeof saved.page === "number" && saved.page >= 1) setPage(saved.page)
+        if (typeof saved.limit === "number" && saved.limit >= 1) setLimit(saved.limit)
+        if (saved.filters?.department_id) {
+          sectionApi.list(saved.filters.department_id, { limit: "100" }).then(({ data: secData }) => {
+            setSections(Array.isArray(secData.data) ? secData.data : [])
+          }).catch(() => {})
+        }
+        if (saved.filters?.section_id) {
+          Promise.all([
+            designationApi.list(saved.filters.section_id, { limit: "100" }),
+            lineApi.list(saved.filters.section_id, { limit: "100" }),
+          ]).then(([desigRes, lineRes]) => {
+            setDesignations(Array.isArray(desigRes.data?.data) ? desigRes.data.data : [])
+            setLines(Array.isArray(lineRes.data?.data) ? lineRes.data.data : [])
+          }).catch(() => {})
+        }
+      }
+    } catch {
+      // ignore corrupt storage
+    }
+  }, [])
+
+  // Persist to sessionStorage on change (after first mount)
+  React.useEffect(() => {
+    if (isFirstMountRef.current) {
+      isFirstMountRef.current = false
+      return
+    }
+    try {
+      const payload = {
+        filters,
+        appliedFilters,
+        joiningFromDate: joiningFromDate ? joiningFromDate.toISOString() : null,
+        joiningToDate: joiningToDate ? joiningToDate.toISOString() : null,
+        page,
+        limit,
+      }
+      sessionStorage.setItem("employees_advanced_filters_v2", JSON.stringify(payload))
+    } catch {}
+  }, [filters, appliedFilters, joiningFromDate, joiningToDate, page, limit])
 
   React.useEffect(() => {
     const init = async () => {
@@ -195,14 +255,14 @@ export default function EmployeesPage() {
       } catch {
         // dropdowns will be empty
       }
-      await fetchEmployees(filters)
     }
     init()
   }, [])
 
+  // Always fetch with appliedFilters + pagination (ensures filter persists)
   React.useEffect(() => {
-    fetchEmployees(filters)
-  }, [page, limit])
+    fetchEmployees(appliedFilters, page, limit)
+  }, [appliedFilters, page, limit])
 
   const handleDepartmentChange = async (value: string) => {
     setFilters((prev) => ({
@@ -252,7 +312,6 @@ export default function EmployeesPage() {
   }
 
   const handleApply = async () => {
-    setPage(1)
     setSubmitting(true)
     setError("")
     const active = { ...filters }
@@ -260,15 +319,22 @@ export default function EmployeesPage() {
     else delete active.joining_from
     if (joiningToDate) active.joining_to = format(joiningToDate, "yyyy-MM-dd")
     else delete active.joining_to
-    const cleaned = Object.fromEntries(Object.entries(active).filter(([, v]) => v !== ""))
-    await fetchEmployees(cleaned, 1)
-    setSubmitting(false)
+    const cleaned = Object.fromEntries(Object.entries(active).filter(([, v]) => v !== "")) as Record<string, string>
+    setAppliedFilters(cleaned)
+    if (page !== 1) {
+      setPage(1)
+      // fetch will be handled by useEffect on appliedFilters/page change
+      setSubmitting(false)
+    } else {
+      await fetchEmployees(cleaned, 1, limit)
+      setSubmitting(false)
+    }
   }
 
   const handleReset = async () => {
-    setPage(1)
-    setLimit(20)
-    setFilters({ status: "active", employee_type: "Regular" })
+    const resetFilters = { status: "active", employee_type: "Regular" } as Record<string, string>
+    setFilters(resetFilters)
+    setAppliedFilters(resetFilters)
     setJoiningFromDate(undefined)
     setJoiningToDate(undefined)
     setSections([])
@@ -276,8 +342,14 @@ export default function EmployeesPage() {
     setLines([])
     setError("")
     setSubmitting(true)
-    await fetchEmployees({ status: "active", employee_type: "Regular" }, 1, 20)
-    setSubmitting(false)
+    if (page !== 1 || limit !== 20) {
+      setPage(1)
+      setLimit(20)
+      setSubmitting(false)
+    } else {
+      await fetchEmployees(resetFilters, 1, 20)
+      setSubmitting(false)
+    }
   }
 
   const handleEdit = (emp: EmployeeRow) => router.push(`/hr/employees/${emp.id}/edit`)
@@ -294,10 +366,7 @@ export default function EmployeesPage() {
   const handleExport = async () => {
     setExporting(true)
     try {
-      const active: Record<string, string> = { ...filters }
-      if (joiningFromDate) active.joining_from = format(joiningFromDate, "yyyy-MM-dd")
-      if (joiningToDate) active.joining_to = format(joiningToDate, "yyyy-MM-dd")
-      const cleaned = Object.fromEntries(Object.entries(active).filter(([, v]) => v !== ""))
+      const cleaned = Object.fromEntries(Object.entries(appliedFilters).filter(([, v]) => v !== ""))
       const res = await employeeApi.exportExcel(cleaned)
       const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
       const url = URL.createObjectURL(blob)

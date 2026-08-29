@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/shakil5281/peoplehub-api/internal/models"
 	"github.com/shakil5281/peoplehub-api/internal/repository"
 	"github.com/shakil5281/peoplehub-api/internal/utils"
 )
@@ -70,7 +71,19 @@ func (s *OtEarlyExitService) ComputeEarlyExitDeductions(companyID string, month,
 		}
 	}
 
-	// Exclude weekend days (per the employee's resolved shift).
+	// Load exemptions for this month so removed/exempted employees or dates are not recreated
+	exemptions, _ := s.otRepo.ListExemptions(companyID, month, year)
+	exemptMap := make(map[string]bool)
+	for _, ex := range exemptions {
+		if ex.Date != nil && *ex.Date != "" {
+			d := utils.NormalizeDate(*ex.Date)
+			exemptMap[ex.EmployeeID+"|"+d] = true
+		} else {
+			exemptMap[ex.EmployeeID] = true
+		}
+	}
+
+	// Exclude weekend days (per the employee's resolved shift) and exempted entries.
 	filtered := make([]repository.ShortfallRow, 0, len(rows))
 	for _, r := range rows {
 		if rr := utils.NormalizeDate(r.Date); rr == "" {
@@ -81,6 +94,10 @@ func (s *OtEarlyExitService) ComputeEarlyExitDeductions(companyID string, month,
 			continue
 		}
 		if utils.IsWeekend(d, r.WeekendDays) {
+			continue
+		}
+		// Skip exempted employee or exempted employee-date
+		if exemptMap[r.EmployeeID] || exemptMap[r.EmployeeID+"|"+d] {
 			continue
 		}
 		filtered = append(filtered, r)
@@ -102,6 +119,63 @@ func (s *OtEarlyExitService) ComputeEarlyExitDeductions(companyID string, month,
 		TotalRecords:      len(filtered),
 		AffectedEmployees: len(empSet),
 	}, nil
+}
+
+// RemoveDeduction deletes an individual deduction record and saves an exemption
+// so future re-computations or salary processes will NOT recreate it.
+func (s *OtEarlyExitService) RemoveDeduction(id string, reason, userID string) error {
+	deduction, err := s.otRepo.FindByID(id)
+	if err != nil {
+		return fmt.Errorf("deduction not found: %w", err)
+	}
+
+	dateStr := utils.NormalizeDate(deduction.Date)
+	if dateStr == "" {
+		dateStr = deduction.Date
+	}
+	var datePtr *string
+	if dateStr != "" {
+		datePtr = &dateStr
+	}
+
+	ex := &models.OtEarlyExitExemption{
+		CompanyID:  deduction.CompanyID,
+		EmployeeID: deduction.EmployeeID,
+		Month:      deduction.Month,
+		Year:       deduction.Year,
+		Date:       datePtr,
+		Reason:     reason,
+	}
+	if userID != "" && len(userID) == 36 {
+		ex.CreatedBy = &userID
+	}
+
+	if err := s.otRepo.CreateExemption(ex); err != nil {
+		return fmt.Errorf("save exemption: %w", err)
+	}
+
+	return s.otRepo.DeleteDeduction(id)
+}
+
+// ExemptEmployee exempts an entire employee from early-exit deductions for a payroll month
+// and deletes any existing deduction records for that employee in that month.
+func (s *OtEarlyExitService) ExemptEmployee(companyID, employeeID string, month, year int, reason, userID string) error {
+	ex := &models.OtEarlyExitExemption{
+		CompanyID:  companyID,
+		EmployeeID: employeeID,
+		Month:      month,
+		Year:       year,
+		Reason:     reason,
+	}
+	if userID != "" && len(userID) == 36 {
+		ex.CreatedBy = &userID
+	}
+
+	if err := s.otRepo.CreateExemption(ex); err != nil {
+		return fmt.Errorf("save exemption: %w", err)
+	}
+
+	return s.otRepo.DeleteEmployeeDeductions(companyID, employeeID, month, year)
 }
 
 // ShortfallTotals exposes the per-employee monthly shortfall for salary.

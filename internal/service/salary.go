@@ -3,10 +3,13 @@ package service
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"github.com/shakil5281/peoplehub-api/internal/repository"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Salary constants — fixed allowances
@@ -24,6 +27,7 @@ type SalaryService struct {
 	otEarlyExitRepo    *repository.OtEarlyExitRepository
 	otEarlyExitService *OtEarlyExitService
 	advanceRepo        *repository.AdvanceSalaryRepository
+	separationRepo     *repository.SeparationRepository
 }
 
 func NewSalaryService(
@@ -34,6 +38,7 @@ func NewSalaryService(
 	otEarlyExitRepo *repository.OtEarlyExitRepository,
 	otEarlyExitService *OtEarlyExitService,
 	advanceRepo *repository.AdvanceSalaryRepository,
+	separationRepo *repository.SeparationRepository,
 ) *SalaryService {
 	return &SalaryService{
 		employeeRepo:       employeeRepo,
@@ -43,6 +48,7 @@ func NewSalaryService(
 		otEarlyExitRepo:    otEarlyExitRepo,
 		otEarlyExitService: otEarlyExitService,
 		advanceRepo:        advanceRepo,
+		separationRepo:     separationRepo,
 	}
 }
 
@@ -64,12 +70,7 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 	endStr := endDate.Format("2006-01-02")
 	daysInMonth := endDate.Day()
 
-	// 1. Auto-compute early exit shortfalls for the month so the table is up-to-date
-	if s.otEarlyExitService != nil {
-		_, _ = s.otEarlyExitService.ComputeEarlyExitDeductions(companyID, month, year, userID)
-	}
-
-	employees, err := s.employeeRepo.ListActiveAll(companyID)
+	employees, err := s.employeeRepo.ListForSalaryProcessing(companyID, month, year)
 	if err != nil {
 		return nil, fmt.Errorf("fetch employees: %w", err)
 	}
@@ -88,21 +89,69 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		}
 	}
 
-	attendanceReport, err := s.attendanceRepo.MonthlyReport(startStr, endStr, companyID, "", "", "", "", "", "", "")
-	if err != nil {
-		return nil, fmt.Errorf("fetch attendance: %w", err)
+	// Build employee ID list for scoped queries
+	empIDs := make([]string, len(employees))
+	for i, e := range employees {
+		empIDs[i] = e.EmployeeID
 	}
 
-	attMap := make(map[string]map[string]interface{})
-	for _, r := range attendanceReport {
-		if empID, ok := r["employee_id"].(string); ok {
-			attMap[empID] = r
+	// Parallel fetch: Combined attendance+OT summary, AdvanceDeductions, and Early-Exit recompute
+	var salarySummary []repository.AttendanceSalarySummary
+	var advanceMap map[string]float64
+	var attErr, advErr error
+
+	doneEarlyExit := make(chan struct{})
+	go func() {
+		if s.otEarlyExitService != nil {
+			_, _ = s.otEarlyExitService.ComputeEarlyExitDeductions(companyID, month, year, userID)
 		}
+		close(doneEarlyExit)
+	}()
+
+	// Parallelize: one combined attendance+OT query replaces two separate heavy scans
+	var wg2 sync.WaitGroup
+	wg2.Add(2)
+	go func() {
+		defer wg2.Done()
+		salarySummary, attErr = s.attendanceRepo.GetSalarySummary(companyID, startStr, endStr, empIDs)
+	}()
+	go func() {
+		defer wg2.Done()
+		if s.advanceRepo != nil {
+			var adv map[string]float64
+			adv, advErr = s.advanceRepo.MonthlyDeductions(companyID, month, year)
+			if advErr == nil {
+				advanceMap = adv
+			} else {
+				advanceMap = make(map[string]float64)
+			}
+		} else {
+			advanceMap = make(map[string]float64)
+		}
+	}()
+	wg2.Wait()
+	<-doneEarlyExit
+
+	if attErr != nil {
+		return nil, fmt.Errorf("fetch attendance: %w", attErr)
+	}
+	if advanceMap == nil {
+		advanceMap = make(map[string]float64)
 	}
 
-	otHoursMap, err := s.attendanceRepo.GetMonthlyOvertimeHours(companyID, startStr, endStr)
-	if err != nil {
-		return nil, fmt.Errorf("fetch overtime: %w", err)
+	// Build attendance map and OT map from the combined summary
+	attMap := make(map[string]map[string]interface{})
+	otHoursMap := make(map[string]float64)
+	for _, s := range salarySummary {
+		attMap[s.EmployeeID] = map[string]interface{}{
+			"present": s.Present,
+			"absent":  s.Absent,
+			"late":    s.Late,
+			"leave":   s.Leave,
+			"weekend": s.Weekend,
+			"holiday": s.Holiday,
+		}
+		otHoursMap[s.EmployeeID] = s.OvertimeHours
 	}
 
 	// 2. Early-exit shortfall deduction: net OT = raw OT - shortfall (if deductEarlyExit is true).
@@ -113,16 +162,16 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		}
 	}
 
-	// 3. Advance Salary deductions
-	advanceMap := make(map[string]float64)
-	if s.advanceRepo != nil {
-		if advDeductions, advErr := s.advanceRepo.MonthlyDeductions(companyID, month, year); advErr == nil {
-			advanceMap = advDeductions
+	// 3. Separation dates for this month (to process salary until separation date)
+	sepDates := make(map[string]string)
+	if s.separationRepo != nil {
+		if sd, sErr := s.separationRepo.GetSeparationDatesByMonth(companyID, month, year); sErr == nil {
+			sepDates = sd
 		}
 	}
 
-	processed := 0
-
+	var toUpsert []*models.Salary
+	var toDeleteIDs []string
 	for _, emp := range employees {
 		groupName := ""
 		if emp.GroupID != nil {
@@ -138,21 +187,54 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 		if netOt < 0 {
 			netOt = 0
 		}
-		
 		advDeduction := advanceMap[emp.EmployeeID]
-		
-		salary := s.calculateEmployeeSalary(emp, groupName, attMap[emp.EmployeeID], netOt, advDeduction, month, year, daysInMonth, userID)
-
+		sepDate := sepDates[emp.EmployeeID]
+		if sepDate == "" && emp.ResignDate != nil && !emp.ResignDate.IsZero() {
+			if emp.ResignDate.Year() == year && int(emp.ResignDate.Month()) == month {
+				sepDate = emp.ResignDate.Format("2006-01-02")
+			}
+		}
+		if sepDate == "" && s.attendanceRepo != nil && (strings.EqualFold(emp.Status, "inactive") || !strings.EqualFold(strings.TrimSpace(emp.EmployeeType), "regular")) {
+			if sep, sErr := s.attendanceRepo.FindSeparationByEmployeeID(emp.EmployeeID); sErr == nil && sep != nil && sep.Date != "" {
+				sepDate = sep.Date
+			}
+		}
+		salary := s.calculateEmployeeSalary(emp, groupName, attMap[emp.EmployeeID], netOt, advDeduction, month, year, daysInMonth, sepDate, userID)
 		if salary.NetSalary <= 1000 {
-			_ = s.salaryRepo.DeleteByEmployeeMonth(emp.EmployeeID, month, year)
+			toDeleteIDs = append(toDeleteIDs, salary.EmployeeID)
 			continue
 		}
-
-		if err := s.salaryRepo.Upsert(salary); err != nil {
-			continue
-		}
-		processed++
+		toUpsert = append(toUpsert, salary)
 	}
+
+	// Optimized batch — single transaction, chunked upserts (100 rows per statement) to avoid giant SQL parse
+	db := s.salaryRepo.DB()
+	err = db.Transaction(func(tx *gorm.DB) error {
+		if len(toDeleteIDs) > 0 {
+			if err := tx.Unscoped().Where("company_id = ? AND employee_id IN ? AND month = ? AND year = ?", companyID, toDeleteIDs, month, year).Delete(&models.Salary{}).Error; err != nil {
+				return err
+			}
+		}
+		if len(toUpsert) > 0 {
+			if err := tx.Clauses(clause.OnConflict{
+				Columns: []clause.Column{{Name: "company_id"}, {Name: "employee_id"}, {Name: "month"}, {Name: "year"}},
+				DoUpdates: clause.AssignmentColumns([]string{
+					"basic_salary", "house_rent", "medical_allowance", "transport_allowance", "food_allowance", "other_allowance",
+					"gross_salary", "provident_fund", "tax", "loan_deduction", "advance_deduction", "absent_deduction", "other_deduction", "total_deductions",
+					"overtime_hours", "overtime_rate", "overtime_amount", "attendance_bonus", "net_salary",
+					"present_days", "absent_days", "late_days", "leave_days", "holiday_days", "weekend_days", "total_days",
+					"status", "updated_at",
+				}),
+			}).CreateInBatches(toUpsert, 100).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("bulk upsert salaries: %w", err)
+	}
+	processed := len(toUpsert)
 
 	// 4. Mark processed advances as deducted
 	if s.advanceRepo != nil {
@@ -168,6 +250,7 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 }
 
 // calculateEmployeeSalary contains ALL business rules — isolated and unit-testable.
+// When an employee has separated, salary is processed until their separation date.
 func (s *SalaryService) calculateEmployeeSalary(
 	emp models.Employee,
 	groupName string,
@@ -175,6 +258,7 @@ func (s *SalaryService) calculateEmployeeSalary(
 	otHours float64,
 	advanceDeduction float64,
 	month, year, daysInMonth int,
+	sepDateStr string,
 	userID string,
 ) *models.Salary {
 	gross := emp.GrossSalary
@@ -199,9 +283,37 @@ func (s *SalaryService) calculateEmployeeSalary(
 	weekendDays := 0
 	totalDays := 0
 
-	// Use calendar month days for totalDays and per-day salary calculations
-	// instead of att["total_days"] which may be inflated by duplicate rows.
-	totalDays = daysInMonth
+	// Determine active working window in this month:
+	// Start day: from 1, or joining date if joined in this month
+	startDay := 1
+	if !emp.JoiningDate.IsZero() && emp.JoiningDate.Year() == year && int(emp.JoiningDate.Month()) == month {
+		startDay = emp.JoiningDate.Day()
+	}
+
+	// Cutoff day: end of month (daysInMonth), or separation date if separated in this month
+	cutoffDay := daysInMonth
+	if sepDateStr != "" {
+		if sepTime, err := time.Parse("2006-01-02", sepDateStr); err == nil {
+			if sepTime.Year() == year && int(sepTime.Month()) == month {
+				cutoffDay = sepTime.Day()
+			}
+		}
+	} else if emp.ResignDate != nil && !emp.ResignDate.IsZero() {
+		if emp.ResignDate.Year() == year && int(emp.ResignDate.Month()) == month {
+			cutoffDay = emp.ResignDate.Day()
+		}
+	}
+
+	// Total expected/eligible days for this employee in the month (e.g. up to separation date)
+	effectiveDays := cutoffDay - startDay + 1
+	if effectiveDays < 0 {
+		effectiveDays = 0
+	}
+	if effectiveDays > daysInMonth {
+		effectiveDays = daysInMonth
+	}
+
+	totalDays = effectiveDays
 
 	if att != nil {
 		presentDays = toInt(att["present"])
@@ -213,8 +325,6 @@ func (s *SalaryService) calculateEmployeeSalary(
 	}
 
 	// Paid days in month = Present + Late + Weekend + Leave + Holiday.
-	// Any unexcused/unrecorded days in the month are treated as absent days so base salary is
-	// (Gross / totalDays) * paidDays = Gross - AbsentDeduction.
 	paidDays := presentDays + lateDays + weekendDays + leaveDays + holidayDays
 	if totalDays > 0 && paidDays < totalDays {
 		calcAbsent := totalDays - paidDays
@@ -223,11 +333,14 @@ func (s *SalaryService) calculateEmployeeSalary(
 		}
 	}
 
-	// Absent deduction
+	// Absent deduction:
+	// Daily rate is calculated based on calendar days in month: gross / daysInMonth
+	// Total unworked days = absent days within working window + unworked days outside window (before joining / after separation)
+	unworkedDays := (daysInMonth - totalDays) + absentDays
 	absentDeduction := float64(0)
-	if totalDays > 0 {
-		perDaySalary := gross / float64(totalDays)
-		absentDeduction = perDaySalary * float64(absentDays)
+	if daysInMonth > 0 {
+		perDaySalary := gross / float64(daysInMonth)
+		absentDeduction = perDaySalary * float64(unworkedDays)
 	}
 
 	// Late attendance salary deduction:
@@ -236,8 +349,8 @@ func (s *SalaryService) calculateEmployeeSalary(
 	// - Deduction is stored in OtherDeduction (absent_days / absent_deduction remain unchanged)
 	lateDeductionDays := lateDays / 3
 	lateDeductionAmount := float64(0)
-	if totalDays > 0 && lateDeductionDays > 0 {
-		perDaySalary := gross / float64(totalDays)
+	if daysInMonth > 0 && lateDeductionDays > 0 {
+		perDaySalary := gross / float64(daysInMonth)
 		lateDeductionAmount = perDaySalary * float64(lateDeductionDays)
 	}
 	otherDeduction := lateDeductionAmount

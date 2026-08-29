@@ -574,6 +574,13 @@ function WcHolidayDialog({
 export default function HolidayPage() {
   const [allData, setAllData] = React.useState<Holiday[]>([])
   const [loading, setLoading] = React.useState(true)
+  const now = React.useMemo(() => new Date(), [])
+  const currentYear = String(now.getFullYear())
+  const currentMonth = String(now.getMonth() + 1)
+  const [filterYear, setFilterYear] = React.useState(currentYear)
+  const [filterMonth, setFilterMonth] = React.useState(currentMonth)
+  const [appliedYear, setAppliedYear] = React.useState(currentYear)
+  const [appliedMonth, setAppliedMonth] = React.useState(currentMonth)
 
   const [govDialogOpen, setGovDialogOpen] = React.useState(false)
   const [wcDialogOpen, setWcDialogOpen] = React.useState(false)
@@ -605,8 +612,55 @@ export default function HolidayPage() {
 
   React.useEffect(() => { fetchData() }, [fetchData])
 
-  const govData = React.useMemo(() => allData.filter((h) => h.type === "government"), [allData])
-  const wcData = React.useMemo(() => allData.filter((h) => h.type === "weekend_change"), [allData])
+  const yearOptions = React.useMemo(() => {
+    const y = now.getFullYear()
+    return Array.from({ length: 7 }, (_, i) => String(y - 3 + i))
+  }, [now])
+  const monthOptions = React.useMemo(() => [
+    { value: "1", label: "January" },
+    { value: "2", label: "February" },
+    { value: "3", label: "March" },
+    { value: "4", label: "April" },
+    { value: "5", label: "May" },
+    { value: "6", label: "June" },
+    { value: "7", label: "July" },
+    { value: "8", label: "August" },
+    { value: "9", label: "September" },
+    { value: "10", label: "October" },
+    { value: "11", label: "November" },
+    { value: "12", label: "December" },
+  ], [])
+
+  const matchesYearMonth = React.useCallback((h: Holiday, y: string, m: string) => {
+    const raw = h.date || h.from_date || ""
+    if (!raw) return false
+    const d = raw.includes("T") ? raw.split("T")[0] : raw
+    const parts = d.split("-")
+    if (parts.length < 2) return false
+    const hy = parts[0]
+    const hm = String(parseInt(parts[1], 10))
+    if (y && y !== "all" && hy !== y) return false
+    if (m && m !== "all" && hm !== String(parseInt(m, 10))) return false
+    return true
+  }, [])
+
+  const filteredData = React.useMemo(() => {
+    return allData.filter((h) => matchesYearMonth(h, appliedYear, appliedMonth))
+  }, [allData, appliedYear, appliedMonth, matchesYearMonth])
+
+  const govData = React.useMemo(() => filteredData.filter((h) => h.type === "government"), [filteredData])
+  const wcData = React.useMemo(() => filteredData.filter((h) => h.type === "weekend_change"), [filteredData])
+
+  const handleFilter = () => {
+    setAppliedYear(filterYear)
+    setAppliedMonth(filterMonth)
+  }
+  const handleResetFilter = () => {
+    setFilterYear(currentYear)
+    setFilterMonth(currentMonth)
+    setAppliedYear(currentYear)
+    setAppliedMonth(currentMonth)
+  }
 
   const openAdd = (type: string) => {
     setEditingItem(null)
@@ -671,6 +725,38 @@ export default function HolidayPage() {
         </div>
       </div>
 
+      <div className="px-4 lg:px-6 rounded-lg border bg-card p-4 flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium text-muted-foreground">Year</Label>
+          <select
+            value={filterYear}
+            onChange={(e) => setFilterYear(e.target.value)}
+            className="flex h-9 w-[140px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="all">All Years</option>
+            {yearOptions.map((y) => (
+              <option key={y} value={y}>{y}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-xs font-medium text-muted-foreground">Month</Label>
+          <select
+            value={filterMonth}
+            onChange={(e) => setFilterMonth(e.target.value)}
+            className="flex h-9 w-[160px] rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+          >
+            <option value="all">All Months</option>
+            {monthOptions.map((m) => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+        <Button onClick={handleFilter} className="h-9">Filter</Button>
+        <Button variant="outline" onClick={handleResetFilter} className="h-9">Reset</Button>
+        <span className="text-xs text-muted-foreground ml-2">Default: {currentYear}-{String(parseInt(currentMonth, 10)).padStart(2, "0")} • Showing {filteredData.length} of {allData.length}</span>
+      </div>
+
       <Tabs defaultValue="government" className="px-4 lg:px-6">
         <TabsList>
           <TabsTrigger value="government" className="flex items-center gap-2">
@@ -698,7 +784,7 @@ export default function HolidayPage() {
         </TabsContent>
 
         <TabsContent value="weekend_change" className="mt-4 space-y-4">
-          <div className="flex justify-end">
+          <div className="flex justify-end gap-2">
             <Button onClick={() => openAdd("weekend_change")}>
               <PlusIcon className="mr-2 h-4 w-4" />
               Add Weekend Change

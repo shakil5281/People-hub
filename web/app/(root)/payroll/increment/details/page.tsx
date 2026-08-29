@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import {
-  FileTextIcon,
+  TrendingUpIcon,
   FilterIcon,
   XIcon,
   UserIcon,
@@ -13,28 +13,28 @@ import {
   HourglassIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  DownloadIcon,
-  SearchIcon,
   Loader2,
-  CalendarCheckIcon,
   FileSpreadsheetIcon,
   BriefcaseIcon,
   Building2Icon,
   PhoneIcon,
+  ArrowRightIcon,
+  DollarSignIcon,
+  LayersIcon,
+  AwardIcon,
+  ArrowLeftIcon,
 } from "lucide-react"
+import Link from "next/link"
 import { format } from "date-fns"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
-import { ButtonGroup } from "@/components/ui/button-group"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
 import {
-  leaveDetailsApi,
-  leaveApi,
+  salaryIncrementApi,
   companyApi,
   departmentApi,
   sectionApi,
@@ -54,6 +54,12 @@ interface EmployeeProfile {
   status: string
   employee_type?: string
   joining_date?: string
+  gross_salary: number
+  basic_salary: number
+  house_rent: number
+  medical_allowance: number
+  transport_allowance: number
+  food_allowance: number
   company_id?: string
   company_name?: string
   department_id?: string
@@ -71,40 +77,37 @@ interface EmployeeProfile {
   photo_url?: string
 }
 
-interface LeaveBalance {
-  id: string
-  leave_type_id: string
-  leave_type: string
-  code: string
-  year: number
-  total: number
-  used: number
-  pending: number
-  remaining: number
-  applicable_gender?: string
-}
-
-interface LeaveRecord {
+interface IncrementRecord {
   id: string
   employee_id: string
-  leave_type_id: string
-  leave_type: string
-  leave_code?: string
-  from_date: string
-  to_date: string
-  total_days: number
-  reason: string
+  increment_type: string
+  calculation_type: string
+  calculation_value: number
+  previous_gross: number
+  previous_basic: number
+  increment_amount: number
+  new_gross: number
+  new_basic: number
+  increment_date: string
+  effective_date: string
   status: string
+  remarks?: string
   rejection_reason?: string
+  previous_designation?: { name: string }
+  new_designation?: { name: string }
   created_at: string
 }
 
-interface LeaveSummary {
-  total_entitled: number
-  total_used: number
-  total_pending: number
-  total_remaining: number
-  total_applications: number
+interface IncrementSummary {
+  current_gross: number
+  current_basic: number
+  total_increment_amount: number
+  total_increment_count: number
+  total_promotions_count: number
+  last_increment_date: string
+  last_increment_amount: number
+  initial_gross: number
+  total_records: number
 }
 
 interface Company { id: string; company_name_en: string }
@@ -113,7 +116,6 @@ interface Section { id: string; name: string }
 interface Designation { id: string; name: string }
 
 const currentYear = new Date().getFullYear()
-const currentMonth = new Date().getMonth() + 1
 
 const monthOptions = [
   { value: "", label: "All Months" },
@@ -131,10 +133,28 @@ const monthOptions = [
   { value: "12", label: "December (12)" },
 ]
 
-const yearOptions = Array.from({ length: 7 }, (_, i) => {
-  const y = currentYear - i + 1
-  return { value: String(y), label: String(y) }
-})
+const yearOptions = [
+  { value: "", label: "All Years" },
+  ...Array.from({ length: 7 }, (_, i) => {
+    const y = currentYear - i + 1
+    return { value: String(y), label: String(y) }
+  }),
+]
+
+const renderTypeBadge = (type?: string) => {
+  switch (type?.toLowerCase()) {
+    case "gov_policy":
+    case "gov":
+    case "policy":
+      return <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs">Gov Policy</Badge>
+    case "promotion":
+      return <Badge className="bg-amber-600 hover:bg-amber-700 text-white text-xs">Promotion</Badge>
+    case "promotion_with_increment":
+      return <Badge className="bg-purple-600 hover:bg-purple-700 text-white text-xs">Promotion + Inc</Badge>
+    default:
+      return <Badge variant="secondary" className="text-xs capitalize">{type || "Increment"}</Badge>
+  }
+}
 
 const getStatusBadge = (status: string) => {
   switch (status?.toLowerCase()) {
@@ -144,29 +164,30 @@ const getStatusBadge = (status: string) => {
       return <Badge variant="outline" className="text-amber-600 border-amber-500 bg-amber-50 dark:bg-amber-950/40 font-medium">Pending</Badge>
     case "rejected":
       return <Badge variant="destructive" className="font-medium">Rejected</Badge>
-    case "cancelled":
-      return <Badge variant="secondary" className="font-medium">Cancelled</Badge>
     default:
       return <Badge variant="outline" className="capitalize">{status || "Pending"}</Badge>
   }
 }
 
-export default function LeaveDetailsPage() {
+export default function IncrementDetailsPage() {
   const [employee, setEmployee] = React.useState<EmployeeProfile | null>(null)
-  const [balances, setBalances] = React.useState<LeaveBalance[]>([])
-  const [leaves, setLeaves] = React.useState<LeaveRecord[]>([])
-  const [summary, setSummary] = React.useState<LeaveSummary>({
-    total_entitled: 0,
-    total_used: 0,
-    total_pending: 0,
-    total_remaining: 0,
-    total_applications: 0,
+  const [increments, setIncrements] = React.useState<IncrementRecord[]>([])
+  const [summary, setSummary] = React.useState<IncrementSummary>({
+    current_gross: 0,
+    current_basic: 0,
+    total_increment_amount: 0,
+    total_increment_count: 0,
+    total_promotions_count: 0,
+    last_increment_date: "",
+    last_increment_amount: 0,
+    initial_gross: 0,
+    total_records: 0,
   })
 
   const [loading, setLoading] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
   const [filters, setFilters] = React.useState<Record<string, string>>({
-    year: String(currentYear),
+    year: "",
     month: "",
     employee_id: "",
   })
@@ -197,7 +218,7 @@ export default function LeaveDetailsPage() {
     }).catch(() => {})
 
     // Initial load
-    fetchLeaveDetails({ year: String(currentYear), month: "" })
+    fetchIncrementDetails({})
   }, [])
 
   // Dynamic section loading
@@ -270,7 +291,7 @@ export default function LeaveDetailsPage() {
     },
   ], [companies, departments, sections, designations, filters.department_id, filters.section_id])
 
-  const fetchLeaveDetails = React.useCallback(async (params: Record<string, string>) => {
+  const fetchIncrementDetails = React.useCallback(async (params: Record<string, string>) => {
     setLoading(true)
     try {
       const active: Record<string, string> = {}
@@ -279,13 +300,11 @@ export default function LeaveDetailsPage() {
           active[k] = v
         }
       }
-      if (!active.year) active.year = String(currentYear)
 
-      const { data: res } = await leaveDetailsApi.get(active)
+      const { data: res } = await salaryIncrementApi.getDetails(active)
       if (res) {
         setEmployee(res.employee || null)
-        setBalances(Array.isArray(res.balances) ? res.balances : [])
-        setLeaves(Array.isArray(res.leaves) ? res.leaves : [])
+        setIncrements(Array.isArray(res.increments) ? res.increments : [])
         if (res.summary) {
           setSummary(res.summary)
         }
@@ -297,10 +316,9 @@ export default function LeaveDetailsPage() {
         }
       }
     } catch (err: any) {
-      toast.error("Failed to load leave details")
+      toast.error("Failed to load increment details")
       setEmployee(null)
-      setBalances([])
-      setLeaves([])
+      setIncrements([])
     } finally {
       setLoading(false)
     }
@@ -311,13 +329,13 @@ export default function LeaveDetailsPage() {
   }
 
   const handleApply = () => {
-    fetchLeaveDetails(filters)
+    fetchIncrementDetails(filters)
   }
 
   const handleReset = () => {
-    const defaultFilters = { year: String(currentYear), month: "", employee_id: "" }
+    const defaultFilters = { year: "", month: "", employee_id: "" }
     setFilters(defaultFilters)
-    fetchLeaveDetails(defaultFilters)
+    fetchIncrementDetails(defaultFilters)
   }
 
   const handlePrev = () => {
@@ -327,7 +345,7 @@ export default function LeaveDetailsPage() {
     setCurrentEmpIndex(prevIdx)
     const newFilters = { ...filters, employee_id: prevEmp.employee_id }
     setFilters(newFilters)
-    fetchLeaveDetails(newFilters)
+    fetchIncrementDetails(newFilters)
   }
 
   const handleNext = () => {
@@ -337,30 +355,19 @@ export default function LeaveDetailsPage() {
     setCurrentEmpIndex(nextIdx)
     const newFilters = { ...filters, employee_id: nextEmp.employee_id }
     setFilters(newFilters)
-    fetchLeaveDetails(newFilters)
+    fetchIncrementDetails(newFilters)
   }
 
-  const handleExportPDF = async (leaveId: string) => {
-    try {
-      const res = await leaveApi.exportFormPdf(leaveId, "en")
-      downloadExport(res, `leave_form_${employee?.employee_id || "emp"}_${leaveId}.pdf`)
-      toast.success("Leave form PDF downloaded")
-    } catch {
-      toast.error("Failed to download leave form PDF")
-    }
-  }
-
-  const handleExportSummaryExcel = async () => {
+  const handleExportExcel = async () => {
     if (!employee) return
     setExporting(true)
     try {
-      const res = await leaveApi.exportExcel({
-        employee_id: employee.employee_id,
-        from_date: `${filters.year || currentYear}-01-01`,
-        to_date: `${filters.year || currentYear}-12-31`,
+      const res = await salaryIncrementApi.exportExcel({
+        company_id: employee.company_id || "",
+        department_id: employee.department_id || "",
       })
-      downloadExport(res, `leave_summary_${employee.employee_id}_${filters.year || currentYear}.xlsx`)
-      toast.success("Leave summary exported to Excel")
+      downloadExport(res, `increment_details_${employee.employee_id}.xlsx`)
+      toast.success("Increment details exported to Excel")
     } catch {
       toast.error("Failed to export Excel")
     } finally {
@@ -368,7 +375,7 @@ export default function LeaveDetailsPage() {
     }
   }
 
-  // Calculate service duration / job age if joining date exists
+  // Calculate service tenure / job age
   const getJobAge = (joiningDate?: string) => {
     if (!joiningDate) return "-"
     try {
@@ -395,22 +402,28 @@ export default function LeaveDetailsPage() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <CalendarCheckIcon className="h-6 w-6" />
+              <TrendingUpIcon className="h-6 w-6" />
             </div>
             <div>
-              <h1 className="text-xl md:text-2xl font-bold tracking-tight">Leave Details & Reports</h1>
+              <h1 className="text-xl md:text-2xl font-bold tracking-tight">Increment Details & Reports</h1>
               <p className="text-sm text-muted-foreground">
-                Employee comprehensive leave profile, balance summary, and leave application records
+                Employee salary increment history, designation progression, and compensation growth breakdown
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            <Link href="/payroll/increment">
+              <Button variant="outline" size="sm">
+                <ArrowLeftIcon className="h-4 w-4 mr-1.5" />
+                Increment List
+              </Button>
+            </Link>
             {employee && (
               <Button
                 variant="outline"
                 size="sm"
-                onClick={handleExportSummaryExcel}
+                onClick={handleExportExcel}
                 disabled={exporting || loading}
               >
                 <FileSpreadsheetIcon className="h-4 w-4 mr-1.5 text-emerald-600" />
@@ -470,14 +483,14 @@ export default function LeaveDetailsPage() {
         {loading ? (
           <div className="flex flex-col items-center justify-center p-16 rounded-xl border bg-card text-muted-foreground gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm font-medium">Loading employee leave details...</p>
+            <p className="text-sm font-medium">Loading employee increment details...</p>
           </div>
         ) : !employee ? (
           <div className="flex flex-col items-center justify-center p-16 rounded-xl border bg-card text-center text-muted-foreground gap-3">
             <UserIcon className="h-12 w-12 text-muted-foreground/50 stroke-1" />
             <h3 className="text-base font-semibold text-foreground">No Employee Selected</h3>
             <p className="text-sm max-w-sm">
-              Search by Employee ID in the filters above to view complete leave balances, allocations, and application history.
+              Search by Employee ID in the filters above to inspect increment records, promotion milestones, and salary history.
             </p>
           </div>
         ) : (
@@ -542,9 +555,11 @@ export default function LeaveDetailsPage() {
                   </div>
 
                   <div className="flex items-center gap-2 self-start sm:self-auto">
-                    <Badge variant="outline" className="text-xs font-normal">
-                      Year: <b className="ml-1 text-foreground">{filters.year || currentYear}</b>
-                    </Badge>
+                    {filters.year && (
+                      <Badge variant="outline" className="text-xs font-normal">
+                        Year: <b className="ml-1 text-foreground">{filters.year}</b>
+                      </Badge>
+                    )}
                     {filters.month && (
                       <Badge variant="outline" className="text-xs font-normal">
                         Month: <b className="ml-1 text-foreground">{monthOptions.find(m => m.value === filters.month)?.label || filters.month}</b>
@@ -591,19 +606,19 @@ export default function LeaveDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Total Leave Report - 4 KPI Metric Summary Cards */}
+            {/* Increment Summary - 4 KPI Metric Cards */}
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
               <Card className="shadow-xs bg-linear-to-br from-blue-50/50 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10 border-blue-200/60 dark:border-blue-900/40">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-blue-700 dark:text-blue-400">Total Entitled</p>
+                    <p className="text-xs font-medium text-blue-700 dark:text-blue-400">Current Gross Salary</p>
                     <p className="text-2xl font-bold tracking-tight text-blue-950 dark:text-blue-100">
-                      {summary.total_entitled} <span className="text-xs font-normal text-muted-foreground">Days</span>
+                      ৳{Number(employee.gross_salary || 0).toLocaleString()}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">Allocated for {filters.year || currentYear}</p>
+                    <p className="text-[11px] text-muted-foreground">Basic: ৳{Number(employee.basic_salary || 0).toLocaleString()}</p>
                   </div>
                   <div className="h-10 w-10 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-                    <CalendarCheckIcon className="h-5 w-5" />
+                    <DollarSignIcon className="h-5 w-5" />
                   </div>
                 </CardContent>
               </Card>
@@ -611,16 +626,16 @@ export default function LeaveDetailsPage() {
               <Card className="shadow-xs bg-linear-to-br from-emerald-50/50 to-teal-50/30 dark:from-emerald-950/20 dark:to-teal-950/10 border-emerald-200/60 dark:border-emerald-900/40">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Total Used / Taken</p>
+                    <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Total Increment Given</p>
                     <p className="text-2xl font-bold tracking-tight text-emerald-950 dark:text-emerald-100">
-                      {summary.total_used} <span className="text-xs font-normal text-muted-foreground">Days</span>
+                      +৳{Number(summary.total_increment_amount || 0).toLocaleString()}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      {summary.total_entitled > 0 ? `${Math.round((summary.total_used / summary.total_entitled) * 100)}% of quota` : "0% utilized"}
+                      Starting gross: ৳{Number(summary.initial_gross || 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
-                    <CheckCircle2Icon className="h-5 w-5" />
+                    <TrendingUpIcon className="h-5 w-5" />
                   </div>
                 </CardContent>
               </Card>
@@ -628,14 +643,16 @@ export default function LeaveDetailsPage() {
               <Card className="shadow-xs bg-linear-to-br from-amber-50/50 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10 border-amber-200/60 dark:border-amber-900/40">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Pending Approval</p>
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Increments Count</p>
                     <p className="text-2xl font-bold tracking-tight text-amber-950 dark:text-amber-100">
-                      {summary.total_pending} <span className="text-xs font-normal text-muted-foreground">Days</span>
+                      {summary.total_increment_count} <span className="text-xs font-normal text-muted-foreground">Times</span>
                     </p>
-                    <p className="text-[11px] text-muted-foreground">Awaiting supervisor review</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {summary.total_promotions_count} Promotion{summary.total_promotions_count === 1 ? "" : "s"}
+                    </p>
                   </div>
                   <div className="h-10 w-10 rounded-full bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
-                    <HourglassIcon className="h-5 w-5" />
+                    <AwardIcon className="h-5 w-5" />
                   </div>
                 </CardContent>
               </Card>
@@ -643,11 +660,13 @@ export default function LeaveDetailsPage() {
               <Card className="shadow-xs bg-linear-to-br from-purple-50/50 to-pink-50/30 dark:from-purple-950/20 dark:to-pink-950/10 border-purple-200/60 dark:border-purple-900/40">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="space-y-1">
-                    <p className="text-xs font-medium text-purple-700 dark:text-purple-400">Remaining Balance</p>
-                    <p className="text-2xl font-bold tracking-tight text-purple-950 dark:text-purple-100">
-                      {summary.total_remaining} <span className="text-xs font-normal text-muted-foreground">Days</span>
+                    <p className="text-xs font-medium text-purple-700 dark:text-purple-400">Last Increment Date</p>
+                    <p className="text-lg font-bold tracking-tight text-purple-950 dark:text-purple-100 truncate">
+                      {summary.last_increment_date ? format(new Date(summary.last_increment_date), "dd MMM yyyy") : "None"}
                     </p>
-                    <p className="text-[11px] text-muted-foreground">Available to apply</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {summary.last_increment_amount > 0 ? `+৳${summary.last_increment_amount.toLocaleString()}` : "No increment applied"}
+                    </p>
                   </div>
                   <div className="h-10 w-10 rounded-full bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
                     <ClockIcon className="h-5 w-5" />
@@ -656,104 +675,71 @@ export default function LeaveDetailsPage() {
               </Card>
             </div>
 
-            {/* Leave Balance Breakdown Table */}
+            {/* Current Salary Structure Breakdown */}
             <Card className="shadow-xs">
               <CardHeader className="py-3 px-4 border-b bg-muted/20">
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-sm font-semibold">Leave Balance Summary ({filters.year || currentYear})</CardTitle>
+                    <CardTitle className="text-sm font-semibold">Current Salary Structure Breakdown</CardTitle>
                     <CardDescription className="text-xs">
-                      Entitlement quota and remaining days for each leave category
+                      Official compensation components based on Bangladesh labor law formula
                     </CardDescription>
                   </div>
-                  <Badge variant="outline" className="text-xs">
-                    {balances.length} Leave Types
+                  <Badge variant="secondary" className="text-xs font-mono font-medium">
+                    Total Gross: ৳{Number(employee.gross_salary || 0).toLocaleString()}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs">
-                    <thead>
-                      <tr className="border-b bg-muted/40 text-muted-foreground">
-                        <th className="px-4 py-2.5 text-left font-semibold w-12">#</th>
-                        <th className="px-4 py-2.5 text-left font-semibold">Leave Type</th>
-                        <th className="px-4 py-2.5 text-center font-semibold w-20">Code</th>
-                        <th className="px-4 py-2.5 text-center font-semibold">Entitled (Days)</th>
-                        <th className="px-4 py-2.5 text-center font-semibold">Used / Taken</th>
-                        <th className="px-4 py-2.5 text-center font-semibold">Pending</th>
-                        <th className="px-4 py-2.5 text-center font-semibold">Remaining</th>
-                        <th className="px-4 py-2.5 text-left font-semibold w-40">Utilization</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y">
-                      {balances.length === 0 ? (
-                        <tr>
-                          <td colSpan={8} className="px-4 py-6 text-center text-muted-foreground">
-                            No leave types configured for this employee's company.
-                          </td>
-                        </tr>
-                      ) : (
-                        balances.map((b, i) => {
-                          const percent = b.total > 0 ? Math.min(100, Math.round((b.used / b.total) * 100)) : 0
-                          return (
-                            <tr key={b.id || i} className="hover:bg-muted/40 transition-colors">
-                              <td className="px-4 py-3 text-muted-foreground">{i + 1}</td>
-                              <td className="px-4 py-3 font-medium text-foreground">
-                                {b.leave_type}
-                              </td>
-                              <td className="px-4 py-3 text-center">
-                                <Badge variant="secondary" className="font-mono text-[11px] font-semibold">
-                                  {b.code || "LEAVE"}
-                                </Badge>
-                              </td>
-                              <td className="px-4 py-3 text-center font-semibold text-foreground">
-                                {b.total}
-                              </td>
-                              <td className="px-4 py-3 text-center text-emerald-700 dark:text-emerald-400 font-semibold">
-                                {b.used}
-                              </td>
-                              <td className="px-4 py-3 text-center text-amber-600 font-semibold">
-                                {b.pending > 0 ? b.pending : "-"}
-                              </td>
-                              <td className="px-4 py-3 text-center font-bold text-foreground">
-                                <span className={b.remaining === 0 ? "text-destructive" : "text-primary"}>
-                                  {b.remaining}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3">
-                                <div className="space-y-1">
-                                  <div className="flex justify-between text-[10px] text-muted-foreground">
-                                    <span>{percent}%</span>
-                                    <span>{b.used}/{b.total}</span>
-                                  </div>
-                                  <Progress value={percent} className="h-1.5" />
-                                </div>
-                              </td>
-                            </tr>
-                          )
-                        })
-                      )}
-                    </tbody>
-                  </table>
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 divide-x divide-y sm:divide-y-0 text-xs">
+                  <div className="p-3.5 space-y-1">
+                    <span className="text-muted-foreground">Basic Salary</span>
+                    <p className="text-sm font-bold text-foreground">৳{Number(employee.basic_salary || 0).toLocaleString()}</p>
+                    <span className="text-[10px] text-muted-foreground">~50% of gross</span>
+                  </div>
+                  <div className="p-3.5 space-y-1">
+                    <span className="text-muted-foreground">House Rent</span>
+                    <p className="text-sm font-bold text-foreground">৳{Number(employee.house_rent || 0).toLocaleString()}</p>
+                    <span className="text-[10px] text-muted-foreground">~50% of basic</span>
+                  </div>
+                  <div className="p-3.5 space-y-1">
+                    <span className="text-muted-foreground">Medical Allowance</span>
+                    <p className="text-sm font-bold text-foreground">৳{Number(employee.medical_allowance || 750).toLocaleString()}</p>
+                    <span className="text-[10px] text-muted-foreground">Fixed: ৳750</span>
+                  </div>
+                  <div className="p-3.5 space-y-1">
+                    <span className="text-muted-foreground">Food Allowance</span>
+                    <p className="text-sm font-bold text-foreground">৳{Number(employee.food_allowance || 1250).toLocaleString()}</p>
+                    <span className="text-[10px] text-muted-foreground">Fixed: ৳1,250</span>
+                  </div>
+                  <div className="p-3.5 space-y-1">
+                    <span className="text-muted-foreground">Transport Allowance</span>
+                    <p className="text-sm font-bold text-foreground">৳{Number(employee.transport_allowance || 450).toLocaleString()}</p>
+                    <span className="text-[10px] text-muted-foreground">Fixed: ৳450</span>
+                  </div>
+                  <div className="p-3.5 space-y-1 bg-primary/5">
+                    <span className="text-primary font-medium">Net Gross Pay</span>
+                    <p className="text-sm font-extrabold text-primary">৳{Number(employee.gross_salary || 0).toLocaleString()}</p>
+                    <span className="text-[10px] text-muted-foreground">Monthly Total</span>
+                  </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Employee All Leave Records Table (Leave Application History) */}
+            {/* Increment & Promotion History Data Table */}
             <Card className="shadow-xs">
               <CardHeader className="py-3 px-4 border-b bg-muted/20">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <div>
                     <CardTitle className="text-sm font-semibold">
-                      Leave History & Applications {filters.month ? `(${monthOptions.find(m => m.value === filters.month)?.label}, ${filters.year || currentYear})` : `(${filters.year || currentYear})`}
+                      Salary Increment & Promotion History {filters.year ? `(${filters.year})` : "(All Records)"}
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      All leave requests submitted by {employee.name_en}
+                      Chronological progression of salary increments and designation changes for {employee.name_en}
                     </CardDescription>
                   </div>
                   <Badge variant="outline" className="text-xs self-start sm:self-auto">
-                    {leaves.length} Applications
+                    {increments.length} Record{increments.length === 1 ? "" : "s"}
                   </Badge>
                 </div>
               </CardHeader>
@@ -763,70 +749,75 @@ export default function LeaveDetailsPage() {
                     <thead>
                       <tr className="border-b bg-muted/40 text-muted-foreground">
                         <th className="px-4 py-2.5 text-left font-semibold w-12">#</th>
-                        <th className="px-4 py-2.5 text-left font-semibold">Leave Type</th>
-                        <th className="px-4 py-2.5 text-left font-semibold">From Date</th>
-                        <th className="px-4 py-2.5 text-left font-semibold">To Date</th>
-                        <th className="px-4 py-2.5 text-center font-semibold">Days</th>
-                        <th className="px-4 py-2.5 text-left font-semibold">Reason</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">Increment Date</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">Effective Date</th>
+                        <th className="px-4 py-2.5 text-center font-semibold">Type</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">Designation Change</th>
+                        <th className="px-4 py-2.5 text-right font-semibold">Previous Gross</th>
+                        <th className="px-4 py-2.5 text-right font-semibold">Increment Amount</th>
+                        <th className="px-4 py-2.5 text-right font-semibold">New Gross</th>
                         <th className="px-4 py-2.5 text-center font-semibold">Status</th>
-                        <th className="px-4 py-2.5 text-left font-semibold">Applied At</th>
-                        <th className="px-4 py-2.5 text-right font-semibold w-24">Action</th>
+                        <th className="px-4 py-2.5 text-left font-semibold">Remarks</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y">
-                      {leaves.length === 0 ? (
+                      {increments.length === 0 ? (
                         <tr>
-                          <td colSpan={9} className="px-4 py-10 text-center text-muted-foreground">
+                          <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                             <div className="flex flex-col items-center justify-center gap-1.5">
-                              <CalendarIcon className="h-7 w-7 text-muted-foreground/40 stroke-1" />
-                              <p className="font-medium text-xs">No leave records found for this period</p>
-                              <p className="text-[11px] text-muted-foreground">Try selecting a different year or month</p>
+                              <TrendingUpIcon className="h-7 w-7 text-muted-foreground/40 stroke-1" />
+                              <p className="font-medium text-xs">No increment records found for this employee</p>
+                              <p className="text-[11px] text-muted-foreground">Applied increments will appear here</p>
                             </div>
                           </td>
                         </tr>
                       ) : (
-                        leaves.map((l, i) => (
-                          <tr key={l.id || i} className="hover:bg-muted/40 transition-colors">
-                            <td className="px-4 py-3 text-muted-foreground">{i + 1}</td>
-                            <td className="px-4 py-3 font-medium text-foreground">
-                              <div className="flex items-center gap-1.5">
-                                <Badge variant="outline" className="font-mono text-[10px]">
-                                  {l.leave_code || "LEAVE"}
-                                </Badge>
-                                <span>{l.leave_type || "Leave"}</span>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              {l.from_date ? format(new Date(l.from_date), "dd MMM yyyy") : "-"}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              {l.to_date ? format(new Date(l.to_date), "dd MMM yyyy") : "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center font-semibold text-foreground">
-                              {l.total_days} {l.total_days === 1 ? "day" : "days"}
-                            </td>
-                            <td className="px-4 py-3 max-w-[200px] truncate text-muted-foreground" title={l.reason || ""}>
-                              {l.reason || "-"}
-                            </td>
-                            <td className="px-4 py-3 text-center">
-                              {getStatusBadge(l.status)}
-                            </td>
-                            <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                              {l.created_at || "-"}
-                            </td>
-                            <td className="px-4 py-3 text-right">
-                              <Button
-                                variant="ghost"
-                                size="icon-sm"
-                                onClick={() => handleExportPDF(l.id)}
-                                title="Download Leave Form PDF"
-                                className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                              >
-                                <DownloadIcon className="h-3.5 w-3.5" />
-                              </Button>
-                            </td>
-                          </tr>
-                        ))
+                        increments.map((inc, i) => {
+                          const prevDesig = inc.previous_designation?.name || "-"
+                          const newDesig = inc.new_designation?.name
+                          const hasDesigChange = newDesig && newDesig !== prevDesig
+
+                          return (
+                            <tr key={inc.id || i} className="hover:bg-muted/40 transition-colors">
+                              <td className="px-4 py-3 text-muted-foreground">{i + 1}</td>
+                              <td className="px-4 py-3 whitespace-nowrap">
+                                {inc.increment_date ? format(new Date(inc.increment_date), "dd MMM yyyy") : "-"}
+                              </td>
+                              <td className="px-4 py-3 whitespace-nowrap font-medium text-foreground">
+                                {inc.effective_date ? format(new Date(inc.effective_date), "dd MMM yyyy") : "-"}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {renderTypeBadge(inc.increment_type)}
+                              </td>
+                              <td className="px-4 py-3">
+                                {hasDesigChange ? (
+                                  <div className="flex items-center gap-1.5 text-xs">
+                                    <span className="text-muted-foreground">{prevDesig}</span>
+                                    <ArrowRightIcon className="h-3 w-3 text-primary shrink-0" />
+                                    <span className="font-semibold text-foreground">{newDesig}</span>
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground">{prevDesig}</span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono text-muted-foreground">
+                                ৳{Number(inc.previous_gross || 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                                +৳{Number(inc.increment_amount || 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-right font-mono font-bold text-foreground">
+                                ৳{Number(inc.new_gross || 0).toLocaleString()}
+                              </td>
+                              <td className="px-4 py-3 text-center">
+                                {getStatusBadge(inc.status)}
+                              </td>
+                              <td className="px-4 py-3 max-w-[180px] truncate text-muted-foreground" title={inc.remarks || inc.rejection_reason || ""}>
+                                {inc.remarks || inc.rejection_reason || "-"}
+                              </td>
+                            </tr>
+                          )
+                        })
                       )}
                     </tbody>
                   </table>

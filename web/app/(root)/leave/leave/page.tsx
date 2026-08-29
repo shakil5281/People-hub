@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { format } from "date-fns"
-import { CalendarCheckIcon, PlusIcon, EllipsisVertical, Pencil, Trash2, Check, X, FileText, FilterIcon, XIcon } from "lucide-react"
+import { CalendarCheckIcon, PlusIcon, EllipsisVertical, Pencil, Trash2, Check, X, FileText, FilterIcon, XIcon, Download } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
@@ -269,6 +269,42 @@ export default function LeavePage() {
     }
   }
 
+  const handleExportExcel = async () => {
+    try {
+      const active: Record<string, string> = {}
+      for (const [k, v] of Object.entries(filters)) if (v) active[k] = v
+      const res = await leaveApi.exportExcel(active)
+      const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `leave_report_${new Date().toISOString().slice(0, 10)}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success("Excel exported")
+    } catch {
+      toast.error("Failed to export Excel")
+    }
+  }
+
+  const handleExportListPdf = async () => {
+    try {
+      const active: Record<string, string> = {}
+      for (const [k, v] of Object.entries(filters)) if (v) active[k] = v
+      const res = await leaveApi.exportPdf(active)
+      const blob = new Blob([res.data], { type: "application/pdf" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `leave_report_${new Date().toISOString().slice(0, 10)}.pdf`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success("PDF exported")
+    } catch {
+      toast.error("Failed to export PDF")
+    }
+  }
+
   return (
     <div className="flex flex-col gap-4 py-4 md:gap-6 md:py-6">
       <div className="px-4 lg:px-6 flex items-center justify-between">
@@ -279,7 +315,15 @@ export default function LeavePage() {
             <p className="text-muted-foreground mt-1">Manage employee leave applications</p>
           </div>
         </div>
-        <div className="hidden md:block">
+        <div className="hidden md:flex items-center gap-2">
+          <Button variant="outline" onClick={handleExportExcel}>
+            <Download className="mr-2 h-4 w-4" />
+            Excel
+          </Button>
+          <Button variant="outline" onClick={handleExportListPdf}>
+            <FileText className="mr-2 h-4 w-4" />
+            PDF
+          </Button>
           <Button onClick={() => router.push("/leave/leave-entry")}>
             <PlusIcon className="mr-2 h-4 w-4" />
             Leave Entry
@@ -315,6 +359,16 @@ export default function LeavePage() {
             Leave Entry
           </Button>
         </ButtonGroup>
+        <div className="flex gap-2 mt-2">
+          <Button variant="outline" className="flex-1" onClick={handleExportExcel}>
+            <Download className="mr-2 h-4 w-4" />
+            Excel
+          </Button>
+          <Button variant="outline" className="flex-1" onClick={handleExportListPdf}>
+            <FileText className="mr-2 h-4 w-4" />
+            PDF
+          </Button>
+        </div>
       </div>
 
       <div className="px-4 lg:px-6 hidden md:block">

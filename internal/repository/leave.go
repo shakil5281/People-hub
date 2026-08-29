@@ -2,6 +2,7 @@ package repository
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/shakil5281/peoplehub-api/internal/models"
@@ -123,6 +124,31 @@ func (r *LeaveRepository) HardDeleteLeave(id string) error {
 	return r.db.Unscoped().Where("id = ?", id).Delete(&models.Leave{}).Error
 }
 
+func (r *LeaveRepository) ListLeavesExport(companyID, departmentID, employeeID, status, fromDate, toDate string) ([]models.Leave, error) {
+	base := r.db.Model(&models.Leave{}).Where("leaves.deleted_at IS NULL")
+	if companyID != "" {
+		base = base.Where("leaves.company_id = ?", companyID)
+	}
+	if departmentID != "" {
+		base = base.Where("leaves.employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", departmentID)
+	}
+	if employeeID != "" {
+		base = base.Where("leaves.employee_id = ?", employeeID)
+	}
+	if status != "" {
+		base = base.Where("leaves.status = ?", status)
+	}
+	if fromDate != "" {
+		base = base.Where("leaves.from_date >= ?", fromDate)
+	}
+	if toDate != "" {
+		base = base.Where("leaves.to_date <= ?", toDate)
+	}
+	var list []models.Leave
+	err := base.Preload("Employee").Preload("LeaveType").Order("leaves.from_date DESC").Find(&list).Error
+	return list, err
+}
+
 // --- Leave Allocations / Balance ---
 
 func (r *LeaveRepository) UpsertAllocation(a *models.LeaveAllocation) error {
@@ -198,3 +224,37 @@ func (r *LeaveRepository) MonthlyReport(month, year int, companyID, departmentID
 	err := q.Group("departments.id, departments.name").Order("departments.name ASC").Find(&results).Error
 	return results, err
 }
+
+func (r *LeaveRepository) ListActiveLeaveTypes(companyID string) ([]models.LeaveType, error) {
+	var list []models.LeaveType
+	q := r.db.Where("deleted_at IS NULL AND (status = 'active' OR status IS NULL OR status = '')")
+	if companyID != "" {
+		q = q.Where("company_id = ? OR company_id IS NULL OR company_id = ''", companyID)
+	}
+	err := q.Order("name ASC").Find(&list).Error
+	if len(list) == 0 && companyID != "" {
+		// Fallback to all active leave types if none specific to company
+		_ = r.db.Where("deleted_at IS NULL AND (status = 'active' OR status IS NULL OR status = '')").Order("name ASC").Find(&list).Error
+	}
+	return list, err
+}
+
+func (r *LeaveRepository) ListEmployeeLeavesByPeriod(employeeID string, year, month int) ([]models.Leave, error) {
+	var list []models.Leave
+	q := r.db.Preload("LeaveType").Preload("Employee").Where("leaves.employee_id = ? AND leaves.deleted_at IS NULL", employeeID)
+
+	if year > 0 && month > 0 {
+		startDate := fmt.Sprintf("%04d-%02d-01", year, month)
+		t := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		endDate := fmt.Sprintf("%04d-%02d-%02d", year, month, t.AddDate(0, 1, -1).Day())
+		q = q.Where("(leaves.from_date <= ? AND leaves.to_date >= ?) OR (leaves.from_date >= ? AND leaves.from_date <= ?)", endDate, startDate, startDate, endDate)
+	} else if year > 0 {
+		startDate := fmt.Sprintf("%04d-01-01", year)
+		endDate := fmt.Sprintf("%04d-12-31", year)
+		q = q.Where("(leaves.from_date <= ? AND leaves.to_date >= ?) OR (leaves.from_date >= ? AND leaves.from_date <= ?)", endDate, startDate, startDate, endDate)
+	}
+
+	err := q.Order("leaves.from_date DESC").Find(&list).Error
+	return list, err
+}
+

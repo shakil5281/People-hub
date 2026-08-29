@@ -74,7 +74,7 @@ func TestCalculateEmployeeSalary_LateDeductions(t *testing.T) {
 				"absent":  tt.absentDays,
 				"late":    tt.lateDays,
 			}
-			res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 0, 8, 2026, daysInMonth, "user-1")
+			res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 0, 8, 2026, daysInMonth, "", "user-1")
 
 			if res.OtherDeduction != tt.expectedOtherDeduct {
 				t.Errorf("OtherDeduction got = %v, want = %v", res.OtherDeduction, tt.expectedOtherDeduct)
@@ -106,7 +106,7 @@ func TestCalculateEmployeeSalary_PartialMonthPaidDays(t *testing.T) {
 		"weekend": 1,
 	}
 
-	res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 0, 7, 2026, daysInMonth, "user-1")
+	res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 0, 7, 2026, daysInMonth, "", "user-1")
 
 	expectedAbsentDays := 17 // 31 - (12 + 1 + 1)
 	if res.AbsentDays != expectedAbsentDays {
@@ -116,6 +116,57 @@ func TestCalculateEmployeeSalary_PartialMonthPaidDays(t *testing.T) {
 	expectedNetSalary := (9875.0 / 31.0) * 14.0 // (Gross / 31) * (Weekend + Late + Present)
 	diff := res.NetSalary - expectedNetSalary
 	if diff < -0.01 || diff > 0.01 {
+		t.Errorf("NetSalary got = %v, want = %v", res.NetSalary, expectedNetSalary)
+	}
+}
+
+func TestCalculateEmployeeSalary_SeparationDate(t *testing.T) {
+	s := &SalaryService{}
+	emp := models.Employee{
+		CompanyID:      "comp-1",
+		EmployeeID:     "1002",
+		GrossSalary:    31000,
+		OverTimeStatus: true,
+	}
+
+	daysInMonth := 31 // August 2026
+	sepDate := "2026-08-15" // Separated on August 15
+
+	// Worked 13 present days + 2 weekend days = 15 paid days out of 15 days until separation
+	att := map[string]interface{}{
+		"present": 13,
+		"weekend": 2,
+		"late":    0,
+		"absent":  0,
+	}
+
+	res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 0, 8, 2026, daysInMonth, sepDate, "user-1")
+
+	// TotalDays must be 15 (up to separation date)
+	if res.TotalDays != 15 {
+		t.Errorf("TotalDays got = %v, want = 15", res.TotalDays)
+	}
+
+	// AbsentDays must be 0 (worked all eligible days before separation)
+	if res.AbsentDays != 0 {
+		t.Errorf("AbsentDays got = %v, want = 0", res.AbsentDays)
+	}
+
+	// Unworked days outside separation window = 31 - 15 = 16 days
+	// Absent deduction = (31000 / 31) * 16 = 16000
+	expectedAbsentDeduct := (31000.0 / 31.0) * 16.0
+	if res.AbsentDeduction != expectedAbsentDeduct {
+		t.Errorf("AbsentDeduction got = %v, want = %v", res.AbsentDeduction, expectedAbsentDeduct)
+	}
+
+	// Attendance bonus should be awarded because 0 absent days and present > 0
+	if res.AttendanceBonus != 725 {
+		t.Errorf("AttendanceBonus got = %v, want = 725", res.AttendanceBonus)
+	}
+
+	// NetSalary = Gross (31000) - 16000 + 725 = 15725
+	expectedNetSalary := (31000.0 - expectedAbsentDeduct) + 725.0
+	if res.NetSalary != expectedNetSalary {
 		t.Errorf("NetSalary got = %v, want = %v", res.NetSalary, expectedNetSalary)
 	}
 }

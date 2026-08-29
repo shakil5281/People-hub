@@ -44,3 +44,14 @@ export function formatCheck(val: string | null | undefined): string {
   if (val.length >= 5 && val[2] === ":") return val.slice(0, 5)
   return val
 }
+
+export function downloadExport(res: { data: Blob | any }, filename: string) {
+  const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type: res.data?.type || "application/octet-stream" })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+

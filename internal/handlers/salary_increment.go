@@ -92,6 +92,198 @@ func (h *SalaryIncrementHandler) List(c *gin.Context) {
 	})
 }
 
+// GetIncrementDetails godoc
+//
+// @Summary      Get employee increment details and history
+// @Description  Get comprehensive salary increment details and progression for an employee
+// @Tags         Salary
+// @Security     BearerAuth
+// @Produce      json
+// @Param        employee_id   query string false "Employee ID, Punch Number, or UUID"
+// @Param        year          query int    false "Filter by year"
+// @Param        month         query int    false "Filter by month (1-12)"
+// @Param        company_id    query string false "Filter by company"
+// @Param        department_id query string false "Filter by department"
+// @Param        section_id    query string false "Filter by section"
+// @Param        designation_id query string false "Filter by designation"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      500  {object}  map[string]string
+// @Router       /salary/increments/details [get]
+func (h *SalaryIncrementHandler) GetIncrementDetails(c *gin.Context) {
+	empCode := strings.TrimSpace(c.Query("employee_id"))
+	yearStr := c.Query("year")
+	monthStr := c.Query("month")
+	companyID := c.Query("company_id")
+	departmentID := c.Query("department_id")
+	sectionID := c.Query("section_id")
+	designationID := c.Query("designation_id")
+
+	year, _ := strconv.Atoi(yearStr)
+	month, _ := strconv.Atoi(monthStr)
+	if month < 0 || month > 12 {
+		month = 0
+	}
+
+	var emp *models.Employee
+	if empCode != "" {
+		emp, _ = h.employeeRepo.FindWithDetails(empCode)
+	}
+
+	if emp == nil {
+		filter := repository.EmployeeFilter{
+			CompanyID:     companyID,
+			DepartmentID:  departmentID,
+			SectionID:     sectionID,
+			DesignationID: designationID,
+			EmployeeID:    empCode,
+		}
+		emp, _ = h.employeeRepo.FindFirstFilteredWithDetails(filter)
+	}
+
+	if emp == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"employee": nil,
+			"summary": gin.H{
+				"current_gross":          0,
+				"current_basic":          0,
+				"total_increment_amount": 0,
+				"total_increment_count":  0,
+				"total_promotions_count": 0,
+				"last_increment_date":    "",
+				"last_increment_amount":  0,
+				"initial_gross":          0,
+				"total_records":          0,
+			},
+			"increments": []interface{}{},
+		})
+		return
+	}
+
+	// Fetch all increments for the employee (all-time for complete summary calculations)
+	allIncrements, _ := h.incrementRepo.ListByEmployee(emp.EmployeeID, 0, 0)
+
+	// Fetch filtered increments for the specific year/month period
+	var filteredIncrements []models.SalaryIncrement
+	if year > 0 || month > 0 {
+		filteredIncrements, _ = h.incrementRepo.ListByEmployee(emp.EmployeeID, year, month)
+	} else {
+		filteredIncrements = allIncrements
+	}
+
+	// Calculate summary metrics
+	totalIncrementAmount := 0.0
+	totalApprovedCount := 0
+	totalPromotionsCount := 0
+	lastIncrementDate := ""
+	lastIncrementAmount := 0.0
+
+	for _, inc := range allIncrements {
+		if strings.EqualFold(inc.Status, "approved") {
+			totalIncrementAmount += inc.IncrementAmount
+			totalApprovedCount++
+			if lastIncrementDate == "" {
+				lastIncrementDate = inc.EffectiveDate
+				if lastIncrementDate == "" {
+					lastIncrementDate = inc.IncrementDate
+				}
+				lastIncrementAmount = inc.IncrementAmount
+			}
+			if strings.Contains(strings.ToLower(inc.IncrementType), "promotion") {
+				totalPromotionsCount++
+			}
+		}
+	}
+
+	initialGross := emp.GrossSalary - totalIncrementAmount
+	if initialGross < 0 {
+		initialGross = emp.GrossSalary
+	}
+
+	// Format employee profile
+	companyName := ""
+	if emp.Company.CompanyNameEn != "" {
+		companyName = emp.Company.CompanyNameEn
+	}
+	deptName := ""
+	if emp.Department != nil && emp.Department.Name != "" {
+		deptName = emp.Department.Name
+	}
+	desigName := ""
+	if emp.DesignationRef != nil {
+		desigName = emp.DesignationRef.Name
+	}
+	secName := ""
+	if emp.SectionRef != nil {
+		secName = emp.SectionRef.Name
+	}
+	lineName := ""
+	if emp.LineRef != nil {
+		lineName = emp.LineRef.Name
+	}
+	groupName := ""
+	if emp.GroupRef != nil {
+		groupName = emp.GroupRef.Name
+	}
+	shiftName := ""
+	if emp.Shift != nil {
+		shiftName = emp.Shift.Name
+	}
+	joiningDateStr := ""
+	if !emp.JoiningDate.IsZero() {
+		joiningDateStr = emp.JoiningDate.Format("2006-01-02")
+	}
+
+	employeeData := gin.H{
+		"id":                  emp.ID,
+		"employee_id":         emp.EmployeeID,
+		"punch_number":        emp.PunchNumber,
+		"name_en":             emp.NameEn,
+		"name_bn":             emp.NameBn,
+		"phone":               emp.Phone,
+		"gender":              emp.Gender,
+		"status":              emp.Status,
+		"employee_type":       emp.EmployeeType,
+		"joining_date":        joiningDateStr,
+		"gross_salary":        emp.GrossSalary,
+		"basic_salary":        emp.BasicSalary,
+		"house_rent":          emp.HouseRent,
+		"medical_allowance":   emp.MedicalAllowance,
+		"transport_allowance": emp.TransportAllowance,
+		"food_allowance":      emp.FoodAllowance,
+		"company_id":          emp.CompanyID,
+		"company_name":        companyName,
+		"department_id":       emp.DepartmentID,
+		"department_name":     deptName,
+		"designation_id":      emp.DesignationID,
+		"designation_name":    desigName,
+		"section_id":          emp.SectionID,
+		"section_name":        secName,
+		"line_id":             emp.LineID,
+		"line_name":           lineName,
+		"group_id":            emp.GroupID,
+		"group_name":          groupName,
+		"shift_id":            emp.ShiftID,
+		"shift_name":          shiftName,
+		"photo_url":           emp.ImageURL,
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"employee": employeeData,
+		"summary": gin.H{
+			"current_gross":          emp.GrossSalary,
+			"current_basic":          emp.BasicSalary,
+			"total_increment_amount": totalIncrementAmount,
+			"total_increment_count":  totalApprovedCount,
+			"total_promotions_count": totalPromotionsCount,
+			"last_increment_date":    lastIncrementDate,
+			"last_increment_amount":  lastIncrementAmount,
+			"initial_gross":          initialGross,
+			"total_records":          len(filteredIncrements),
+		},
+		"increments": filteredIncrements,
+	})
+}
+
 // BulkApplyIncrement godoc
 //
 // @Summary      Bulk apply salary increments

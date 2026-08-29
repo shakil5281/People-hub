@@ -179,7 +179,7 @@ func (r *OtEarlyExitRepository) UpsertMonth(companyID string, month, year int, r
 				CreatedBy:      &createdBy,
 			}
 		}
-		return tx.Create(&toInsert).Error
+		return tx.CreateInBatches(toInsert, 100).Error
 	})
 }
 
@@ -331,3 +331,37 @@ func (r *OtEarlyExitRepository) ListStats(companyID string, month, year int, dep
 	err := query.Scan(&sum).Error
 	return round2(sum.TotalShortfall), sum.Affected, err
 }
+
+// FindByID retrieves a single early-exit deduction record by ID.
+func (r *OtEarlyExitRepository) FindByID(id string) (*models.OtEarlyExitDeduction, error) {
+	var deduction models.OtEarlyExitDeduction
+	err := r.db.Where("id::text = ? AND deleted_at IS NULL", id).First(&deduction).Error
+	return &deduction, err
+}
+
+// DeleteDeduction permanently deletes a single early-exit deduction record.
+func (r *OtEarlyExitRepository) DeleteDeduction(id string) error {
+	return r.db.Where("id::text = ?", id).Delete(&models.OtEarlyExitDeduction{}).Error
+}
+
+// CreateExemption saves an exemption rule so future re-computations or salary processes
+// skip this employee (or employee on a specific date).
+func (r *OtEarlyExitRepository) CreateExemption(ex *models.OtEarlyExitExemption) error {
+	_ = r.db.AutoMigrate(&models.OtEarlyExitExemption{})
+	return r.db.Create(ex).Error
+}
+
+// ListExemptions returns all active exemptions for a company and payroll month.
+func (r *OtEarlyExitRepository) ListExemptions(companyID string, month, year int) ([]models.OtEarlyExitExemption, error) {
+	var exemptions []models.OtEarlyExitExemption
+	err := r.db.Where("company_id = ? AND month = ? AND year = ? AND deleted_at IS NULL", companyID, month, year).
+		Find(&exemptions).Error
+	return exemptions, err
+}
+
+// DeleteEmployeeDeductions deletes all deduction rows for a specific employee in a month.
+func (r *OtEarlyExitRepository) DeleteEmployeeDeductions(companyID, employeeID string, month, year int) error {
+	return r.db.Where("company_id = ? AND employee_id = ? AND month = ? AND year = ?", companyID, employeeID, month, year).
+		Delete(&models.OtEarlyExitDeduction{}).Error
+}
+

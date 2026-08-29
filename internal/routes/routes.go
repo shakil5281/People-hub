@@ -38,6 +38,7 @@ func Setup(
 	eidBonusHandler *handlers.EidBonusHandler,
 	employeeImportHandler *handlers.EmployeeImportHandler,
 	tempShiftHandler *handlers.TemporaryShiftHandler,
+	rosterHandler *handlers.RosterHandler,
 	userHandler *handlers.UserHandler,
 	roleHandler *handlers.RoleHandler,
 	settingsHandler *handlers.SettingsHandler,
@@ -298,8 +299,22 @@ func Setup(
 		tempShift.GET("", tempShiftHandler.List)
 		tempShift.GET("/:id", tempShiftHandler.GetByID)
 		tempShift.POST("", tempShiftHandler.Create)
+		tempShift.POST("/bulk", tempShiftHandler.BulkCreate)
 		tempShift.PUT("/:id", tempShiftHandler.Update)
 		tempShift.DELETE("/:id", tempShiftHandler.Delete)
+	}
+
+	// Protected roster routes
+	roster := api.Group("/rosters")
+	roster.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		roster.GET("", rosterHandler.List)
+		roster.GET("/:id", rosterHandler.GetByID)
+		roster.POST("", rosterHandler.Create)
+		roster.POST("/bulk", rosterHandler.BulkCreate)
+		roster.PUT("/:id", rosterHandler.Update)
+		roster.DELETE("/:id", rosterHandler.Delete)
+		roster.POST("/bulk-delete", rosterHandler.BulkDelete)
 	}
 
 	// Protected attendance routes
@@ -311,7 +326,6 @@ func Setup(
 		attendance.GET("/monthly-report", attendanceHandler.MonthlyReport)
 		attendance.GET("/monthly-report/export/excel", attendanceHandler.ExportMonthlyReportExcel)
 		attendance.GET("/monthly-report/export/pdf", attendanceHandler.ExportMonthlyReportPDF)
-		attendance.GET("/:id", attendanceHandler.GetByID)
 		attendance.GET("/summary", attendanceHandler.Summary)
 		attendance.GET("/summary/export/excel", attendanceHandler.ExportSummaryExcel)
 		attendance.GET("/custom-daily-summary", attendanceHandler.GetCustomDailySummary)
@@ -334,14 +348,8 @@ func Setup(
 		attendance.GET("/absent", attendanceHandler.AbsentAttendance)
 		attendance.GET("/absent/export/excel", attendanceHandler.ExportAbsentExcel)
 		attendance.GET("/missing/export/excel", attendanceHandler.ExportMissingAttendanceExcel)
-		attendance.POST("", attendanceHandler.Create)
-		attendance.POST("/bulk-delete", attendanceHandler.DeleteBulk)
-		attendance.PUT("/:id", attendanceHandler.Update)
-		attendance.DELETE("/:id", attendanceHandler.Delete)
-		attendance.POST("/ot-early-exit/process", otEarlyExitHandler.Compute)
-		attendance.GET("/ot-early-exit", otEarlyExitHandler.List)
-		attendance.GET("/ot-early-exit/export/excel", otEarlyExitHandler.ExportExcel)
 
+		// Night Bill
 		attendance.GET("/night-bill", nightBillHandler.List)
 		attendance.POST("/night-bill", nightBillHandler.Create)
 		attendance.POST("/night-bill/process", nightBillHandler.Process)
@@ -360,6 +368,12 @@ func Setup(
 		attendance.POST("/night-bill/employee-list/bulk-delete", nightBillEmployeeListHandler.BulkDelete)
 		attendance.GET("/night-bill/employee-list/check/:employee_id", nightBillEmployeeListHandler.CheckEmployee)
 
+		attendance.POST("", attendanceHandler.Create)
+		attendance.POST("/bulk-delete", attendanceHandler.DeleteBulk)
+		attendance.GET("/:id", attendanceHandler.GetByID)
+		attendance.PUT("/:id", attendanceHandler.Update)
+		attendance.DELETE("/:id", attendanceHandler.Delete)
+
 		// Admin-only destructive attendance operations
 		attendanceAdmin := attendance.Group("")
 		attendanceAdmin.Use(middleware.RequireRole("admin"))
@@ -371,6 +385,18 @@ func Setup(
 		attendance.POST("/clock-out", attendanceHandler.ClockOut)
 		attendance.POST("/custom-summary", attendanceHandler.CustomSummaryReport)
 		attendance.POST("/bulk-update-missing", attendanceHandler.BulkUpdateMissing)
+	}
+
+	// Protected OT Early Exit routes
+	otEarlyExit := api.Group("/attendance/ot-early-exit")
+	otEarlyExit.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		otEarlyExit.POST("/process", otEarlyExitHandler.Compute)
+		otEarlyExit.GET("", otEarlyExitHandler.List)
+		otEarlyExit.GET("/export/excel", otEarlyExitHandler.ExportExcel)
+		otEarlyExit.POST("/exempt-employee", otEarlyExitHandler.ExemptEmployee)
+		otEarlyExit.DELETE("/:id", otEarlyExitHandler.Remove)
+		otEarlyExit.POST("/delete/:id", otEarlyExitHandler.Remove)
 	}
 
 	// Protected data log routes
@@ -493,6 +519,8 @@ func Setup(
 	leaves.Use(middleware.AuthMiddleware(jwtSecret))
 	{
 		leaves.GET("", leaveHandler.ListLeaves)
+		leaves.GET("/export/excel", leaveHandler.ExportExcel)
+		leaves.GET("/export/pdf", leaveHandler.ExportPDF)
 		leaves.GET("/:id", leaveHandler.GetLeave)
 		leaves.GET("/:id/export/pdf", leaveHandler.ExportLeaveFormPDF)
 		leaves.POST("", leaveHandler.ApplyLeave)
@@ -516,10 +544,20 @@ func Setup(
 		leaveReport.GET("/monthly", leaveHandler.MonthlyLeaveReport)
 	}
 
+	// Protected leave-details routes
+	leaveDetails := api.Group("/leave-details")
+	leaveDetails.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		leaveDetails.GET("", leaveHandler.GetLeaveDetails)
+	}
+
 	// Protected holiday routes
 	holiday := api.Group("/holidays")
 	holiday.Use(middleware.AuthMiddleware(jwtSecret))
 	{
+		holiday.GET("/advance-preview", holidayHandler.AdvancePreview)
+		holiday.POST("/bulk-advance", holidayHandler.BulkAdvanceHoliday)
+		holiday.POST("/bulk-delete", holidayHandler.BulkDelete)
 		holiday.GET("", holidayHandler.List)
 		holiday.GET("/:id", holidayHandler.GetByID)
 		holiday.POST("", holidayHandler.Create)
@@ -551,6 +589,7 @@ func Setup(
 		salary.GET("/bank-sheet/export", salaryHandler.BankSheetExportAll)
 		salary.GET("/increments/export/excel", salaryIncrementHandler.ExportExcel)
 		salary.GET("/increments/export/pdf", salaryIncrementHandler.ExportPDF)
+		salary.GET("/increments/details", salaryIncrementHandler.GetIncrementDetails)
 		salary.GET("/increments", salaryIncrementHandler.List)
 		salary.POST("/increments/bulk-apply", salaryIncrementHandler.BulkApply)
 		salary.PUT("/increments/:id/approve", salaryIncrementHandler.Approve)

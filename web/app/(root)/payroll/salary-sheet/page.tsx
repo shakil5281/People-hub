@@ -59,7 +59,7 @@ interface SalaryRecord {
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth()
-const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
+const YEARS = Array.from({length: currentYear - 2020 + 6}, (_,i)=>2020+i)
 
 const selectCls = "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm"
 const labelCls = "text-xs font-medium text-muted-foreground"

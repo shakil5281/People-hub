@@ -357,6 +357,254 @@ func (h *HolidayHandler) Update(c *gin.Context) {
 	c.JSON(http.StatusOK, holiday)
 }
 
+type BulkAdvanceHolidayRequest struct {
+	CompanyID   string   `json:"company_id" binding:"required"`
+	Name        string   `json:"name" binding:"required"`
+	FromDate    string   `json:"from_date" binding:"required"`
+	ToDate      string   `json:"to_date"`
+	Dates       []string `json:"dates"`
+	Description string   `json:"description"`
+	Type        string   `json:"type"`
+	AdvanceOnly *bool    `json:"advance_only"`
+}
+
+type BulkDeleteHolidayRequest struct {
+	IDs []string `json:"ids" binding:"required"`
+}
+
+// BulkAdvanceHoliday godoc
+//
+// @Summary      Bulk advance holidays
+// @Description  Create government holidays in advance for future dates. Expands date range per-day, skips existing active holiday dates.
+// @Tags         Holidays
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        request body BulkAdvanceHolidayRequest true "Bulk advance holiday payload"
+// @Success      201  {object}  map[string]interface{}
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /holidays/bulk-advance [post]
+func (h *HolidayHandler) BulkAdvanceHoliday(c *gin.Context) {
+	var req BulkAdvanceHolidayRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.Type == "" {
+		req.Type = "government"
+	}
+	if req.Type != "government" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bulk advance holiday only supports type=government"})
+		return
+	}
+	advanceOnly := true
+	if req.AdvanceOnly != nil {
+		advanceOnly = *req.AdvanceOnly
+	}
+	today := time.Now().UTC().Format("2006-01-02")
+	var dates []string
+	if len(req.Dates) > 0 {
+		for _, d := range req.Dates {
+			if _, err := time.Parse("2006-01-02", d); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid dates entry format, use YYYY-MM-DD"})
+				return
+			}
+			if advanceOnly && d < today {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "advance_only: date must be today or future: " + d})
+				return
+			}
+		}
+		dates = req.Dates
+	} else {
+		toDate := req.ToDate
+		if toDate == "" {
+			toDate = req.FromDate
+		}
+		var err error
+		dates, err = utils.GenerateDateRange(req.FromDate, toDate)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from_date/to_date format, use YYYY-MM-DD"})
+			return
+		}
+		if advanceOnly {
+			for _, d := range dates {
+				if d < today {
+					c.JSON(http.StatusBadRequest, gin.H{"error": "advance_only: date must be today or future: " + d})
+					return
+				}
+			}
+		}
+	}
+	userID := c.GetString("user_id")
+	var created []models.Holiday
+	var skipped []string
+	for _, d := range dates {
+		existing, _ := h.holidayRepo.ListActiveByDate(d, req.CompanyID)
+		already := false
+		for _, ex := range existing {
+			if ex.Type != "weekend_change" {
+				already = true
+				break
+			}
+		}
+		if already {
+			skipped = append(skipped, d)
+			continue
+		}
+		holiday := models.Holiday{
+			CompanyID:   req.CompanyID,
+			Name:        req.Name,
+			Date:        d,
+			Type:        req.Type,
+			Description: req.Description,
+			Status:      "active",
+			CreatedBy:   &userID,
+		}
+		if err := h.holidayRepo.Create(&holiday); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		created = append(created, holiday)
+	}
+	if len(created) > 0 {
+		startDate := dates[0]
+		endDate := dates[len(dates)-1]
+		go h.reprocessHolidayAttendance(startDate, &startDate, &endDate, req.CompanyID)
+	}
+	c.JSON(http.StatusCreated, gin.H{
+		"message": "Bulk advance holidays created",
+		"count":   len(created),
+		"skipped": skipped,
+		"records": created,
+	})
+}
+
+// AdvancePreview godoc
+//
+// @Summary      Preview advance holiday/general duty
+// @Description  Dry-run expansion of dates and collision check without DB write.
+// @Tags         Holidays
+// @Security     BearerAuth
+// @Produce      json
+// @Param        company_id query string true "Company ID"
+// @Param        type query string false "Type government|weekend_change"
+// @Param        from_date query string false "From date"
+// @Param        to_date query string false "To date"
+// @Param        dates query string false "Comma-separated dates for preview"
+// @Param        advance_only query bool false "Future only"
+// @Success      200  {object}  map[string]interface{}
+// @Router       /holidays/advance-preview [get]
+func (h *HolidayHandler) AdvancePreview(c *gin.Context) {
+	companyID := c.Query("company_id")
+	fromDate := c.Query("from_date")
+	toDate := c.Query("to_date")
+	datesParam := c.Query("dates")
+	hType := c.Query("type")
+	if hType == "" {
+		hType = "government"
+	}
+	advanceOnlyStr := c.Query("advance_only")
+	advanceOnly := advanceOnlyStr != "false"
+	today := time.Now().UTC().Format("2006-01-02")
+	var dates []string
+	if datesParam != "" {
+		for _, d := range splitCSV(datesParam) {
+			d = utils.NormalizeDate(d)
+			if _, err := time.Parse("2006-01-02", d); err != nil {
+				continue
+			}
+			dates = append(dates, d)
+		}
+	} else if fromDate != "" {
+		if toDate == "" {
+			toDate = fromDate
+		}
+		var err error
+		dates, err = utils.GenerateDateRange(fromDate, toDate)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid from_date/to_date"})
+			return
+		}
+	}
+	var collisions []string
+	var valid []string
+	for _, d := range dates {
+		if advanceOnly && d < today {
+			collisions = append(collisions, d+": past date (advance_only)")
+			continue
+		}
+		if hType == "government" {
+			list, _ := h.holidayRepo.ListActiveByDate(d, companyID)
+			has := false
+			for _, ex := range list {
+				if ex.Type != "weekend_change" {
+					has = true
+					break
+				}
+			}
+			if has {
+				collisions = append(collisions, d+": already holiday")
+			} else {
+				valid = append(valid, d)
+			}
+		} else {
+			valid = append(valid, d)
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"expanded":   dates,
+		"valid":      valid,
+		"collisions": collisions,
+	})
+}
+
+func splitCSV(s string) []string {
+	var out []string
+	start := 0
+	for i, ch := range s {
+		if ch == ',' {
+			out = append(out, trimSpace(s[start:i]))
+			start = i + 1
+		}
+	}
+	out = append(out, trimSpace(s[start:]))
+	return out
+}
+
+func trimSpace(s string) string {
+	for len(s) > 0 && (s[0] == ' ' || s[0] == '\t' || s[0] == '\n' || s[0] == '\r') {
+		s = s[1:]
+	}
+	for len(s) > 0 && (s[len(s)-1] == ' ' || s[len(s)-1] == '\t' || s[len(s)-1] == '\n' || s[len(s)-1] == '\r') {
+		s = s[:len(s)-1]
+	}
+	return s
+}
+
+// BulkDelete godoc
+//
+// @Summary      Bulk delete holidays
+// @Tags         Holidays
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        request body BulkDeleteHolidayRequest true "IDs to delete"
+// @Success      200  {object}  map[string]string
+// @Router       /holidays/bulk-delete [post]
+func (h *HolidayHandler) BulkDelete(c *gin.Context) {
+	var req BulkDeleteHolidayRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.holidayRepo.DeleteBulk(req.IDs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Holidays deleted", "count": len(req.IDs)})
+}
+
 // DeleteHoliday godoc
 //
 // @Summary      Delete holiday

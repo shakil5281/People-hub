@@ -150,3 +150,27 @@ func (r *HolidayRepository) ListActiveByDateRange(startDate, endDate, companyID 
 	}
 	return list, nil
 }
+
+func (r *HolidayRepository) BatchCreate(holidays []models.Holiday) error {
+	if len(holidays) == 0 {
+		return nil
+	}
+	return r.db.Create(&holidays).Error
+}
+
+func (r *HolidayRepository) DeleteBulk(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.Where("id IN ?", ids).Delete(&models.Holiday{}).Error
+}
+
+func (r *HolidayRepository) FindByCompanyAndDate(companyID, date string) (*models.Holiday, error) {
+	var h models.Holiday
+	err := r.db.Where("company_id = ? AND date = ? AND deleted_at IS NULL", companyID, date).First(&h).Error
+	if err != nil {
+		return nil, err
+	}
+	normalizeHolidayDates(&h)
+	return &h, nil
+}

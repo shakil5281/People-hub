@@ -79,12 +79,14 @@ func Connect(cfg *config.Config) {
 		&models.Upazila{}, &models.Union{}, &models.Employee{}, &models.Requirement{},
 		&models.Separation{}, &models.IdCard{}, &models.Shift{}, &models.LeaveType{},
 		&models.LeaveAllocation{}, &models.Leave{}, &models.TemporaryShift{},
+		&models.Roster{},
 		&models.Attendance{}, &models.DataLog{}, &models.Salary{}, &models.Session{},
 		&models.SystemSetting{}, &models.SalaryIncrement{}, &models.AdvanceSalary{},
 		&models.Punishment{}, &models.DailySchedule{}, &models.TiffinBill{},
 		&models.Holiday{}, &models.PostOffice{},
 		&models.MissingAttendance{},
 		&models.OtEarlyExitDeduction{},
+		&models.OtEarlyExitExemption{},
 		&models.NightBill{},
 		&models.NightBillEmployeeList{},
 		&models.EmployeeMigration{},
@@ -95,6 +97,8 @@ func Connect(cfg *config.Config) {
 	db.Exec("CREATE TABLE IF NOT EXISTS tiffin_bills (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS night_bills (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	db.Exec("CREATE TABLE IF NOT EXISTS employee_migrations (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
+	db.Exec("CREATE TABLE IF NOT EXISTS rosters (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
+	db.Exec("CREATE TABLE IF NOT EXISTS ot_early_exit_exemptions (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
 	// Re-run AutoMigrate after ensuring tables exist so columns/indexes are added.
 	db.AutoMigrate(
 		&models.SalaryIncrement{}, &models.AdvanceSalary{},
@@ -106,6 +110,8 @@ func Connect(cfg *config.Config) {
 		&models.NightBill{},
 		&models.NightBillEmployeeList{},
 		&models.EmployeeMigration{},
+		&models.Roster{},
+		&models.OtEarlyExitExemption{},
 	)
 
 	// Use silent session for ALTER statements to avoid noisy ERROR logs when tables don't exist yet
@@ -130,6 +136,7 @@ func Connect(cfg *config.Config) {
 	alterCol("missing_attendances", "employee_id")
 	alterCol("ot_early_exit_deductions", "employee_id")
 	alterCol("night_bill_employee_lists", "employee_id")
+	alterCol("rosters", "employee_id")
 	// Recreate employee_id unique index as partial so soft-deleted records don't block re-adding an employee.
 	silentDB.Exec("DROP INDEX IF EXISTS idx_night_bill_employee_lists_employee_id")
 	silentDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_night_bill_employee_lists_employee_id ON night_bill_employee_lists(employee_id) WHERE deleted_at IS NULL")
@@ -168,14 +175,34 @@ func Connect(cfg *config.Config) {
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_leave_allocations_emp_year ON leave_allocations(employee_id, year)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_temporary_shifts_company_date ON temporary_shifts(company_id, date)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_data_logs_date_processed ON data_logs(date, processed) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_attendances_company_date ON attendances(company_id, date) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_attendances_employee_date_company ON attendances(employee_id, date, company_id) WHERE deleted_at IS NULL")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_attendances_date_status ON attendances(date, status)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_ot_early_exit_company_month ON ot_early_exit_deductions(company_id, year, month) WHERE deleted_at IS NULL")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_leaves_status_dates ON leaves(status, from_date, to_date)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_rosters_company_date ON rosters(company_id, date) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_rosters_employee_date ON rosters(employee_id, date) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_holidays_company_date ON holidays(company_id, date) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_holidays_weekend_date ON holidays(company_id, weekend_date) WHERE deleted_at IS NULL AND weekend_date IS NOT NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_holidays_type_status ON holidays(type, status) WHERE deleted_at IS NULL")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_level ON system_logs(level)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_source ON system_logs(source)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_user ON system_logs(user_id)")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_system_logs_created ON system_logs(created_at)")
+
+	// Salary-process optimization indexes
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_advance_salaries_monthly ON advance_salaries(company_id, deduction_year, deduction_month, status) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_temporary_shifts_emp_date ON temporary_shifts(employee_id, date) WHERE deleted_at IS NULL AND status = 'active'")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_ot_early_exit_lookup ON ot_early_exit_deductions(company_id, month, year, employee_id) WHERE deleted_at IS NULL")
+
+	// Tune connection pool — prevents salary process blocking on single connection (was 1m30s due to pool starvation)
+	if sqlDB, err := db.DB(); err == nil {
+		sqlDB.SetMaxOpenConns(25)
+		sqlDB.SetMaxIdleConns(10)
+		sqlDB.SetConnMaxLifetime(30 * 60 * 1_000_000_000) // 30m
+		sqlDB.SetConnMaxIdleTime(5 * 60 * 1_000_000_000)  // 5m
+	}
 
 	DB = db
 	fmt.Println("Database connected successfully")

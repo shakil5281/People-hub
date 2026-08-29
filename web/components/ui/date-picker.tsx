@@ -47,33 +47,128 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
 
   const handleDdChange = (val: string) => {
     const cleaned = val.replace(/\D/g, "").slice(0, 2)
+    // prevent invalid day first digit >3 from sticking as single digit that blocks 30/31
+    // allow 0-3 as first digit, but if user types 4-9 as first char, keep it but don't auto-advance
     setDd(cleaned)
     if (cleaned.length === 2) {
-      mmRef.current?.focus()
-      mmRef.current?.select()
+      // defer focus to avoid stealing the just-typed character (fixes 30, 10 not registering)
+      setTimeout(() => {
+        mmRef.current?.focus()
+        mmRef.current?.select()
+      }, 0)
+    } else if (cleaned.length === 1 && parseInt(cleaned, 10) > 3) {
+      // single digit 4-9 can't be valid day without leading zero -> auto-pad and advance
+      const padded = cleaned.padStart(2, "0")
+      setDd(padded)
+      setTimeout(() => {
+        mmRef.current?.focus()
+        mmRef.current?.select()
+      }, 0)
     }
   }
 
   const handleMmChange = (val: string) => {
     const cleaned = val.replace(/\D/g, "").slice(0, 2)
+    // clamp month to 12
+    if (cleaned.length === 2) {
+      const num = parseInt(cleaned, 10)
+      if (num > 12) {
+        // keep only first digit if second makes >12, e.g., 13 -> 1
+        const first = cleaned.slice(0, 1)
+        setMm(first)
+        return
+      }
+    }
     setMm(cleaned)
     if (cleaned.length === 2) {
-      yyyyRef.current?.focus()
-      yyyyRef.current?.select()
+      setTimeout(() => {
+        yyyyRef.current?.focus()
+        yyyyRef.current?.select()
+      }, 0)
+    } else if (cleaned.length === 1 && parseInt(cleaned, 10) > 1) {
+      // month 2-9 as single digit -> pad to 02-09 and advance (fixes 9 working but consistent)
+      const padded = cleaned.padStart(2, "0")
+      // don't auto-pad 1 because 10,11,12 are valid two-digit months
+      if (cleaned !== "1") {
+        setMm(padded)
+        setTimeout(() => {
+          yyyyRef.current?.focus()
+          yyyyRef.current?.select()
+        }, 0)
+      }
     }
   }
 
   const handleYyyyChange = (val: string) => {
     const cleaned = val.replace(/\D/g, "").slice(0, 4)
     setYyyy(cleaned)
+    // tryComplete handled by useEffect after state settles; also try immediate for fast feedback
     if (cleaned.length === 4) {
       tryComplete(dd, mm, cleaned)
     }
   }
 
-  const handleDdBlur = () => tryComplete(dd, mm, yyyy)
-  const handleMmBlur = () => tryComplete(dd, mm, yyyy)
+  // auto-complete when all parts become valid (covers paste and deferred state)
+  React.useEffect(() => {
+    if (dd && mm && yyyy.length === 4) {
+      tryComplete(dd, mm, yyyy)
+    }
+  }, [dd, mm, yyyy])
+
+  const handleDdBlur = () => {
+    // pad single digit dd: 3 -> 03
+    if (dd.length === 1) {
+      const padded = dd.padStart(2, "0")
+      setDd(padded)
+      tryComplete(padded, mm, yyyy)
+    } else {
+      tryComplete(dd, mm, yyyy)
+    }
+  }
+  const handleMmBlur = () => {
+    if (mm.length === 1) {
+      const padded = mm.padStart(2, "0")
+      setMm(padded)
+      tryComplete(dd, padded, yyyy)
+    } else {
+      tryComplete(dd, mm, yyyy)
+    }
+  }
   const handleYyyyBlur = () => tryComplete(dd, mm, yyyy)
+
+  const handleDdKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && dd === "" ) {
+      e.preventDefault()
+      mmRef.current?.focus()
+    }
+    if (e.key === "/" || e.key === "-" ) {
+      e.preventDefault()
+      mmRef.current?.focus()
+      mmRef.current?.select()
+    }
+  }
+  const handleMmKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && mm === "") {
+      e.preventDefault()
+      ddRef.current?.focus()
+      ddRef.current?.select()
+    }
+    if (e.key === "/" || e.key === "-") {
+      e.preventDefault()
+      yyyyRef.current?.focus()
+      yyyyRef.current?.select()
+    }
+  }
+  const handleYyyyKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Backspace" && yyyy === "") {
+      e.preventDefault()
+      mmRef.current?.focus()
+      mmRef.current?.select()
+    }
+    if (e.key === "Enter") {
+      tryComplete(dd, mm, yyyy)
+    }
+  }
 
   const handleClear = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -104,6 +199,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
           onChange={(e) => handleDdChange(e.target.value)}
           onBlur={handleDdBlur}
           onFocus={(e) => e.target.select()}
+          onKeyDown={handleDdKeyDown}
           disabled={disabled}
           className="w-10 h-full text-center bg-transparent outline-none placeholder:text-muted-foreground text-sm border-r border-input"
         />
@@ -116,6 +212,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
           onChange={(e) => handleMmChange(e.target.value)}
           onBlur={handleMmBlur}
           onFocus={(e) => e.target.select()}
+          onKeyDown={handleMmKeyDown}
           disabled={disabled}
           className="w-10 h-full text-center bg-transparent outline-none placeholder:text-muted-foreground text-sm border-r border-input"
         />
@@ -128,6 +225,7 @@ export function DatePicker({ value, onChange, placeholder = "Pick a date", class
           onChange={(e) => handleYyyyChange(e.target.value)}
           onBlur={handleYyyyBlur}
           onFocus={(e) => e.target.select()}
+          onKeyDown={handleYyyyKeyDown}
           disabled={disabled}
           className="w-14 h-full text-center bg-transparent outline-none placeholder:text-muted-foreground text-sm flex-1 min-w-0"
         />

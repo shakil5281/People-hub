@@ -9,15 +9,14 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { DatePicker } from "@/components/ui/date-picker"
-import { tempShiftSchema, TempShiftFormData, TempShift } from "../data/temporary-shift-data"
+import { rosterSchema, RosterFormData, Roster } from "../data/roster-data"
 import { employeeApi, shiftApi } from "@/lib/api"
 
-interface TempShiftFormProps {
-  initialData?: Partial<TempShift>
-  onSuccess: (data: TempShiftFormData) => void
+interface RosterFormProps {
+  initialData?: Partial<Roster>
+  onSuccess: (data: RosterFormData) => void
   onCancel?: () => void
   isEditing?: boolean
-  tempShiftId?: string
 }
 
 interface EmployeeOption {
@@ -31,33 +30,37 @@ interface ShiftOption {
   name: string
 }
 
-export function TempShiftForm({ initialData, onSuccess, onCancel, isEditing = false, tempShiftId }: TempShiftFormProps) {
+export function RosterForm({ initialData, onSuccess, onCancel, isEditing = false }: RosterFormProps) {
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isLoading, setIsLoading] = React.useState(false)
   const [employees, setEmployees] = React.useState<EmployeeOption[]>([])
   const [shifts, setShifts] = React.useState<ShiftOption[]>([])
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm({
-    resolver: zodResolver(tempShiftSchema),
+    resolver: zodResolver(rosterSchema),
     defaultValues: {
       employee_id: initialData?.employee_id || "",
       shift_id: initialData?.shift_id || "",
       from_date: "",
+      to_date: "",
       reason: "",
       status: "active",
     },
   })
 
   const fromDateVal = watch("from_date")
+  const toDateVal = watch("to_date")
 
   React.useEffect(() => {
     setIsLoading(true)
     Promise.all([
-      employeeApi.list({ status: "active" }),
+      employeeApi.list({ status: "active", limit: "500" }),
       shiftApi.list(),
     ]).then(([empRes, shiftRes]) => {
-      const empList = Array.isArray(empRes.data) ? empRes.data : []
-      const shiftList = Array.isArray(shiftRes.data) ? shiftRes.data : []
+      const empData = empRes.data as unknown as { data?: EmployeeOption[] }
+      const empList: EmployeeOption[] = Array.isArray(empData?.data) ? empData.data : (Array.isArray(empRes.data) ? empRes.data as unknown as EmployeeOption[] : [])
+      const shiftData = shiftRes.data as unknown as { data?: ShiftOption[] }
+      const shiftList: ShiftOption[] = Array.isArray(shiftData?.data) ? shiftData.data : (Array.isArray(shiftRes.data) ? shiftRes.data as unknown as ShiftOption[] : [])
       setEmployees(empList)
       setShifts(shiftList)
     }).finally(() => setIsLoading(false))
@@ -69,13 +72,14 @@ export function TempShiftForm({ initialData, onSuccess, onCancel, isEditing = fa
         employee_id: initialData.employee_id || "",
         shift_id: initialData.shift_id || "",
         from_date: initialData.date || "",
+        to_date: initialData.date || "",
         reason: initialData.reason || "",
         status: initialData.status || "active",
       })
     }
   }, [initialData, isEditing, reset])
 
-  const onSubmit = async (data: TempShiftFormData) => {
+  const onSubmit = async (data: RosterFormData) => {
     setIsSubmitting(true)
     try {
       await onSuccess(data)
@@ -104,7 +108,7 @@ export function TempShiftForm({ initialData, onSuccess, onCancel, isEditing = fa
           >
             <option value="">Select Employee</option>
             {employees.map((emp) => (
-              <option key={emp.id} value={emp.id}>
+              <option key={emp.id} value={emp.employee_id}>
                 {emp.name_en} ({emp.employee_id})
               </option>
             ))}
@@ -127,21 +131,29 @@ export function TempShiftForm({ initialData, onSuccess, onCancel, isEditing = fa
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>Date *</Label>
-        <DatePicker
-          value={fromDateVal ? new Date(fromDateVal + "T00:00:00") : undefined}
-          onChange={(date) => setValue("from_date", date ? format(date, "yyyy-MM-dd") : "", { shouldValidate: true })}
-          placeholder="Select date (single day only)"
-        />
-        {errors.from_date && <p className="text-sm text-destructive">{errors.from_date.message}</p>}
-        <p className="text-xs text-muted-foreground">Temporary shift is for single day only — all selected employees will be assigned the same date.</p>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>From Date *</Label>
+          <DatePicker
+            value={fromDateVal ? new Date(fromDateVal + "T00:00:00") : undefined}
+            onChange={(date) => setValue("from_date", date ? format(date, "yyyy-MM-dd") : "", { shouldValidate: true })}
+            placeholder="Select from date"
+          />
+          {errors.from_date && <p className="text-sm text-destructive">{errors.from_date.message}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label>To Date</Label>
+          <DatePicker
+            value={toDateVal ? new Date(toDateVal + "T00:00:00") : undefined}
+            onChange={(date) => setValue("to_date", date ? format(date, "yyyy-MM-dd") : "")}
+            placeholder="Select to date"
+          />
+        </div>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="reason">Reason *</Label>
-        <Input id="reason" placeholder="Replacement, Overtime, Emergency..." {...register("reason")} aria-invalid={!!errors.reason} />
-        {errors.reason && <p className="text-sm text-destructive">{errors.reason.message}</p>}
+        <Label htmlFor="reason">Reason</Label>
+        <Input id="reason" placeholder="Weekly roster, rotation, etc." {...register("reason")} />
       </div>
 
       <div className="flex justify-end gap-4 pt-4 border-t">

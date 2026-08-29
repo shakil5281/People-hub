@@ -1,6 +1,9 @@
 package repository
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"gorm.io/gorm"
 )
@@ -50,7 +53,7 @@ func (r *SeparationRepository) ListFiltered(employee, employeeID, departmentID, 
 		base = base.Where("separations.employee ILIKE ?", "%"+employee+"%")
 	}
 	if employeeID != "" {
-		base = base.Where("separations.employee_id ILIKE ?", "%"+employeeID+"%")
+		base = base.Where("separations.employee_id = ?", employeeID)
 	}
 	if departmentID != "" {
 		base = base.Where("separations.department_id = ?", departmentID)
@@ -100,7 +103,7 @@ func (r *SeparationRepository) ListAllFiltered(employee, employeeID, departmentI
 		base = base.Where("separations.employee ILIKE ?", "%"+employee+"%")
 	}
 	if employeeID != "" {
-		base = base.Where("separations.employee_id ILIKE ?", "%"+employeeID+"%")
+		base = base.Where("separations.employee_id = ?", employeeID)
 	}
 	if departmentID != "" {
 		base = base.Where("separations.department_id = ?", departmentID)
@@ -178,4 +181,35 @@ func (r *SeparationRepository) FindEmployeeByCode(empCode string) (*models.Emplo
 	err := r.db.Preload("Company").Preload("Department").Preload("DesignationRef").Preload("SectionRef").
 		Where("employee_id = ? AND deleted_at IS NULL", empCode).First(&emp).Error
 	return &emp, err
+}
+
+// GetSeparationDatesByMonth returns a map of employee_id -> separation_date (YYYY-MM-DD) for processed separations in that month.
+func (r *SeparationRepository) GetSeparationDatesByMonth(companyID string, month, year int) (map[string]string, error) {
+	startDate := fmt.Sprintf("%04d-%02d-01", year, month)
+	t := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	lastDay := t.AddDate(0, 1, -1).Day()
+	endDate := fmt.Sprintf("%04d-%02d-%02d", year, month, lastDay)
+
+	var rows []struct {
+		EmployeeID string `gorm:"column:employee_id"`
+		Date       string `gorm:"column:date"`
+	}
+
+	q := r.db.Table("separations").
+		Select("employee_id, MAX(date) as date").
+		Where("deleted_at IS NULL AND LOWER(status) != 'cancelled' AND date >= ? AND date <= ?", startDate, endDate)
+	if companyID != "" {
+		q = q.Where("company_id = ?", companyID)
+	}
+
+	err := q.Group("employee_id").Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+
+	res := make(map[string]string, len(rows))
+	for _, row := range rows {
+		res[row.EmployeeID] = row.Date
+	}
+	return res, nil
 }

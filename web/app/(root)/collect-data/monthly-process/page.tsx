@@ -17,7 +17,7 @@ const MONTHS = [
 ]
 
 const currentYear = new Date().getFullYear()
-const YEARS = Array.from({ length: 10 }, (_, i) => currentYear - 5 + i)
+const YEARS = Array.from({ length: currentYear - 2020 + 6 }, (_, i) => 2020 + i)
 
 export default function MonthlyProcessPage() {
   const [processing, setProcessing] = React.useState(false)

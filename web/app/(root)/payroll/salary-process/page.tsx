@@ -11,7 +11,7 @@ interface Company { id: string; company_name_en: string }
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"]
 const currentYear = new Date().getFullYear()
 const currentMonth = new Date().getMonth()
-const YEARS = Array.from({length:10},(_,i)=>currentYear-5+i)
+const YEARS = Array.from({length: currentYear - 2020 + 6}, (_,i)=>2020+i)
 
 export default function SalaryProcessPage() {
   const [companies, setCompanies] = React.useState<Company[]>([])

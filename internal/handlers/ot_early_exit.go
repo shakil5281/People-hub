@@ -141,6 +141,82 @@ func (h *OtEarlyExitHandler) List(c *gin.Context) {
 	})
 }
 
+// Remove godoc
+//
+//	@Summary      Remove single employee OT early-exit deduction
+//	@Description  Remove an individual early-exit deduction and persist exemption so future runs/salary processes skip it
+//	@Tags         Attendance
+//	@Security     BearerAuth
+//	@Param        id      path   string true  "Deduction record ID"
+//	@Param        reason  query  string false "Optional removal/exemption reason"
+//	@Success      200     {object} map[string]string
+//	@Failure      400     {object} map[string]string
+//	@Failure      500     {object} map[string]string
+//	@Router       /attendance/ot-early-exit/{id} [delete]
+func (h *OtEarlyExitHandler) Remove(c *gin.Context) {
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	reason := c.DefaultQuery("reason", "Manually removed by admin")
+	userID := c.GetString("user_id")
+
+	if err := h.otService.RemoveDeduction(id, reason, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "OT Early Exit deduction removed and saved. This employee will not be deducted during salary process.",
+	})
+}
+
+type exemptEmployeeRequest struct {
+	CompanyID  string `json:"company_id" binding:"required"`
+	EmployeeID string `json:"employee_id" binding:"required"`
+	Month      int    `json:"month" binding:"required"`
+	Year       int    `json:"year" binding:"required"`
+	Reason     string `json:"reason"`
+}
+
+// ExemptEmployee godoc
+//
+//	@Summary      Exempt entire employee from monthly OT early-exit deductions
+//	@Description  Exempt an employee from all early-exit shortfall deductions for a payroll month
+//	@Tags         Attendance
+//	@Security     BearerAuth
+//	@Accept       json
+//	@Produce      json
+//	@Param        request body exemptEmployeeRequest true "Company, employee ID, month, year"
+//	@Success      200  {object}  map[string]string
+//	@Failure      400  {object}  map[string]string
+//	@Failure      500  {object}  map[string]string
+//	@Router       /attendance/ot-early-exit/exempt-employee [post]
+func (h *OtEarlyExitHandler) ExemptEmployee(c *gin.Context) {
+	var req exemptEmployeeRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	reason := req.Reason
+	if reason == "" {
+		reason = "Exempted by admin"
+	}
+	userID := c.GetString("user_id")
+
+	if err := h.otService.ExemptEmployee(req.CompanyID, req.EmployeeID, req.Month, req.Year, reason, userID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": fmt.Sprintf("Employee %s exempted from OT Early Exit deductions for %d/%d", req.EmployeeID, req.Month, req.Year),
+	})
+}
+
 // ExportOtEarlyExitExcel godoc
 //
 //	@Summary      Export early-exit overtime deductions to Excel

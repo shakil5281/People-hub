@@ -19,6 +19,7 @@ type AttendanceProcessor struct {
 	shiftRepo             *repository.ShiftRepository
 	leaveRepo             *repository.LeaveRepository
 	tempShiftRepo         *repository.TemporaryShiftRepository
+	rosterRepo            *repository.RosterRepository
 	holidayRepo           *repository.HolidayRepository
 	missingAttendanceRepo *repository.MissingAttendanceRepository
 }
@@ -30,6 +31,7 @@ func NewAttendanceProcessor(
 	shiftRepo *repository.ShiftRepository,
 	leaveRepo *repository.LeaveRepository,
 	tempShiftRepo *repository.TemporaryShiftRepository,
+	rosterRepo *repository.RosterRepository,
 	holidayRepo *repository.HolidayRepository,
 	missingAttendanceRepo *repository.MissingAttendanceRepository,
 ) *AttendanceProcessor {
@@ -40,6 +42,7 @@ func NewAttendanceProcessor(
 		shiftRepo:             shiftRepo,
 		leaveRepo:             leaveRepo,
 		tempShiftRepo:         tempShiftRepo,
+		rosterRepo:            rosterRepo,
 		holidayRepo:           holidayRepo,
 		missingAttendanceRepo: missingAttendanceRepo,
 	}
@@ -84,7 +87,7 @@ func (p *AttendanceProcessor) ProcessDateRange(startDate, endDate, companyID str
 		Details: make([]DayResult, 0, len(dates)),
 	}
 
-	// Pre-fetch temporary shifts for the whole range once.
+	// Pre-fetch temporary shifts and rosters for the whole range once.
 	tempShiftByKey := make(map[string]*models.TemporaryShift)
 	allTempShifts, tempErr := p.tempShiftRepo.ListByCompanyAndDateRange(companyID, startDate, endDate)
 	if tempErr == nil {
@@ -98,10 +101,25 @@ func (p *AttendanceProcessor) ProcessDateRange(startDate, endDate, companyID str
 		}
 	}
 
+	rosterByKey := make(map[string]*models.Roster)
+	if p.rosterRepo != nil {
+		allRosters, rosterErr := p.rosterRepo.ListByCompanyAndDateRange(companyID, startDate, endDate)
+		if rosterErr == nil {
+			for i := range allRosters {
+				r := &allRosters[i]
+				if r.Status != "" && !strings.EqualFold(r.Status, "active") {
+					continue
+				}
+				key := r.EmployeeID + "|" + r.Date
+				rosterByKey[key] = r
+			}
+		}
+	}
+
 	shiftCache := make(map[string]*models.Shift)
 
 	for _, date := range dates {
-		dr, dayErr := p.processDay(date, companyID, tempShiftByKey, shiftCache)
+		dr, dayErr := p.processDay(date, companyID, tempShiftByKey, rosterByKey, shiftCache)
 		if dayErr != nil {
 			return nil, fmt.Errorf("process date %s: %w", date, dayErr)
 		}
@@ -121,6 +139,7 @@ func (p *AttendanceProcessor) ProcessDateRange(startDate, endDate, companyID str
 func (p *AttendanceProcessor) processDay(
 	date, companyID string,
 	tempShiftByKey map[string]*models.TemporaryShift,
+	rosterByKey map[string]*models.Roster,
 	shiftCache map[string]*models.Shift,
 ) (DayResult, error) {
 
@@ -250,8 +269,8 @@ func (p *AttendanceProcessor) processDay(
 	for i := range eligible {
 		emp := &eligible[i]
 
-		// 1. Resolve shift (temporary shift takes priority).
-		shift := p.resolveShift(emp, date, tempShiftByKey, shiftCache)
+		// 1. Resolve shift (roster > temporary shift > employee default).
+		shift := p.resolveShift(emp, date, tempShiftByKey, rosterByKey, shiftCache)
 
 		// 2. Calculate the 24-hour attendance window.
 		var window utils.AttendanceWindow
@@ -635,15 +654,19 @@ func filterPunchesInWindow(punches []models.DataLog, window utils.AttendanceWind
 }
 
 // resolveShift returns the shift for an employee on a given date.
-// Priority: active temporary_shift → employee's default shift.
+// Priority: roster (planned) > active temporary_shift (emergency) → employee's default shift.
 func (p *AttendanceProcessor) resolveShift(
 	emp *models.Employee,
 	date string,
 	tempShiftByKey map[string]*models.TemporaryShift,
+	rosterByKey map[string]*models.Roster,
 	shiftCache map[string]*models.Shift,
 ) *models.Shift {
-	tempKey := emp.EmployeeID + "|" + date
-	if ts, ok := tempShiftByKey[tempKey]; ok && ts.ShiftID != "" {
+	key := emp.EmployeeID + "|" + date
+	if r, ok := rosterByKey[key]; ok && r.ShiftID != "" {
+		return p.getShift(r.ShiftID, shiftCache)
+	}
+	if ts, ok := tempShiftByKey[key]; ok && ts.ShiftID != "" {
 		return p.getShift(ts.ShiftID, shiftCache)
 	}
 	if emp.ShiftID != nil {

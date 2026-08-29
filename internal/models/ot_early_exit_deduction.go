@@ -32,3 +32,24 @@ type OtEarlyExitDeduction struct {
 	Employee Employee `json:"employee" gorm:"foreignKey:EmployeeID;references:EmployeeID"`
 	Company  Company  `json:"company" gorm:"foreignKey:CompanyID"`
 }
+
+// OtEarlyExitExemption records an employee (or employee on a specific date)
+// who has been exempted from OT early-exit shortfall deduction for a given month.
+// When salary process or OT early exit compute runs, exempted entries are skipped.
+type OtEarlyExitExemption struct {
+	ID         string         `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	CompanyID  string         `json:"company_id" gorm:"type:uuid;not null;index:idx_ot_early_exempt"`
+	EmployeeID string         `json:"employee_id" gorm:"type:varchar(50);not null;index:idx_ot_early_exempt"`
+	Month      int            `json:"month" gorm:"type:int;not null;index:idx_ot_early_exempt"`
+	Year       int            `json:"year" gorm:"type:int;not null;index:idx_ot_early_exempt"`
+	Date       *string        `json:"date,omitempty" gorm:"type:date"`
+	Reason     string         `json:"reason" gorm:"type:text"`
+	CreatedBy  *string        `json:"created_by" gorm:"type:uuid"`
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `json:"-" gorm:"index"`
+
+	Employee Employee `json:"employee" gorm:"foreignKey:EmployeeID;references:EmployeeID"`
+	Company  Company  `json:"company" gorm:"foreignKey:CompanyID"`
+}
+

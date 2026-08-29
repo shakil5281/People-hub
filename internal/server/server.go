@@ -86,9 +86,10 @@ func New(cfg *config.Config) *gin.Engine {
 	mdbReader := service.NewMDBReader()
 	leaveRepo := repository.NewLeaveRepository(database.DB)
 	tempShiftRepo := repository.NewTemporaryShiftRepository(database.DB)
+	rosterRepo := repository.NewRosterRepository(database.DB)
 	holidayRepo := repository.NewHolidayRepository(database.DB)
 	dataLogService := service.NewDataLogService(dataLogRepo, mdbReader)
-	attendanceProcessor := service.NewAttendanceProcessor(dataLogRepo, attendanceRepo, employeeRepo, shiftRepo, leaveRepo, tempShiftRepo, holidayRepo, missingAttRepo)
+	attendanceProcessor := service.NewAttendanceProcessor(dataLogRepo, attendanceRepo, employeeRepo, shiftRepo, leaveRepo, tempShiftRepo, rosterRepo, holidayRepo, missingAttRepo)
 	dataLogHandler := handlers.NewDataLogHandler(dataLogRepo, dataLogService, attendanceProcessor)
 	leaveHandler := handlers.NewLeaveHandler(leaveRepo, employeeRepo, attendanceRepo)
 	salaryRepo := repository.NewSalaryRepository(database.DB)
@@ -97,7 +98,7 @@ func New(cfg *config.Config) *gin.Engine {
 	
 	otEarlyExitRepo := repository.NewOtEarlyExitRepository(database.DB)
 	otEarlyExitService := service.NewOtEarlyExitService(otEarlyExitRepo, holidayRepo)
-	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo, groupRepo, otEarlyExitRepo, otEarlyExitService, advanceSalaryRepo)
+	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo, groupRepo, otEarlyExitRepo, otEarlyExitService, advanceSalaryRepo, separationRepo)
 	salaryHandler := handlers.NewSalaryHandler(salaryService, salaryRepo)
 	otEarlyExitHandler := handlers.NewOtEarlyExitHandler(otEarlyExitRepo, otEarlyExitService)
 	
@@ -109,6 +110,7 @@ func New(cfg *config.Config) *gin.Engine {
 	dashboardHandler := handlers.NewDashboardHandler(dashboardRepo)
 	databaseHandler := handlers.NewDatabaseHandler(cfg)
 	tempShiftHandler := handlers.NewTemporaryShiftHandler(tempShiftRepo, employeeRepo)
+	rosterHandler := handlers.NewRosterHandler(rosterRepo, employeeRepo)
 	punishmentRepo := repository.NewPunishmentRepository(database.DB)
 	punishmentHandler := handlers.NewPunishmentHandler(punishmentRepo)
 	dailyScheduleRepo := repository.NewDailyScheduleRepository(database.DB)
@@ -155,7 +157,7 @@ func New(cfg *config.Config) *gin.Engine {
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, postOfficeHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, advanceSalaryHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, missingAttendanceHandler, otEarlyExitHandler, nightBillHandler, nightBillEmployeeListHandler, migrationHandler, zktecoSyncHandler, salaryAccountImportHandler, cfg.JWTSecret)
+	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, postOfficeHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, advanceSalaryHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, rosterHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, missingAttendanceHandler, otEarlyExitHandler, nightBillHandler, nightBillEmployeeListHandler, migrationHandler, zktecoSyncHandler, salaryAccountImportHandler, cfg.JWTSecret)
 
 	return r
 }

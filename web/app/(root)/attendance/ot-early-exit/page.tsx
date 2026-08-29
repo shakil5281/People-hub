@@ -1,12 +1,22 @@
 "use client"
 
 import * as React from "react"
-import { ClockIcon, FileSpreadsheetIcon, Loader2, FilterIcon, XIcon } from "lucide-react"
+import { ClockIcon, FileSpreadsheetIcon, Loader2, FilterIcon, XIcon, Trash2Icon } from "lucide-react"
 import { FilterBar } from "@/components/filter-bar"
 import type { FilterDef } from "@/components/filter-bar"
 import { Button } from "@/components/ui/button"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetClose } from "@/components/ui/sheet"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { otEarlyExitApi, companyApi, departmentApi, sectionApi, designationApi, lineApi, groupApi, shiftApi } from "@/lib/api"
 import { toast } from "sonner"
 import { DataTable } from "@/components/table/data-table"
@@ -25,6 +35,7 @@ interface EarlyExitRecord {
   expected_hours: number
   worked_hours: number
   shortfall_hours: number
+  company_id?: string
 }
 
 interface Company { id: string; company_name_en: string }
@@ -45,6 +56,8 @@ export default function OtEarlyExitPage() {
   const [submitting, setSubmitting] = React.useState(false)
   const [processing, setProcessing] = React.useState(false)
   const [exporting, setExporting] = React.useState(false)
+  const [recordToRemove, setRecordToRemove] = React.useState<EarlyExitRecord | null>(null)
+  const [removing, setRemoving] = React.useState(false)
   const [totalShortfall, setTotalShortfall] = React.useState(0)
   const [affectedEmployees, setAffectedEmployees] = React.useState(0)
   const [page, setPage] = React.useState(1)
@@ -76,6 +89,25 @@ export default function OtEarlyExitPage() {
     { accessorKey: "expected_hours", header: "Expected", cell: ({ row }) => `${Math.round(row.original.expected_hours ?? 0)} hrs` },
     { accessorKey: "worked_hours", header: "Worked", cell: ({ row }) => `${Math.round(row.original.worked_hours ?? 0)} hrs` },
     { accessorKey: "shortfall_hours", header: "OT Deducted", cell: ({ row }) => `${Math.round(row.original.shortfall_hours ?? 0)} hrs` },
+    {
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => {
+        const rec = row.original
+        return (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2.5 text-destructive hover:text-destructive hover:bg-destructive/10 text-xs font-medium"
+            onClick={() => setRecordToRemove(rec)}
+            title="Remove OT Early Exit deduction"
+          >
+            <Trash2Icon className="h-3.5 w-3.5 mr-1" />
+            Remove
+          </Button>
+        )
+      },
+    },
   ]
 
   const activeParams = (f?: Record<string, string>, p?: number, l?: number) => {
@@ -176,6 +208,42 @@ export default function OtEarlyExitPage() {
       setError("Failed to export early-exit deductions")
     } finally {
       setExporting(false)
+    }
+  }
+
+  const handleRemoveDeduction = async () => {
+    if (!recordToRemove) return
+    setRemoving(true)
+    try {
+      await otEarlyExitApi.remove(recordToRemove.id, { reason: "Manually removed from OT Early Exit page" })
+      toast.success(`Removed OT Early Exit deduction for ${recordToRemove.employee_name}. This will not be deducted in future salary processes.`)
+      setRecordToRemove(null)
+      fetchData(filters, page)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Failed to remove OT Early Exit deduction")
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  const handleExemptFullMonth = async () => {
+    if (!recordToRemove) return
+    setRemoving(true)
+    try {
+      await otEarlyExitApi.exemptEmployee({
+        company_id: recordToRemove.company_id || filters.company_id,
+        employee_id: recordToRemove.employee_id,
+        month: Number(filters.month || currentMonth),
+        year: Number(filters.year || currentYear),
+        reason: "Exempted full month by admin",
+      })
+      toast.success(`Exempted employee ${recordToRemove.employee_name} (${recordToRemove.employee_id}) from all OT Early Exit deductions for this month.`)
+      setRecordToRemove(null)
+      fetchData(filters, page)
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || "Failed to exempt employee")
+    } finally {
+      setRemoving(false)
     }
   }
 
@@ -368,6 +436,43 @@ export default function OtEarlyExitPage() {
         onPageChange={setPage}
         onPageSizeChange={(size) => { setLimit(size); setPage(1) }}
       />
+
+      <AlertDialog open={!!recordToRemove} onOpenChange={(open) => { if (!open) setRecordToRemove(null) }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove OT Early Exit Deduction</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  Are you sure you want to remove OT Early Exit deduction for <b className="text-foreground">{recordToRemove?.employee_name}</b> (Emp. ID: <b className="text-foreground">{recordToRemove?.employee_id}</b>) on {recordToRemove?.date ? recordToRemove.date.split("T")[0].split("-").reverse().join("-") : ""}?
+                </p>
+                <div className="rounded-md bg-muted/60 p-2.5 text-xs text-foreground mt-2 border">
+                  ✓ <b>Protected in future salary processes</b>: When salary process is run again, this employee will <b>not</b> have OT deducted for this early exit.
+                </div>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2 mt-2">
+            <AlertDialogCancel disabled={removing}>Cancel</AlertDialogCancel>
+            <Button
+              variant="outline"
+              disabled={removing}
+              onClick={handleExemptFullMonth}
+              className="text-xs"
+            >
+              Exempt Full Month
+            </Button>
+            <AlertDialogAction
+              disabled={removing}
+              onClick={handleRemoveDeduction}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {removing ? "Removing..." : "Remove Deduction"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

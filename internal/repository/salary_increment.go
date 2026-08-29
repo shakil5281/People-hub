@@ -131,3 +131,25 @@ func (r *SalaryIncrementRepository) FindEligibleEmployeesByIDs(companyID string,
 func (r *SalaryIncrementRepository) Delete(id string) error {
 	return r.db.Where("id = ?", id).Delete(&models.SalaryIncrement{}).Error
 }
+
+func (r *SalaryIncrementRepository) ListByEmployee(employeeID string, year, month int) ([]models.SalaryIncrement, error) {
+	query := r.db.Preload("Employee.Department").
+		Preload("Employee.DesignationRef").
+		Preload("NewDesignation").
+		Preload("PreviousDesignation").
+		Where("salary_increments.employee_id = ? AND salary_increments.deleted_at IS NULL", employeeID)
+
+	if year > 0 && month > 0 {
+		monthStr := fmt.Sprintf("%02d", month)
+		yearStr := fmt.Sprintf("%d", year)
+		query = query.Where("(salary_increments.effective_date::text LIKE ? OR salary_increments.increment_date::text LIKE ? OR salary_increments.created_at::text LIKE ?)", yearStr+"-"+monthStr+"%", yearStr+"-"+monthStr+"%", yearStr+"-"+monthStr+"%")
+	} else if year > 0 {
+		yearStr := fmt.Sprintf("%d", year)
+		query = query.Where("(salary_increments.effective_date::text LIKE ? OR salary_increments.increment_date::text LIKE ? OR salary_increments.created_at::text LIKE ?)", yearStr+"-%", yearStr+"-%", yearStr+"-%")
+	}
+
+	var incs []models.SalaryIncrement
+	err := query.Order("salary_increments.effective_date DESC, salary_increments.created_at DESC").Find(&incs).Error
+	return incs, err
+}
+

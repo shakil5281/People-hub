@@ -50,6 +50,7 @@ export const monthlyReportNav = [
 export const informationNav = [
   { title: "Company", url: "/information/company", icon: Building2Icon },
   { title: "Shift", url: "/information/shift", icon: CalendarClockIcon },
+  { title: "Roster", url: "/information/roster", icon: CalendarRangeIcon },
   { title: "Temporary Shift", url: "/information/temporary-shift", icon: TimerIcon },
   { title: "Address", url: "/information/address", icon: MapPinIcon },
   { title: "Group", url: "/information/group", icon: UsersIcon },
@@ -101,6 +102,7 @@ export const payrollNav = [
   { title: "Salary Summary", url: "/payroll/salary-summary", icon: FileBarChartIcon },
   { title: "Advance Salary", url: "/payroll/advance-salary", icon: BanknoteIcon },
   { title: "Increment", url: "/payroll/increment", icon: TrendingUpIcon },
+  { title: "Increment Details", url: "/payroll/increment/details", icon: TrendingUpIcon },
   { title: "PaySlip", url: "/payroll/payslip", icon: ReceiptIcon },
   { title: "Daily Salary Sheet", url: "/payroll/daily-salary-sheet", icon: CalendarRangeIcon },
   { title: "Daily Salary Summary", url: "/payroll/daily-salary-summary", icon: FileBarChartIcon },
