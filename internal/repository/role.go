@@ -60,7 +60,14 @@ func (r *RoleRepository) RemovePermission(roleID, permissionID string) error {
 
 func (r *RoleRepository) ListByCompany(companyID string) ([]models.Role, error) {
 	var roles []models.Role
-	err := r.db.Where("company_id = ? AND deleted_at IS NULL", companyID).Find(&roles).Error
+	q := r.db.Where("deleted_at IS NULL")
+	if companyID == "" {
+		// no company filter — return all (including system) for super_admin
+		err := q.Find(&roles).Error
+		return roles, err
+	}
+	// company-scoped + system (company_id IS NULL) roles
+	err := q.Where("(company_id = ? OR company_id IS NULL)", companyID).Find(&roles).Error
 	return roles, err
 }
 

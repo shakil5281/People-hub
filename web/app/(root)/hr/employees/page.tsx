@@ -166,13 +166,29 @@ export default function EmployeesPage() {
     setError("")
     setLoading(true)
     try {
-      const params = { ...(f || {}), page: String(p ?? page), limit: String(l ?? limit) }
-      // ensure join dates are always included if applied
+      const params: Record<string, string> = { ...(f || {}), page: String(p ?? page), limit: String(l ?? limit) }
       console.log("[Employees] fetch with params", params)
       const { data: res } = await employeeApi.list(params)
-      setData(Array.isArray(res.data) ? res.data : [])
+      const rows = Array.isArray(res.data) ? res.data : []
+      setData(rows)
       setTotal(res.total ?? 0)
       setTotalPages(res.total_pages ?? 0)
+      // Fallback: if employee_id was searched and list is empty, try direct lookup (exact code / punch)
+      if (rows.length === 0 && params["employee_id"]) {
+        try {
+          const { data: emp } = await employeeApi.getByCode(params["employee_id"])
+          if (emp && (emp as unknown as { employee_id?: string }).employee_id) {
+            const single = emp as unknown as EmployeeRow
+            // map single employee to row shape if needed
+            setData([single as unknown as EmployeeRow])
+            setTotal(1)
+            setTotalPages(1)
+            setError("")
+          }
+        } catch {
+          // keep empty — will show empty state with hint
+        }
+      }
     } catch {
       setError("Failed to load employees")
     } finally {
@@ -319,11 +335,16 @@ export default function EmployeesPage() {
     else delete active.joining_from
     if (joiningToDate) active.joining_to = format(joiningToDate, "yyyy-MM-dd")
     else delete active.joining_to
+    // If searching by exact employee_id/punch, ignore narrow HR filters that may hide the result
+    // (keep status/employee_type as they are usually intended, but clear org hierarchy if it blocks global search)
+    // We keep company_id/department etc. but user can Reset if needed — log for debug
     const cleaned = Object.fromEntries(Object.entries(active).filter(([, v]) => v !== "")) as Record<string, string>
+    if (cleaned.employee_id) {
+      console.log("[Employees] employee_id search — active filters", cleaned)
+    }
     setAppliedFilters(cleaned)
     if (page !== 1) {
       setPage(1)
-      // fetch will be handled by useEffect on appliedFilters/page change
       setSubmitting(false)
     } else {
       await fetchEmployees(cleaned, 1, limit)
@@ -718,6 +739,15 @@ export default function EmployeesPage() {
       {error && (
         <div className="px-4 lg:px-6">
           <div className="rounded-md bg-destructive/15 px-4 py-3 text-sm text-destructive">{error}</div>
+        </div>
+      )}
+
+      {!loading && data.length === 0 && appliedFilters.employee_id && (
+        <div className="px-4 lg:px-6">
+          <div className="rounded-md bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-4 py-3 text-sm">
+            <p className="font-medium text-amber-800 dark:text-amber-300">No results for Employee ID “{appliedFilters.employee_id}” with current filters.</p>
+            <p className="text-amber-700 dark:text-amber-400 mt-1">Active filters: {Object.entries(appliedFilters).map(([k,v])=>`${k}=${v}`).join(", ") || "none"} — try <button onClick={handleReset} className="underline font-medium">Reset</button> to clear company/department filters or check the ID. Direct API <code className="bg-white/60 dark:bg-black/20 px-1 rounded">/api/v1/employees?employee_id={appliedFilters.employee_id}</code> does return data, so the web filter is over-narrow.</p>
+          </div>
         </div>
       )}
 

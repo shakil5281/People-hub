@@ -104,6 +104,10 @@ export default function JobAgePage() {
   const [data, setData] = React.useState<JobAgeRecord[]>([])
   const [filteredData, setFilteredData] = React.useState<JobAgeRecord[]>([])
   const [loading, setLoading] = React.useState(false)
+  const [page, setPage] = React.useState(1)
+  const [limit] = React.useState(20)
+  const [total, setTotal] = React.useState(0)
+  const [totalPages, setTotalPages] = React.useState(0)
   const [showAdvance, setShowAdvance] = React.useState(false)
   const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
 
@@ -206,10 +210,10 @@ export default function JobAgePage() {
     return result
   }, [minAge, maxAge, searchEmp])
 
-  const fetchData = async (params: Record<string, string>) => {
+  const fetchData = async (params: Record<string, string>, p = page) => {
     setLoading(true)
     try {
-      const active: Record<string, string> = { limit: "2000" }
+      const active: Record<string, string> = { status: "active", page: String(p), limit: String(limit) }
       if (params.company_id) active.company_id = params.company_id
       if (params.department_id) active.department_id = params.department_id
       if (params.section_id) active.section_id = params.section_id
@@ -219,7 +223,10 @@ export default function JobAgePage() {
       if (params.employee_id) active.employee_id = params.employee_id
 
       const { data: res } = await employeeApi.list(active)
-      const employees = res.data?.data || []
+      const employees: any[] = Array.isArray((res as any)?.data) ? (res as any).data : Array.isArray((res as any)?.data?.data) ? (res as any).data.data : []
+      const totalRes = (res as any)?.total ?? employees.length
+      const totalPagesRes = (res as any)?.total_pages ?? (Math.ceil(totalRes / limit) || 1)
+      console.log("[JobAge] fetch", active, "->", employees.length, "employees, total", totalRes)
       const mapped: JobAgeRecord[] = employees.map((e: any) => {
         const age = calcJobAge(e.joining_date)
         return {
@@ -237,22 +244,27 @@ export default function JobAgePage() {
       })
       setData(mapped)
       setFilteredData(applyAdvanceFilters(mapped))
+      setTotal(totalRes)
+      setTotalPages(totalPagesRes)
     } catch {
       setData([])
       setFilteredData([])
+      setTotal(0)
+      setTotalPages(0)
     } finally {
       setLoading(false)
     }
   }
 
-  const handleApply = () => { fetchData(filters) }
+  const handleApply = () => { setPage(1); fetchData(filters, 1) }
   const handleReset = () => {
     setFilters({})
     setMinAge("")
     setMaxAge("")
     setSearchEmp("")
     setActivePreset("all")
-    fetchData({})
+    setPage(1)
+    fetchData({}, 1)
   }
   const handleChange = (key: string, value: string) => setFilters((prev) => ({ ...prev, [key]: value }))
 
@@ -505,7 +517,20 @@ export default function JobAgePage() {
         </div>
       </div>
 
-      <DataTable data={filteredData} columns={columns} loading={loading} enableSelection={false} />
+      <DataTable
+        data={filteredData}
+        columns={columns}
+        loading={loading}
+        enableSelection={false}
+        enableDnd={false}
+        serverSide={true}
+        page={page}
+        pageSize={limit}
+        pageCount={totalPages}
+        total={total}
+        onPageChange={(p)=> { setPage(p); fetchData(filters, p) }}
+        onPageSizeChange={()=>{}}
+      />
     </div>
   )
 }

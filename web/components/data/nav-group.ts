@@ -106,7 +106,6 @@ export const payrollNav = [
   { title: "PaySlip", url: "/payroll/payslip", icon: ReceiptIcon },
   { title: "Daily Salary Sheet", url: "/payroll/daily-salary-sheet", icon: CalendarRangeIcon },
   { title: "Daily Salary Summary", url: "/payroll/daily-salary-summary", icon: FileBarChartIcon },
-  { title: "Night Bill", url: "/payroll/night-bill", icon: MoonIcon },
   { title: "Tiffin Bill", url: "/payroll/tiffin-bill", icon: CoffeeIcon },
   { title: "Eid Bonus", url: "/payroll/eid-bonus", icon: GiftIcon },
 ] as const satisfies { title: string; url: string; icon: LucideIcon }[]

@@ -123,9 +123,9 @@ func (r *MissingAttendanceRepository) FindByEmployeeAndDate(employeeID, date str
 // ListByDateRange returns all missing attendance override records for a date range.
 // Used by the daily process to apply overrides with highest priority.
 func (r *MissingAttendanceRepository) ListByDateRange(startDate, endDate, companyID string) ([]models.MissingAttendance, error) {
-	q := r.db.Where("date BETWEEN ? AND ?", startDate, endDate)
+	q := r.db.Where("missing_attendances.date BETWEEN ? AND ? AND missing_attendances.deleted_at IS NULL", startDate, endDate)
 	if companyID != "" {
-		q = q.Where("company_id = ?", companyID)
+		q = q.Where("missing_attendances.company_id = ?", companyID)
 	}
 	var results []models.MissingAttendance
 	err := q.Find(&results).Error
