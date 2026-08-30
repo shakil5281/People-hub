@@ -55,30 +55,33 @@ export default function SalaryProcessPage() {
           <CardHeader className="pb-3"><CardTitle className="text-base">Process Parameters</CardTitle></CardHeader>
           <CardContent>
             <div className="flex flex-col gap-4">
-              <div className="flex flex-wrap gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Company</label>
-                  <select value={companyId} onChange={e=>setCompanyId(e.target.value)} className="flex h-10 w-60 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <select value={companyId} onChange={e=>setCompanyId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                     <option value="">Select</option>
                     {companies.map(c=><option key={c.id} value={c.id}>{c.company_name_en}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Month</label>
-                  <select value={month} onChange={e=>setMonth(Number(e.target.value))} className="flex h-10 w-40 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <select value={month} onChange={e=>setMonth(Number(e.target.value))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                     {MONTHS.map((n,i)=><option key={n} value={i}>{n}</option>)}
                   </select>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-medium text-muted-foreground">Year</label>
-                  <select value={year} onChange={e=>setYear(Number(e.target.value))} className="flex h-10 w-28 rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <select value={year} onChange={e=>setYear(Number(e.target.value))} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                     {YEARS.map(y=><option key={y} value={y}>{y}</option>)}
                   </select>
                 </div>
-                <Button onClick={handleProcess} disabled={processing}>
-                  {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpDownIcon className="mr-2 h-4 w-4" />}
-                  Process Salary
-                </Button>
+                <div className="flex flex-col gap-1.5 justify-end">
+                  <label className="text-xs font-medium text-transparent hidden sm:block">Action</label>
+                  <Button onClick={handleProcess} disabled={processing} className="w-full sm:w-auto h-10">
+                    {processing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ArrowUpDownIcon className="mr-2 h-4 w-4" />}
+                    Process Salary
+                  </Button>
+                </div>
               </div>
 
               <div className="flex items-center gap-2 pt-2 border-t text-sm">

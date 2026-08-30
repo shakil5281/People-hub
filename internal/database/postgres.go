@@ -196,6 +196,21 @@ func Connect(cfg *config.Config) {
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_temporary_shifts_emp_date ON temporary_shifts(employee_id, date) WHERE deleted_at IS NULL AND status = 'active'")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_ot_early_exit_lookup ON ot_early_exit_deductions(company_id, month, year, employee_id) WHERE deleted_at IS NULL")
 
+	// Daily Process — high-performance indexes & idempotency
+	// Unique partial index prevents duplicate attendance; enables UPSERT ON CONFLICT
+	silentDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS ux_attendances_employee_date ON attendances(employee_id, date) WHERE deleted_at IS NULL")
+	// Punch lookup — primary query for daily process is badge_number + punch_time range
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_data_logs_badge_punch_time ON data_logs(badge_number, punch_time) WHERE deleted_at IS NULL")
+	// Separation lookup for eligibility (batch by employee_id)
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_separations_employee ON separations(employee_id) WHERE deleted_at IS NULL")
+	// Missing attendance — bulk fetch by company+date
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_missing_attendance_company_date ON missing_attendances(company_id, date) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_missing_attendance_emp_date ON missing_attendances(employee_id, date) WHERE deleted_at IS NULL")
+	// Leave range scan
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_leaves_employee_date ON leaves(employee_id, from_date, to_date) WHERE deleted_at IS NULL")
+	// Attendance bulk fetch by company+date range
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_attendances_company_date_range ON attendances(company_id, date, employee_id) WHERE deleted_at IS NULL")
+
 	// Tune connection pool — prevents salary process blocking on single connection (was 1m30s due to pool starvation)
 	if sqlDB, err := db.DB(); err == nil {
 		sqlDB.SetMaxOpenConns(25)

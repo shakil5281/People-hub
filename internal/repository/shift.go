@@ -53,3 +53,13 @@ func (r *ShiftRepository) ListActiveByCompany(companyID string) ([]models.Shift,
 	err := query.Order("created_at DESC").Find(&shifts).Error
 	return shifts, err
 }
+
+// ListByIDs fetches shifts by IDs in a single query — used by daily process bulk load.
+func (r *ShiftRepository) ListByIDs(ids []string) ([]models.Shift, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var shifts []models.Shift
+	err := r.db.Where("id IN ? AND deleted_at IS NULL", ids).Find(&shifts).Error
+	return shifts, err
+}

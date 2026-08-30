@@ -13,8 +13,15 @@ import {
   CheckCircleIcon,
   FileTextIcon,
   Trash2Icon,
+  UsersIcon,
+  ClipboardCheckIcon,
+  CalendarDaysIcon,
+  BanknoteIcon,
+  FileSpreadsheetIcon,
+  ShieldCheckIcon,
 } from "lucide-react"
-import { databaseApi } from "@/lib/api"
+import { databaseApi, employeeApi, attendanceApi, leaveApi, salaryApi, companyApi } from "@/lib/api"
+import { downloadExport } from "@/lib/utils"
 import { toast } from "sonner"
 import { isSuperAdmin } from "@/lib/auth"
 import {
@@ -235,6 +242,31 @@ export default function DatabasePage() {
       </div>
 
       <div className="px-4 lg:px-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileSpreadsheetIcon className="h-4 w-4" />
+              Per-Domain Export (no data missed)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-3">
+              Global backup above covers <strong>ALL 38 tables</strong> (employees, attendance, leaves, salaries, etc.). Use per-domain exports for quick Excel/PDF reports.
+            </p>
+            <div className="grid gap-2 grid-cols-2 lg:grid-cols-3">
+              <Button variant="outline" size="sm" onClick={async()=>{ try{ const r=await employeeApi.exportExcel(); downloadExport(r as unknown as {data:Blob}, `employees_${new Date().toISOString().slice(0,10)}.xlsx`)}catch{toast.error("Employees export failed")}}}><UsersIcon className="mr-2 h-4 w-4" />Employees</Button>
+              <Button variant="outline" size="sm" onClick={async()=>{ try{ const r=await attendanceApi.exportExcel(); downloadExport(r as unknown as {data:Blob}, `attendance_${new Date().toISOString().slice(0,10)}.xlsx`)}catch{toast.error("Attendance export failed")}}}><ClipboardCheckIcon className="mr-2 h-4 w-4" />Attendance</Button>
+              <Button variant="outline" size="sm" onClick={async()=>{ try{ const r=await leaveApi.exportExcel({}); downloadExport(r as unknown as {data:Blob}, `leaves_${new Date().toISOString().slice(0,10)}.xlsx`)}catch{toast.error("Leaves export failed")}}}><CalendarDaysIcon className="mr-2 h-4 w-4" />Leaves</Button>
+              <Button variant="outline" size="sm" onClick={async()=>{ try{ const r=await salaryApi.sheetExport({}); downloadExport(r as unknown as {data:Blob}, `salary-sheet_${new Date().toISOString().slice(0,10)}.xlsx`)}catch{toast.error("Salary sheet failed — select month/year in Payroll first")}}}><BanknoteIcon className="mr-2 h-4 w-4" />Salary Sheet</Button>
+              <Button variant="outline" size="sm" onClick={async()=>{ try{ const r=await companyApi.list({limit:"100"}); toast.info(`Companies: ${(r.data as unknown as {data?:unknown[]})?.data?.length ?? 0} — use Company page export`)}catch{toast.error("Companies fetch failed")}}}><DatabaseIcon className="mr-2 h-4 w-4" />Companies</Button>
+              <Button variant="outline" size="sm" onClick={async()=>{ try{ const r=await databaseApi.backup(); toast.success(r.data.message); fetchBackups()}catch{toast.error("Global backup failed")}}}><ShieldCheckIcon className="mr-2 h-4 w-4" />Global Backup</Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2">High-perf: global backup paginated 5k/batch, 64KB buffer, retention 20 files, import 300MB limit with Tx.</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="px-4 lg:px-6">
         <Card className="border-red-200 dark:border-red-900">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2 text-red-600">
@@ -244,7 +276,7 @@ export default function DatabasePage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              This will drop all tables and re-run auto-migration. All data will be permanently lost.
+              This will drop all 38 tables and re-run auto-migration (38 models + 20 indexes), re-seed superadmin + permissions. All data will be permanently lost. Retention is 20 backups.
             </p>
             {isSuperAdmin() && (
               <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
