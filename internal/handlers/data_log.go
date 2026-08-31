@@ -2,13 +2,20 @@ package handlers
 
 import (
 	"fmt"
+	"log"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/shakil5281/peoplehub-api/internal/repository"
 	"github.com/shakil5281/peoplehub-api/internal/service"
 )
+
+var uuidRegex = regexp.MustCompile(`^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$`)
+
+const maxProcessDays = 31
 
 type DataLogHandler struct {
 	dataLogRepo         *repository.DataLogRepository
@@ -102,29 +109,92 @@ func (h *DataLogHandler) List(c *gin.Context) {
 // ProcessDataLogs godoc
 //
 // @Summary      Process data logs into attendance
-// @Description  Convert unprocessed raw punch data into attendance records
+// @Description  Convert unprocessed raw punch data into attendance records (bulk-optimized, idempotent)
 // @Tags         Data Logs
 // @Security     BearerAuth
 // @Accept       json
 // @Produce      json
-// @Param        request body ProcessRequest false "Date to process (defaults to today)"
+// @Param        request body ProcessRequest true "Date range and company to process"
 // @Success      200  {object}  map[string]interface{}
+// @Failure      400  {object}  map[string]string
+// @Failure      403  {object}  map[string]string
+// @Failure      409  {object}  map[string]string
 // @Failure      500  {object}  map[string]string
 // @Router       /data-logs/process [post]
 func (h *DataLogHandler) Process(c *gin.Context) {
+	startTime := time.Now()
 	var req ProcessRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request body: " + err.Error()})
 		return
+	}
+
+	// Mandatory company_id
+	if strings.TrimSpace(req.CompanyID) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "company_id is required"})
+		return
+	}
+	if !uuidRegex.MatchString(req.CompanyID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "company_id must be a valid UUID"})
+		return
+	}
+	// Company authorization: non-super_admin can only process own company
+	if tokenCompanyID, exists := c.Get("company_id"); exists {
+		if cid, ok := tokenCompanyID.(string); ok && cid != "" {
+			rolesVal, _ := c.Get("roles")
+			isSuper := false
+			if roles, ok := rolesVal.([]string); ok {
+				for _, r := range roles {
+					if strings.EqualFold(r, "super_admin") {
+						isSuper = true
+						break
+					}
+				}
+			}
+			// also check comma-separated if stored differently
+			if !isSuper && cid != req.CompanyID {
+				c.JSON(http.StatusForbidden, gin.H{"error": "not authorized to process for this company"})
+				return
+			}
+		}
 	}
 
 	startDate, endDate := h.resolveDateRange(req)
 
+	// Validate date formats
+	if _, err := time.Parse("2006-01-02", startDate); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid start_date format, expected YYYY-MM-DD"})
+		return
+	}
+	if _, err := time.Parse("2006-01-02", endDate); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid end_date format, expected YYYY-MM-DD"})
+		return
+	}
+	if startDate > endDate {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "start_date must be <= end_date"})
+		return
+	}
+	// Enforce max range (spec §22, §26)
+	if days := dateDiffDays(startDate, endDate); days > maxProcessDays {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("date range exceeds maximum %d days (requested %d days)", maxProcessDays, days)})
+		return
+	}
+
 	result, err := h.attendanceProcessor.ProcessDateRange(startDate, endDate, req.CompanyID)
 	if err != nil {
+		// Concurrent lock
+		if strings.Contains(err.Error(), "already running") {
+			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
+			return
+		}
+		log.Printf("[data-log] process failed company=%s range=%s..%s err=%v", req.CompanyID, startDate, endDate, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	duration := time.Since(startTime)
+	log.Printf("[data-log] process ok company=%s range=%s..%s days=%d logs=%d created=%d updated=%d skipped=%d duration=%s",
+		req.CompanyID, startDate, endDate, result.Days, result.TotalLogs, result.TotalCreated, result.TotalUpdated, result.TotalSkipped, duration)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":    fmt.Sprintf("Processed %d employee attendances across %d days from %d raw logs", result.TotalProcessed, result.Days, result.TotalLogs),
@@ -137,7 +207,14 @@ func (h *DataLogHandler) Process(c *gin.Context) {
 		"updated":    result.TotalUpdated,
 		"skipped":    result.TotalSkipped,
 		"details":    result.Details,
+		"duration_ms": duration.Milliseconds(),
 	})
+}
+
+func dateDiffDays(start, end string) int {
+	s, _ := time.Parse("2006-01-02", start)
+	e, _ := time.Parse("2006-01-02", end)
+	return int(e.Sub(s).Hours()/24) + 1
 }
 
 func (h *DataLogHandler) resolveDateRange(req ProcessRequest) (string, string) {

@@ -15,6 +15,10 @@ func NewDataLogRepository(db *gorm.DB) *DataLogRepository {
 	return &DataLogRepository{db: db}
 }
 
+func (r *DataLogRepository) WithTx(tx *gorm.DB) *DataLogRepository {
+	return &DataLogRepository{db: tx}
+}
+
 func (r *DataLogRepository) BatchCreate(logs []models.DataLog) error {
 	if len(logs) == 0 {
 		return nil

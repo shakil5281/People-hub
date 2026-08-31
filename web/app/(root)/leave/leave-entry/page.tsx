@@ -22,6 +22,7 @@ interface EmployeeInfo {
   designation_ref?: { name: string }
   department?: { name: string }
   company_id: string
+  company?: { company_name_en?: string; company_name_bn?: string }
   joining_date: string
   status: string
 }
@@ -88,7 +89,7 @@ export default function LeaveEntryPage() {
       setPrevLeavesLoading(true)
       const [balRes, leavesRes, ltRes] = await Promise.all([
         leaveBalanceApi.list({ employee_id: e.employee_id, year: String(thisYear) }),
-        leaveApi.list({ employee_id: e.employee_id, limit: "10", page: "1" }),
+        leaveApi.list({ employee_id: e.employee_id, from_date: `${thisYear}-01-01`, to_date: `${thisYear}-12-31`, limit: "10", page: "1" }),
         leaveTypeApi.list(e.company_id, { limit: "50" }),
       ])
       setLeaveTypes(Array.isArray(ltRes.data?.data) ? ltRes.data.data : [])
@@ -265,15 +266,15 @@ export default function LeaveEntryPage() {
           </Card>
         )}
 
-        {/* Previous Leaves */}
+        {/* Previous Leaves — filtered to current year */}
         {emp && (
           <Card>
-            <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-5 w-5" /> Previous Leave Applications</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><CalendarDays className="h-5 w-5" /> Previous Leave Applications ({thisYear})</CardTitle></CardHeader>
             <CardContent>
               {prevLeavesLoading ? (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Loading previous leaves...</div>
               ) : previousLeaves.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No previous leave applications found</p>
+                <p className="text-sm text-muted-foreground">No previous leave applications found for {thisYear}</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -283,8 +284,8 @@ export default function LeaveEntryPage() {
                         <th className="pb-2 font-medium">Leave Type</th>
                         <th className="pb-2 font-medium">From</th>
                         <th className="pb-2 font-medium">To</th>
-                        <th className="pb-2 font-medium text-right">Days</th>
-                        <th className="pb-2 font-medium">Status</th>
+                        <th className="pb-2 font-medium text-right pr-2">Days</th>
+                        <th className="pb-2 font-medium pl-2">Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -294,8 +295,8 @@ export default function LeaveEntryPage() {
                           <td className="py-2">{lv.leave_type?.name || "-"}</td>
                           <td className="py-2">{lv.from_date ? format(new Date(lv.from_date), "dd-MM-yyyy") : "-"}</td>
                           <td className="py-2">{lv.to_date ? format(new Date(lv.to_date), "dd-MM-yyyy") : "-"}</td>
-                          <td className="py-2 text-right">{lv.total_days}</td>
-                          <td className="py-2">
+                          <td className="py-2 text-right pr-2">{lv.total_days}</td>
+                          <td className="py-2 pl-2">
                             <Badge variant={
                               lv.status === "approved" ? "default" :
                               lv.status === "pending" ? "secondary" :
@@ -322,7 +323,7 @@ export default function LeaveEntryPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Company</Label>
-                  <Input value={emp.company_id} disabled className="text-muted-foreground" />
+                  <Input value={emp.company?.company_name_en || emp.company_id} disabled className="text-muted-foreground" />
                   <p className="text-xs text-muted-foreground">Auto-filled from employee record</p>
                 </div>
 

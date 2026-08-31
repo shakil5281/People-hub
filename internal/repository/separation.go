@@ -183,6 +183,16 @@ func (r *SeparationRepository) FindEmployeeByCode(empCode string) (*models.Emplo
 	return &emp, err
 }
 
+// ListByEmployeeIDs returns all separation records for the given employee IDs in one query.
+func (r *SeparationRepository) ListByEmployeeIDs(employeeIDs []string) ([]models.Separation, error) {
+	if len(employeeIDs) == 0 {
+		return nil, nil
+	}
+	var list []models.Separation
+	err := r.db.Where("employee_id IN ? AND deleted_at IS NULL", employeeIDs).Order("date DESC").Find(&list).Error
+	return list, err
+}
+
 // GetSeparationDatesByMonth returns a map of employee_id -> separation_date (YYYY-MM-DD) for processed separations in that month.
 func (r *SeparationRepository) GetSeparationDatesByMonth(companyID string, month, year int) (map[string]string, error) {
 	startDate := fmt.Sprintf("%04d-%02d-01", year, month)

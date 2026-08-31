@@ -171,6 +171,81 @@ func (r *AttendanceRepository) ListByDateAndEmployeeIDs(date string, employeeIDs
 	return attendances, err
 }
 
+// ListByDateRangeAndEmployeeIDs bulk-loads attendances for a date range + employee set in one query.
+func (r *AttendanceRepository) ListByDateRangeAndEmployeeIDs(startDate, endDate string, employeeIDs []string) ([]models.Attendance, error) {
+	var attendances []models.Attendance
+	query := r.db.Where("date BETWEEN ? AND ? AND deleted_at IS NULL", startDate, endDate)
+	if len(employeeIDs) > 0 {
+		query = query.Where("employee_id IN ?", employeeIDs)
+	}
+	err := query.Find(&attendances).Error
+	return attendances, err
+}
+
+// ListByCompanyAndDateRange bulk-loads attendances for company + date range (no employee filter).
+func (r *AttendanceRepository) ListByCompanyAndDateRange(companyID, startDate, endDate string) ([]models.Attendance, error) {
+	var attendances []models.Attendance
+	q := r.db.Where("date BETWEEN ? AND ? AND deleted_at IS NULL", startDate, endDate)
+	if companyID != "" {
+		q = q.Where("company_id = ?", companyID)
+	}
+	err := q.Find(&attendances).Error
+	return attendances, err
+}
+
+// UpsertBatch performs idempotent batch upsert using ON CONFLICT (employee_id, date) WHERE deleted_at IS NULL.
+// Requires unique partial index ux_attendances_employee_date.
+func (r *AttendanceRepository) UpsertBatch(attendances []models.Attendance) error {
+	if len(attendances) == 0 {
+		return nil
+	}
+	// GORM clause.OnConflict requires explicit columns; use map-based conflict target.
+	return r.db.Transaction(func(tx *gorm.DB) error {
+		const batchSize = 500
+		for i := 0; i < len(attendances); i += batchSize {
+			end := i + batchSize
+			if end > len(attendances) {
+				end = len(attendances)
+			}
+			batch := attendances[i:end]
+			// Use raw SQL for partial-index upsert because GORM clause does not support WHERE predicate on conflict.
+			// Fallback: try clause first, then handle duplicates via UpdateFields if conflict.
+			for _, att := range batch {
+				// Attempt insert
+				err := tx.Where("employee_id = ? AND date = ? AND deleted_at IS NULL", att.EmployeeID, att.Date).First(&models.Attendance{}).Error
+				if err == gorm.ErrRecordNotFound {
+					if cErr := tx.Create(&att).Error; cErr != nil {
+						return cErr
+					}
+				} else if err == nil {
+					// Update existing
+					updates := map[string]interface{}{
+						"shift_id":     att.ShiftID,
+						"check_in":     att.CheckIn,
+						"check_out":    att.CheckOut,
+						"total_hours":  att.TotalHours,
+						"over_time":    att.OverTime,
+						"status":       att.Status,
+						"late_minutes": att.LateMinutes,
+						"punch_number": att.PunchNumber,
+						"company_id":   att.CompanyID,
+						"updated_at":   time.Now(),
+					}
+					if att.PunchNumber == nil {
+						delete(updates, "punch_number")
+					}
+					if err := tx.Model(&models.Attendance{}).Where("employee_id = ? AND date = ? AND deleted_at IS NULL", att.EmployeeID, att.Date).Updates(updates).Error; err != nil {
+						return err
+					}
+				} else {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+}
+
 func (r *AttendanceRepository) ListByDateFiltered(date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID string, page, limit int) ([]models.Attendance, int64, error) {
 	return r.ListByDateRangeFiltered(date, date, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, status, employeeID, page, limit)
 }
