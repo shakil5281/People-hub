@@ -90,6 +90,7 @@ func New(cfg *config.Config) *gin.Engine {
 	holidayRepo := repository.NewHolidayRepository(database.DB)
 	dataLogService := service.NewDataLogService(dataLogRepo, mdbReader)
 	attendanceProcessor := service.NewAttendanceProcessor(dataLogRepo, attendanceRepo, employeeRepo, shiftRepo, leaveRepo, tempShiftRepo, rosterRepo, holidayRepo, missingAttRepo)
+	attendanceProcessor.SetSeparationRepo(separationRepo)
 	dataLogHandler := handlers.NewDataLogHandler(dataLogRepo, dataLogService, attendanceProcessor)
 	leaveHandler := handlers.NewLeaveHandler(leaveRepo, employeeRepo, attendanceRepo)
 	salaryRepo := repository.NewSalaryRepository(database.DB)

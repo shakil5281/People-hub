@@ -112,6 +112,14 @@ func (r *LeaveRepository) ListApprovedByDate(date string) ([]models.Leave, error
 	return leaves, err
 }
 
+// ListApprovedByDateRange returns all approved leaves that overlap [startDate, endDate] in one query.
+func (r *LeaveRepository) ListApprovedByDateRange(startDate, endDate string) ([]models.Leave, error) {
+	var leaves []models.Leave
+	err := r.db.Where("status = 'approved' AND from_date <= ? AND to_date >= ? AND deleted_at IS NULL",
+		endDate, startDate).Find(&leaves).Error
+	return leaves, err
+}
+
 func (r *LeaveRepository) UpdateLeave(l *models.Leave) error {
 	return r.db.Save(l).Error
 }

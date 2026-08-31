@@ -357,7 +357,7 @@ export default function AdvanceSalaryPage() {
   const labelCls = "text-xs font-semibold text-muted-foreground uppercase tracking-wider"
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <div className="flex flex-col gap-6 p-4 lg:p-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 text-primary">
           <div className="rounded-lg bg-primary/10 p-2">
@@ -390,7 +390,7 @@ export default function AdvanceSalaryPage() {
 
       <Card className="border-emerald-100 dark:border-emerald-900/50 shadow-sm">
         <CardContent className="p-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="flex flex-col gap-1.5">
               <label className={labelCls}>Company</label>
               <select value={companyId} onChange={e => setCompanyId(e.target.value)} className={selectCls}>
@@ -427,6 +427,13 @@ export default function AdvanceSalaryPage() {
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
+              <label className={labelCls}>Group</label>
+              <select value={groupId} onChange={e => setGroupId(e.target.value)} className={selectCls}>
+                <option value="">All</option>
+                {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
               <label className={labelCls}>Month</label>
               <select value={month} onChange={e => setMonth(Number(e.target.value))} className={selectCls}>
                 {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
@@ -442,7 +449,7 @@ export default function AdvanceSalaryPage() {
                 ))}
               </select>
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-1">
               <label className={labelCls}>Status</label>
               <select value={status} onChange={e => setStatus(e.target.value)} className={selectCls}>
                 <option value="all">All</option>
