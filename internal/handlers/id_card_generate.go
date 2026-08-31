@@ -57,6 +57,8 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		Preload("SectionRef").
 		Preload("LineRef").
 		Preload("GroupRef").
+		Preload("PermanentDistrict").
+		Preload("PermanentUpazila").
 		Where("employee_id IN ? AND deleted_at IS NULL", req.EmployeeIDs).
 		Order("LENGTH(employee_id) ASC, employee_id ASC").
 		Find(&employees).Error; err != nil {
@@ -253,7 +255,7 @@ func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fo
 	pdf.Line(x, y+13.0, x+w, y+13.0)
 
 	// Company Title inside Top Bar (Centered, Bold, dynamically fitted)
-	fontSz := fitTextFontSize(pdf, font, "B", companyName, w-4.0, 10.5, 7.5)
+	fontSz := fitTextFontSize(pdf, font, "B", companyName, w-4.0, 11.5, 8.5)
 	pdf.SetFont(font, "B", fontSz)
 	pdf.SetTextColor(255, 255, 255)
 	pdf.SetXY(x+2.0, y+2.5)
@@ -261,7 +263,7 @@ func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fo
 
 	// Employee Category Subtitle (Office Staff / Production Staff / Worker)
 	categoryText := getCategoryText(emp, isBn)
-	pdf.SetFont(font, "B", 6.2)
+	pdf.SetFont(font, "B", 7.2)
 	pdf.SetTextColor(220, 235, 252)
 	pdf.SetXY(x+2.0, y+7.8)
 	pdf.CellFormat(w-4.0, 3.0, categoryText, "", 0, "C", false, 0, "")
@@ -566,7 +568,7 @@ func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fon
 		cy += 3.8
 
 		companyName := companyDisplayName(emp.Company, isBn)
-		pdf.SetFont(font, "B", 8.0)
+		pdf.SetFont(font, "B", 9.0)
 		pdf.SetTextColor(28, 28, 28)
 		pdf.SetXY(x+m, cy)
 		pdf.CellFormat(textW, 3.6, companyName, "", 0, "C", false, 0, "")
@@ -591,10 +593,36 @@ func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fon
 
 		// 3. Employee Personal Info (Left aligned, +1pt font size -> 6.0pt)
 		permAddr := emp.PermanentAddress
+		if isBn && strings.TrimSpace(emp.PermanentAddressBn) != "" {
+			permAddr = emp.PermanentAddressBn
+		}
 		if permAddr == "" {
 			permAddr = "ভাওয়াল মির্জাপুর,গাজীপুর সদর গাজীপুর।"
 		}
-		permText := utils.UnicodeToBijoy("স্থায়ী ঠিকানাঃ " + permAddr)
+		permParts := []string{}
+		if strings.TrimSpace(permAddr) != "" {
+			permParts = append(permParts, strings.TrimSpace(permAddr))
+		}
+		if emp.PermanentUpazila != nil {
+			un := strings.TrimSpace(emp.PermanentUpazila.NameBn)
+			if un == "" {
+				un = strings.TrimSpace(emp.PermanentUpazila.Name)
+			}
+			if un != "" {
+				permParts = append(permParts, un)
+			}
+		}
+		if emp.PermanentDistrict != nil {
+			dn := strings.TrimSpace(emp.PermanentDistrict.NameBn)
+			if dn == "" {
+				dn = strings.TrimSpace(emp.PermanentDistrict.Name)
+			}
+			if dn != "" {
+				permParts = append(permParts, dn)
+			}
+		}
+		permJoined := strings.Join(permParts, ", ")
+		permText := utils.UnicodeToBijoy("স্থায়ী ঠিকানাঃ " + permJoined)
 		pdf.SetXY(x+m, cy)
 		pdf.MultiCell(textW, 3.0, permText, "", "L", false)
 		cy = pdf.GetY() + 1.2
@@ -624,14 +652,10 @@ func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fon
 		if nid == "" {
 			nid = "19983313067000302"
 		}
-		nidLabel := utils.UnicodeToBijoy("জাতীয় পরিচয় পত্র নংঃ")
-		nidVal := utils.UnicodeToBijoy(convertENToBNDigits(nid))
+		nidSingle := utils.UnicodeToBijoy("জাতীয় পরিচয় পত্র নংঃ ") + utils.UnicodeToBijoy(convertENToBNDigits(nid))
 		pdf.SetXY(x+m, cy)
-		pdf.CellFormat(textW, 3.0, nidLabel, "", 0, "L", false, 0, "")
-		cy += 3.2
-		pdf.SetXY(x+m, cy)
-		pdf.CellFormat(textW, 3.0, nidVal, "", 0, "L", false, 0, "")
-		cy += 5.5 // Clean spacing gap
+		pdf.CellFormat(textW, 3.0, nidSingle, "", 0, "L", false, 0, "")
+		cy += 3.0 + 10.5 // single line 3.0 + original 5.5 + extra 5.0 gap
 
 		// 4. Bottom Instruction Loss Note (Centered, +1pt font size -> 6.0pt)
 		pdf.SetFont(font, "", 6.0)
@@ -653,7 +677,7 @@ func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fon
 		cy += 3.8
 
 		companyName := companyDisplayName(emp.Company, false)
-		pdf.SetFont(font, "B", 8.0)
+		pdf.SetFont(font, "B", 9.0)
 		pdf.SetTextColor(28, 28, 28)
 		pdf.SetXY(x+m, cy)
 		pdf.CellFormat(textW, 3.6, companyName, "", 0, "C", false, 0, "")
@@ -678,8 +702,25 @@ func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fon
 		if permAddr == "" {
 			permAddr = "Bhawal Mirzapur, Gazipur Sadar, Gazipur."
 		}
+		permPartsEn := []string{}
+		if strings.TrimSpace(permAddr) != "" {
+			permPartsEn = append(permPartsEn, strings.TrimSpace(permAddr))
+		}
+		if emp.PermanentUpazila != nil {
+			unEn := strings.TrimSpace(emp.PermanentUpazila.Name)
+			if unEn != "" {
+				permPartsEn = append(permPartsEn, unEn)
+			}
+		}
+		if emp.PermanentDistrict != nil {
+			dnEn := strings.TrimSpace(emp.PermanentDistrict.Name)
+			if dnEn != "" {
+				permPartsEn = append(permPartsEn, dnEn)
+			}
+		}
+		permJoinedEn := strings.Join(permPartsEn, ", ")
 		pdf.SetXY(x+m, cy)
-		pdf.MultiCell(textW, 3.0, "Permanent Address: "+permAddr, "", "L", false)
+		pdf.MultiCell(textW, 3.0, "Permanent Address: "+permJoinedEn, "", "L", false)
 		cy = pdf.GetY() + 1.2
 
 		blood := emp.BloodGroup
@@ -706,11 +747,8 @@ func drawCardBack(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fon
 			nid = "19983313067000302"
 		}
 		pdf.SetXY(x+m, cy)
-		pdf.CellFormat(textW, 3.0, "National ID No:", "", 0, "L", false, 0, "")
-		cy += 3.2
-		pdf.SetXY(x+m, cy)
-		pdf.CellFormat(textW, 3.0, nid, "", 0, "L", false, 0, "")
-		cy += 5.5
+		pdf.CellFormat(textW, 3.0, "National ID No: "+nid, "", 0, "L", false, 0, "")
+		cy += 3.0 + 10.5 // single line 3.0 + original 5.5 + extra 5.0 gap
 
 		pdf.SetXY(x+m, cy)
 		pdf.CellFormat(textW, 3.0, "If this ID card is lost, report immediately", "", 0, "C", false, 0, "")
