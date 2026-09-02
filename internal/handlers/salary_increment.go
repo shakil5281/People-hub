@@ -30,9 +30,13 @@ type BulkApplyRequest struct {
 	LineID           string   `json:"line_id"`
 	GroupID          string   `json:"group_id"`
 	EmployeeIDs      []string `json:"employee_ids"`
+	EmployeeIDSearch string   `json:"employee_id_search"`
 	IncrementType    string   `json:"increment_type" binding:"required"`
 	CalculationType  string   `json:"calculation_type"`
 	NewDesignationID string   `json:"new_designation_id"`
+	PromoDepartmentID string   `json:"promo_department_id"`
+	PromoSectionID    string   `json:"promo_section_id"`
+	PromoLineID       string   `json:"promo_line_id"`
 	IncrementDate    string   `json:"increment_date" binding:"required"`
 	EffectiveDate    string   `json:"effective_date" binding:"required"`
 	Value            float64  `json:"value"`
@@ -304,6 +308,27 @@ func (h *SalaryIncrementHandler) BulkApply(c *gin.Context) {
 		return
 	}
 
+	// Validate dates: increment_date and effective_date must be YYYY-MM-DD and effective >= increment
+	if req.IncrementDate != "" {
+		if _, err := time.Parse("2006-01-02", req.IncrementDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid increment_date, expected YYYY-MM-DD"})
+			return
+		}
+	}
+	if req.EffectiveDate != "" {
+		if _, err := time.Parse("2006-01-02", req.EffectiveDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid effective_date, expected YYYY-MM-DD"})
+			return
+		}
+	}
+	if req.IncrementDate != "" && req.EffectiveDate != "" {
+		incD, _ := time.Parse("2006-01-02", req.IncrementDate)
+		effD, _ := time.Parse("2006-01-02", req.EffectiveDate)
+		if effD.Before(incD) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "effective_date cannot be before increment_date"})
+			return
+		}
+	}
 	// Normalize increment type
 	incType := strings.ToLower(strings.TrimSpace(req.IncrementType))
 	calcType := strings.ToLower(strings.TrimSpace(req.CalculationType))
@@ -330,7 +355,30 @@ func (h *SalaryIncrementHandler) BulkApply(c *gin.Context) {
 
 	var emps []models.Employee
 	var err error
-	if len(req.EmployeeIDs) > 0 {
+	// Priority 1: exact employee_id search — ignores all other filters (requested behavior)
+	if strings.TrimSpace(req.EmployeeIDSearch) != "" {
+		code := strings.TrimSpace(req.EmployeeIDSearch)
+		var emp *models.Employee
+		emp, err = h.employeeRepo.FindByEmployeeID(code)
+		if err == nil && emp != nil && emp.CompanyID == req.CompanyID {
+			// Enforce eligibility for search path as well (active + gross>0)
+			if emp.Status == "active" && emp.GrossSalary > 0 {
+				emps = []models.Employee{*emp}
+			} else {
+				emps = []models.Employee{}
+			}
+		} else {
+			// Fallback: try punch_number exact
+			emp2, err2 := h.employeeRepo.FindByPunchNumber(code)
+			if err2 == nil && emp2 != nil && emp2.CompanyID == req.CompanyID && emp2.Status == "active" && emp2.GrossSalary > 0 {
+				emps = []models.Employee{*emp2}
+				err = nil
+			} else if err == nil {
+				// keep original err (not found) to return 404 below
+				emps = []models.Employee{}
+			}
+		}
+	} else if len(req.EmployeeIDs) > 0 {
 		emps, err = h.incrementRepo.FindEligibleEmployeesByIDs(req.CompanyID, req.EmployeeIDs)
 	} else {
 		emps, err = h.incrementRepo.FindEligibleEmployees(req.CompanyID, req.DepartmentID, req.SectionID, req.DesignationID, req.LineID, req.GroupID)
@@ -409,9 +457,22 @@ func (h *SalaryIncrementHandler) BulkApply(c *gin.Context) {
 
 		var prevDesigID *string = emp.DesignationID
 		var newDesigID *string = nil
-		if (incType == "promotion" || incType == "promotion_with_increment") && strings.TrimSpace(req.NewDesignationID) != "" {
-			targetDesig := strings.TrimSpace(req.NewDesignationID)
-			newDesigID = &targetDesig
+		var promoDeptID *string = nil
+		var promoSecID *string = nil
+		var promoLineID *string = nil
+		if incType == "promotion" || incType == "promotion_with_increment" {
+			if v := strings.TrimSpace(req.NewDesignationID); v != "" {
+				newDesigID = &v
+			}
+			if v := strings.TrimSpace(req.PromoDepartmentID); v != "" {
+				promoDeptID = &v
+			}
+			if v := strings.TrimSpace(req.PromoSectionID); v != "" {
+				promoSecID = &v
+			}
+			if v := strings.TrimSpace(req.PromoLineID); v != "" {
+				promoLineID = &v
+			}
 		}
 
 		incs = append(incs, models.SalaryIncrement{
@@ -426,6 +487,9 @@ func (h *SalaryIncrementHandler) BulkApply(c *gin.Context) {
 			PreviousMedical:       emp.MedicalAllowance,
 			PreviousDesignationID: prevDesigID,
 			NewDesignationID:      newDesigID,
+			PromoDepartmentID:     promoDeptID,
+			PromoSectionID:        promoSecID,
+			PromoLineID:           promoLineID,
 			IncrementAmount:       incAmount,
 			NewGross:              newGross,
 			NewBasic:              newBasic,
@@ -484,18 +548,42 @@ func (h *SalaryIncrementHandler) Approve(c *gin.Context) {
 		return
 	}
 
-	emp.GrossSalary = inc.NewGross
-	emp.BasicSalary = inc.NewBasic
-	emp.HouseRent = inc.NewHouse
-	emp.MedicalAllowance = inc.NewMedical
-
-	if inc.NewDesignationID != nil && *inc.NewDesignationID != "" {
-		emp.DesignationID = inc.NewDesignationID
+	// Temporal gate: only mutate live employee if effective_date <= today.
+	// Future increments are approved but not yet applied to employees — salary ProcessMonth will pick them up when effective month arrives.
+	// This ensures "salary process effective month to after next increment" and old salary for before months.
+	isFuture := false
+	if inc.EffectiveDate != "" {
+		if eff, err := time.Parse("2006-01-02", inc.EffectiveDate); err == nil {
+			todayStr := time.Now().Format("2006-01-02")
+			today, _ := time.Parse("2006-01-02", todayStr)
+			if eff.After(today) {
+				isFuture = true
+			}
+		}
 	}
+	if !isFuture {
+		emp.GrossSalary = inc.NewGross
+		emp.BasicSalary = inc.NewBasic
+		emp.HouseRent = inc.NewHouse
+		emp.MedicalAllowance = inc.NewMedical
 
-	if err := h.employeeRepo.Update(emp); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		if inc.PromoDepartmentID != nil && *inc.PromoDepartmentID != "" {
+			emp.DepartmentID = inc.PromoDepartmentID
+		}
+		if inc.PromoSectionID != nil && *inc.PromoSectionID != "" {
+			emp.SectionID = inc.PromoSectionID
+		}
+		if inc.NewDesignationID != nil && *inc.NewDesignationID != "" {
+			emp.DesignationID = inc.NewDesignationID
+		}
+		if inc.PromoLineID != nil && *inc.PromoLineID != "" {
+			emp.LineID = inc.PromoLineID
+		}
+
+		if err := h.employeeRepo.UpdateWithPromotion(emp); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
 	}
 
 	now := time.Now()

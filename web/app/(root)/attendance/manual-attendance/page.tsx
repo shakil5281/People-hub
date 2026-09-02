@@ -174,12 +174,20 @@ export default function ManualAttendancePage() {
     {
       accessorKey: "department",
       header: "Department",
-      cell: ({ row }) => <span>{row.original.department || "-"}</span>,
+      cell: ({ row }) => {
+        const v = row.original.department as unknown
+        const display = typeof v === "object" && v !== null ? (v as { name?: string }).name : (v as string)
+        return <span>{display || "-"}</span>
+      },
     },
     {
       accessorKey: "designation",
       header: "Designation",
-      cell: ({ row }) => <span>{row.original.designation || "-"}</span>,
+      cell: ({ row }) => {
+        const v = row.original.designation as unknown
+        const display = typeof v === "object" && v !== null ? (v as { name?: string }).name : (v as string)
+        return <span>{display || "-"}</span>
+      },
     },
     {
       accessorKey: "status",

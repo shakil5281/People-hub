@@ -55,17 +55,29 @@ const columns: ColumnDef<AbsentRecord>[] = [
   {
     accessorKey: "designation",
     header: "Designation",
-    cell: ({ row }) => row.original.designation || row.original.employee?.designation_ref?.name || "-",
+    cell: ({ row }) => {
+      const v = row.original.designation as unknown
+      const des = typeof v === "object" && v !== null ? (v as { name?: string }).name : (v as string)
+      return des || row.original.employee?.designation_ref?.name || "-"
+    },
   },
   {
     id: "department",
     header: "Department",
-    cell: ({ row }) => row.original.department || row.original.employee?.department?.name || "-",
+    cell: ({ row }) => {
+      const v = row.original.department as unknown
+      const dep = typeof v === "object" && v !== null ? (v as { name?: string }).name : (v as string)
+      return dep || row.original.employee?.department?.name || "-"
+    },
   },
   {
     id: "section",
     header: "Section",
-    cell: ({ row }) => row.original.section || row.original.employee?.section_ref?.name || "-",
+    cell: ({ row }) => {
+      const v = row.original.section as unknown
+      const sec = typeof v === "object" && v !== null ? (v as { name?: string }).name : (v as string)
+      return sec || row.original.employee?.section_ref?.name || "-"
+    },
   },
   {
     id: "total_absent",

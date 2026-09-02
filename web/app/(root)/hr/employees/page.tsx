@@ -106,9 +106,18 @@ const columns: ColumnDef<EmployeeRow>[] = [
       </Link>
     ),
   },
-  { accessorKey: "designation", header: "Designation", cell: ({ row }) => row.original.designation || "-" },
-  { accessorKey: "department", header: "Department", cell: ({ row }) => row.original.department || "-" },
-  { accessorKey: "section", header: "Section", cell: ({ row }) => row.original.section || "-" },
+  { accessorKey: "designation", header: "Designation", cell: ({ row }) => {
+    const v = row.original.designation as unknown
+    return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-"
+  }},
+  { accessorKey: "department", header: "Department", cell: ({ row }) => {
+    const v = row.original.department as unknown
+    return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-"
+  }},
+  { accessorKey: "section", header: "Section", cell: ({ row }) => {
+    const v = row.original.section as unknown
+    return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-"
+  }},
   { accessorKey: "punch_number", header: "Punch No" },
   { accessorKey: "phone", header: "Phone" },
   {

@@ -261,7 +261,7 @@ export default function CustomAttendancePage() {
     if (!v) return "-"
     const d = v.slice(0, 10)
     if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return v
-    return d.split("-").reverse().join("/")
+    return d.split("-").reverse().join("-")
   }
 
   const extractDate = (v: string): string => {

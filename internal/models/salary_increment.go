@@ -24,6 +24,14 @@ type SalaryIncrement struct {
 	NewDesignationID      *string      `json:"new_designation_id" gorm:"type:uuid"`
 	NewDesignation        *Designation `json:"new_designation,omitempty" gorm:"foreignKey:NewDesignationID"`
 
+	// Promotion target hierarchy — relational, cascading Dept→Section→Designation→Line
+	PromoDepartmentID *string     `json:"promo_department_id" gorm:"type:uuid;index"`
+	PromoSectionID    *string     `json:"promo_section_id" gorm:"type:uuid;index"`
+	PromoLineID       *string     `json:"promo_line_id" gorm:"type:uuid;index"`
+	PromoDepartment   *Department `json:"promo_department,omitempty" gorm:"foreignKey:PromoDepartmentID"`
+	PromoSection      *Section    `json:"promo_section,omitempty" gorm:"foreignKey:PromoSectionID"`
+	PromoLine         *Line       `json:"promo_line,omitempty" gorm:"foreignKey:PromoLineID"`
+
 	IncrementAmount float64 `json:"increment_amount" gorm:"type:decimal(12,2);not null"`
 	NewGross        float64 `json:"new_gross" gorm:"type:decimal(12,2);default:0"`
 	NewBasic        float64 `json:"new_basic" gorm:"type:decimal(12,2);default:0"`

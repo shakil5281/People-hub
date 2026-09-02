@@ -518,10 +518,13 @@ func (h *LeaveHandler) ApproveLeave(c *gin.Context) {
 	l.ApprovedBy = &userID
 	l.ApprovedAt = &now
 
-	// Wrap leave approval + allocation + attendance update in a transaction
+	// Wrap leave approval + allocation update in a transaction.
+	// IMPORTANT: Leave approval does NOT update attendance status directly.
+	// Attendance for leave days remains locked and is only materialized to
+	// on_leave (Lv) by the daily process (attendance_processor). DeleteLeave
+	// is the only handler permitted to revert leave-locked attendance rows.
 	err = database.DB.Transaction(func(tx *gorm.DB) error {
 		leaveTx := h.leaveRepo.WithTx(tx)
-		attTx := h.attendanceRepo.WithTx(tx)
 
 		if err := leaveTx.UpdateLeave(l); err != nil {
 			return err
@@ -538,10 +541,6 @@ func (h *LeaveHandler) ApproveLeave(c *gin.Context) {
 			}
 		}
 
-		// Mark attendance as on_leave for the leave period
-		if err := attTx.UpdateStatusByEmployeeAndDateRange(l.EmployeeID, l.FromDate, l.ToDate, "on_leave"); err != nil {
-			return err
-		}
 		return nil
 	})
 	if err != nil {

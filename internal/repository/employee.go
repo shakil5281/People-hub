@@ -293,6 +293,15 @@ func (r *EmployeeRepository) Update(emp *models.Employee) error {
 		Updates(emp).Error
 }
 
+// UpdateWithPromotion updates salary fields plus promotion org hierarchy.
+// Used only by SalaryIncrement Approve to apply promo department/section/designation/line.
+func (r *EmployeeRepository) UpdateWithPromotion(emp *models.Employee) error {
+	return r.db.Model(&models.Employee{}).
+		Where("employee_id = ? AND company_id = ? AND deleted_at IS NULL", emp.EmployeeID, emp.CompanyID).
+		Select("GrossSalary", "BasicSalary", "HouseRent", "MedicalAllowance", "DepartmentID", "SectionID", "DesignationID", "LineID").
+		Updates(emp).Error
+}
+
 func (r *EmployeeRepository) MapByID(companyID string) (map[string]models.Employee, error) {
 	var employees []models.Employee
 	if err := r.db.Where("company_id = ?", companyID).Find(&employees).Error; err != nil {

@@ -30,6 +30,7 @@ type IncrementFilter struct {
 
 func (r *SalaryIncrementRepository) List(f IncrementFilter) ([]models.SalaryIncrement, error) {
 	query := r.db.Preload("Employee.Department").
+		Preload("Employee.SectionRef").
 		Preload("Employee.DesignationRef").
 		Preload("NewDesignation").
 		Preload("PreviousDesignation").
@@ -151,5 +152,68 @@ func (r *SalaryIncrementRepository) ListByEmployee(employeeID string, year, mont
 	var incs []models.SalaryIncrement
 	err := query.Order("salary_increments.effective_date DESC, salary_increments.created_at DESC").Find(&incs).Error
 	return incs, err
+}
+
+// GetEffectiveSalary returns the latest approved increment at or before asOfDate (YYYY-MM-DD) for one employee.
+// Used by salary ProcessMonth to resolve temporal gross: effective month → next increment.
+func (r *SalaryIncrementRepository) GetEffectiveSalary(employeeID, companyID, asOfDate string) (*models.SalaryIncrement, error) {
+	var inc models.SalaryIncrement
+	err := r.db.Where("employee_id = ? AND company_id = ? AND status = 'approved' AND effective_date <= ? AND deleted_at IS NULL", employeeID, companyID, asOfDate).
+		Order("effective_date DESC, created_at DESC").
+		First(&inc).Error
+	if err != nil {
+		return nil, err
+	}
+	return &inc, nil
+}
+
+// BatchEffectiveSalaries returns map[employeeID]→latest approved increment ≤ asOfDate for a company.
+// Uses DISTINCT ON to fetch one row per employee efficiently.
+func (r *SalaryIncrementRepository) BatchEffectiveSalaries(companyID string, employeeIDs []string, asOfDate string) (map[string]*models.SalaryIncrement, error) {
+	if len(employeeIDs) == 0 {
+		return map[string]*models.SalaryIncrement{}, nil
+	}
+	// Single query with DISTINCT ON (PostgreSQL) — one row per employee, latest effective_date
+	var rows []models.SalaryIncrement
+	err := r.db.Where("company_id = ? AND employee_id IN ? AND status = 'approved' AND effective_date <= ? AND deleted_at IS NULL", companyID, employeeIDs, asOfDate).
+		Order("employee_id ASC, effective_date DESC, created_at DESC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	// Distinct ON logic in Go: keep first (latest) per employee_id since ordered DESC
+	m := make(map[string]*models.SalaryIncrement, len(employeeIDs))
+	for i := range rows {
+		empID := rows[i].EmployeeID
+		if _, exists := m[empID]; !exists {
+			cp := rows[i]
+			m[empID] = &cp
+		}
+	}
+	return m, nil
+}
+
+// BatchEarliestFutureIncrements returns map[employeeID]→earliest approved increment > asOfDate.
+// Used to derive old salary for months before first increment when live has already been mutated.
+func (r *SalaryIncrementRepository) BatchEarliestFutureIncrements(companyID string, employeeIDs []string, asOfDate string) (map[string]*models.SalaryIncrement, error) {
+	if len(employeeIDs) == 0 {
+		return map[string]*models.SalaryIncrement{}, nil
+	}
+	var rows []models.SalaryIncrement
+	err := r.db.Where("company_id = ? AND employee_id IN ? AND status = 'approved' AND effective_date > ? AND deleted_at IS NULL", companyID, employeeIDs, asOfDate).
+		Order("employee_id ASC, effective_date ASC, created_at ASC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	m := make(map[string]*models.SalaryIncrement, len(employeeIDs))
+	for i := range rows {
+		empID := rows[i].EmployeeID
+		if _, exists := m[empID]; !exists {
+			cp := rows[i]
+			m[empID] = &cp
+		}
+	}
+	return m, nil
 }
 

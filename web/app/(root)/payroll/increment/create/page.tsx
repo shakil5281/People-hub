@@ -99,6 +99,7 @@ export default function CreateIncrementPage() {
   const [designationId, setDesignationId] = React.useState("")
   const [lineId, setLineId] = React.useState("")
   const [groupId, setGroupId] = React.useState("")
+  const [employeeIdSearch, setEmployeeIdSearch] = React.useState("")
   const [incrementType, setIncrementType] = React.useState<string>("gov_policy")
   const [filterMonth, setFilterMonth] = React.useState<number>(new Date().getMonth() + 1) // default 8 for August
   const [filterYear, setFilterYear] = React.useState<number>(currentYear) // default 2026
@@ -116,6 +117,14 @@ export default function CreateIncrementPage() {
   const [incrementDate, setIncrementDate] = React.useState<Date | undefined>(new Date())
   const [effectiveDate, setEffectiveDate] = React.useState<Date | undefined>(new Date())
   const [remarks, setRemarks] = React.useState<string>("")
+
+  // Promotion target relational states (dept→sec→desig→line)
+  const [promoDepartmentId, setPromoDepartmentId] = React.useState("")
+  const [promoSectionId, setPromoSectionId] = React.useState("")
+  const [promoLineId, setPromoLineId] = React.useState("")
+  const [promoSections, setPromoSections] = React.useState<Section[]>([])
+  const [promoDesignations, setPromoDesignations] = React.useState<Designation[]>([])
+  const [promoLines, setPromoLines] = React.useState<Line[]>([])
 
   const [applying, setApplying] = React.useState(false)
   const [dialogOpen, setDialogOpen] = React.useState(false)
@@ -183,6 +192,33 @@ export default function CreateIncrementPage() {
     }
   }, [])
 
+  const fetchPromoSections = React.useCallback(async (deptId: string) => {
+    try {
+      const { data } = await sectionApi.list(deptId || undefined, { limit: "100" })
+      setPromoSections(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch {
+      setPromoSections([])
+    }
+  }, [])
+
+  const fetchPromoDesignations = React.useCallback(async (secId: string) => {
+    try {
+      const { data } = await designationApi.list(secId || undefined, { limit: "100" })
+      setPromoDesignations(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch {
+      setPromoDesignations([])
+    }
+  }, [])
+
+  const fetchPromoLines = React.useCallback(async (secId: string) => {
+    try {
+      const { data } = await lineApi.list(secId || undefined, { limit: "100" })
+      setPromoLines(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch {
+      setPromoLines([])
+    }
+  }, [])
+
   React.useEffect(() => {
     if (!departmentId) {
       setSections([])
@@ -213,6 +249,37 @@ export default function CreateIncrementPage() {
     setLineId("")
   }, [sectionId, fetchDesignations, fetchLines, allDesignations])
 
+  // Promo cascading: dept → section → desig/line
+  React.useEffect(() => {
+    if (!promoDepartmentId) {
+      setPromoSections([])
+      setPromoDesignations([])
+      setPromoLines([])
+      setPromoSectionId("")
+      setNewDesignationId("")
+      setPromoLineId("")
+      return
+    }
+    fetchPromoSections(promoDepartmentId)
+    setPromoSectionId("")
+    setNewDesignationId("")
+    setPromoLineId("")
+  }, [promoDepartmentId, fetchPromoSections])
+
+  React.useEffect(() => {
+    if (!promoSectionId) {
+      setPromoDesignations([])
+      setPromoLines([])
+      setNewDesignationId("")
+      setPromoLineId("")
+      return
+    }
+    fetchPromoDesignations(promoSectionId)
+    fetchPromoLines(promoSectionId)
+    setNewDesignationId("")
+    setPromoLineId("")
+  }, [promoSectionId, fetchPromoDesignations, fetchPromoLines])
+
   // Sync modal state when incrementType in filter changes
   React.useEffect(() => {
     setModalIncrementType(incrementType)
@@ -238,6 +305,47 @@ export default function CreateIncrementPage() {
     }
     setLoading(true)
     try {
+      const trimmedSearch = employeeIdSearch.trim()
+      // Exact employee_id search — ignores all other filters except company (requested === behavior)
+      if (trimmedSearch !== "") {
+        const params: Record<string, string> = {
+          company_id: companyId,
+          employee_id: trimmedSearch,
+          limit: "100",
+        }
+        const res = await employeeApi.list(params)
+        let data: EmployeeRow[] = res.data?.data || res.data || []
+        if (!Array.isArray(data)) data = []
+        // Enforce exact match (ILIKE would return partial). Spec: 8 → only 8, 1 → only 1
+        const exact = data.filter((e: EmployeeRow) => String(e.employee_id) === trimmedSearch)
+        // Fallback exact via by-code if ILIKE returned superset but filtered away all
+        if (exact.length === 0 && data.length > 0) {
+          // No exact among partials → treat as not found per spec
+          setEmployees([])
+          setSelectedRows([])
+          toast.info("No employee search found")
+          return
+        }
+        if (exact.length === 0) {
+          // Try direct exact endpoint for punch_number / id fallback
+          try {
+            const { data: empRes } = await employeeApi.getByCode(trimmedSearch)
+            const emp = empRes?.data || empRes
+            if (emp && emp.employee_id && String(emp.employee_id) === trimmedSearch && String(emp.company_id) === String(companyId)) {
+              exact.push(emp as EmployeeRow)
+            }
+          } catch {}
+        }
+        setEmployees(exact)
+        setSelectedRows([])
+        if (exact.length === 0) {
+          toast.info("No employee search found")
+        } else {
+          toast.success(`Found ${exact.length} employee(s) for ID ${trimmedSearch}`)
+        }
+        return
+      }
+
       const params: Record<string, string> = {
         company_id: companyId,
         limit: "1000",
@@ -249,8 +357,8 @@ export default function CreateIncrementPage() {
       if (lineId) params.line_id = lineId
       if (groupId) params.group_id = groupId
 
-      // Anniversary Joining Date filter (e.g. Month = Aug, Year = 2026 -> finds joined August 2024, August 2025...)
-      if (filterMonth > 0) {
+      // Anniversary filter ONLY for gov_policy — keep as per spec, do not change gov path
+      if (incrementType === "gov_policy" && filterMonth > 0) {
         params.joining_month = String(filterMonth)
         params.joining_year = String(filterYear)
         params.joining_after_year = "2024"
@@ -290,8 +398,8 @@ export default function CreateIncrementPage() {
     }
 
     const isPromotion = modalIncrementType === "promotion" || modalIncrementType === "promotion_with_increment"
-    if (isPromotion && !newDesignationId) {
-      toast.error("Please select a New Designation for promotion")
+    if (isPromotion && (!promoDepartmentId || !promoSectionId || !newDesignationId)) {
+      toast.error("Please select Target Department, Section and Designation for promotion")
       return
     }
 
@@ -303,6 +411,7 @@ export default function CreateIncrementPage() {
 
     setApplying(true)
     try {
+      const trimmedSearch = employeeIdSearch.trim()
       const payload: Record<string, unknown> = {
         company_id: companyId,
         increment_type: modalIncrementType,
@@ -313,12 +422,19 @@ export default function CreateIncrementPage() {
         employee_ids: selectedRows.map((r) => r.employee_id),
         remarks: remarks.trim(),
       }
+      if (trimmedSearch !== "") payload.employee_id_search = trimmedSearch
       if (newDesignationId) payload.new_designation_id = newDesignationId
-      if (departmentId) payload.department_id = departmentId
-      if (sectionId) payload.section_id = sectionId
-      if (designationId) payload.designation_id = designationId
-      if (lineId) payload.line_id = lineId
-      if (groupId) payload.group_id = groupId
+      if (promoDepartmentId) payload.promo_department_id = promoDepartmentId
+      if (promoSectionId) payload.promo_section_id = promoSectionId
+      if (promoLineId) payload.promo_line_id = promoLineId
+      // For audit: still send filter context when not in exact-search mode
+      if (trimmedSearch === "") {
+        if (departmentId) payload.department_id = departmentId
+        if (sectionId) payload.section_id = sectionId
+        if (designationId) payload.designation_id = designationId
+        if (lineId) payload.line_id = lineId
+        if (groupId) payload.group_id = groupId
+      }
 
       const { data: res } = await salaryIncrementApi.bulkApply(payload)
       toast.success(`${res.message || "Increment submitted successfully"}`)
@@ -414,17 +530,26 @@ export default function CreateIncrementPage() {
     {
       accessorKey: "designation",
       header: "Current Designation",
-      cell: ({ row }) => row.original.designation || "-",
+      cell: ({ row }) => {
+        const v = row.original.designation as unknown
+        return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-"
+      },
     },
     {
       accessorKey: "department",
       header: "Department / Section",
-      cell: ({ row }) => (
-        <div className="text-xs text-muted-foreground">
-          <div>{row.original.department || "-"}</div>
-          {row.original.section && <div>{row.original.section}</div>}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const d = row.original.department as unknown
+        const s = row.original.section as unknown
+        const dep = typeof d === "object" && d !== null ? (d as { name?: string }).name : d as string
+        const sec = typeof s === "object" && s !== null ? (s as { name?: string }).name : s as string
+        return (
+          <div className="text-xs text-muted-foreground">
+            <div>{dep || "-"}</div>
+            {sec && <div>{sec}</div>}
+          </div>
+        )
+      },
     },
     {
       accessorKey: "gross_salary",
@@ -596,6 +721,20 @@ export default function CreateIncrementPage() {
               </select>
             </div>
 
+            {/* Employee ID Search — exact match, ignores other filters when filled */}
+            <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-2">
+              <label className={labelCls}>Search Employee ID</label>
+              <input
+                type="text"
+                value={employeeIdSearch}
+                onChange={(e) => setEmployeeIdSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleSearch() }}
+                placeholder="Exact ID — e.g. 8 or 1001 (ignores other filters)"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring font-mono"
+              />
+              <span className="text-[11px] text-muted-foreground">If filled, search is exact (8 → only 8). Empty shows filtered list.</span>
+            </div>
+
             {/* Month Filter */}
             <div className="flex flex-col gap-1.5">
               <label className={labelCls}>Joining Month *</label>
@@ -678,7 +817,13 @@ export default function CreateIncrementPage() {
             <div>
               <h2 className="text-lg font-semibold">Matched Employees ({employees.length})</h2>
               <p className="text-xs text-muted-foreground">
-                Showing active employees joined in {selectedMonthName} after 2024
+                {employeeIdSearch.trim() !== "" ? (
+                  <>Exact search for Employee ID <b>{employeeIdSearch.trim()}</b> — other filters ignored</>
+                ) : incrementType === "gov_policy" ? (
+                  <>Showing active employees joined in {selectedMonthName} after 2024</>
+                ) : (
+                  <>Showing all active employees matching the filters</>
+                )}
               </p>
             </div>
             {selectedRows.length > 0 && (
@@ -693,7 +838,13 @@ export default function CreateIncrementPage() {
             <Alert>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
-                No active employees found matching the filters (Joined in {selectedMonthName} between 2024 and {filterYear - 1}). Please adjust filters and click <b>Search Employees</b>.
+                {employeeIdSearch.trim() !== "" ? (
+                  <>No employee search found for ID <b>{employeeIdSearch.trim()}</b>.</>
+                ) : incrementType === "gov_policy" ? (
+                  <>No active employees found matching the filters (Joined in {selectedMonthName} between 2024 and {filterYear - 1}). Please adjust filters and click <b>Search Employees</b>.</>
+                ) : (
+                  <>No employees found matching the filters. Please adjust filters and click <b>Search Employees</b>.</>
+                )}
               </AlertDescription>
             </Alert>
           ) : (
@@ -737,26 +888,45 @@ export default function CreateIncrementPage() {
               </select>
             </div>
 
-            {/* Target Designation for Promotion types */}
+            {/* Target Promotion Hierarchy — relational dept→sec→desig→line */}
             {(modalIncrementType === "promotion" || modalIncrementType === "promotion_with_increment") && (
-              <div className="flex flex-col gap-1.5 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
-                <label className="text-xs font-semibold text-amber-900 dark:text-amber-300">
-                  Target Promotional Designation *
-                </label>
-                <select
-                  value={newDesignationId}
-                  onChange={(e) => setNewDesignationId(e.target.value)}
-                  className={selectCls}
-                >
-                  <option value="">-- Select New Designation --</option>
-                  {allDesignations.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-[11px] text-muted-foreground mt-1">
-                  Upon manager approval, this designation will replace the employee&apos;s current designation.
+              <div className="flex flex-col gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3">
+                <div className="text-xs font-semibold text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                  <AwardIcon className="h-3.5 w-3.5" />
+                  Target Promotion — Department / Section / Designation / Line *
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelCls}>Target Department *</label>
+                    <select value={promoDepartmentId} onChange={(e) => setPromoDepartmentId(e.target.value)} className={selectCls}>
+                      <option value="">-- Select Department --</option>
+                      {departments.map((d) => (<option key={d.id} value={d.id}>{d.name}</option>))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelCls}>Target Section *</label>
+                    <select value={promoSectionId} onChange={(e) => setPromoSectionId(e.target.value)} className={selectCls} disabled={!promoDepartmentId}>
+                      <option value="">-- Select Section --</option>
+                      {promoSections.map((s) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelCls}>Target Designation *</label>
+                    <select value={newDesignationId} onChange={(e) => setNewDesignationId(e.target.value)} className={selectCls} disabled={!promoSectionId}>
+                      <option value="">-- Select Designation --</option>
+                      {promoDesignations.map((d) => (<option key={d.id} value={d.id}>{d.name}</option>))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className={labelCls}>Target Line</label>
+                    <select value={promoLineId} onChange={(e) => setPromoLineId(e.target.value)} className={selectCls} disabled={!promoSectionId}>
+                      <option value="">-- Select Line (optional) --</option>
+                      {promoLines.map((l) => (<option key={l.id} value={l.id}>{l.name}</option>))}
+                    </select>
+                  </div>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Relational — Section filtered by Department, Designation & Line filtered by Section. Upon approval, employee&apos;s Department/Section/Designation/Line will update.
                 </p>
               </div>
             )}

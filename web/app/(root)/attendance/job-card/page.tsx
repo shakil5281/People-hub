@@ -35,7 +35,7 @@ interface Shift { id: string; name: string }
 const today = new Date().toISOString().split("T")[0]
 
 const statusMapEn: Record<string, string> = {
-  present: "P", late: "L", absent: "A", half_day: "HD", leave: "V", on_leave: "V", weekend: "W", holiday: "H",
+  present: "P", late: "L", absent: "A", half_day: "HD", leave: "Lv", on_leave: "Lv", weekend: "W", holiday: "H",
 }
 
 const statusMapBn: Record<string, string> = {
@@ -388,7 +388,7 @@ export default function JobCardPage() {
                 <div><span className="text-muted-foreground">{lang === "bn" ? "নাম: " : "Name: "}</span><span className="font-medium">{emp.name_en}</span></div>
                 <div><span className="text-muted-foreground">{lang === "bn" ? "কর্মী আইডি: " : "Code: "}</span><span className="font-medium">{emp.employee_id}</span></div>
                 <div><span className="text-muted-foreground">{lang === "bn" ? "পদবী: " : "Designation: "}</span><span className="font-medium">{emp.designation || "-"}</span></div>
-                <div><span className="text-muted-foreground">{lang === "bn" ? "বিভাগ: " : "Department: "}</span><span className="font-medium">{emp.department || "-"}</span></div>
+                <div><span className="text-muted-foreground">{lang === "bn" ? "বিভাগ: " : "Department: "}</span><span className="font-medium">{(() => { const v = emp.department as unknown; return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-" })()}</span></div>
                 <div><span className="text-muted-foreground">{lang === "bn" ? "মোবাইল: " : "Phone: "}</span><span className="font-medium">{emp.phone || "-"}</span></div>
                 <div><span className="text-muted-foreground">{lang === "bn" ? "যোগদানের তারিখ: " : "Joining: "}</span><span className="font-medium">{emp.joining_date ? format(new Date(emp.joining_date), "dd-MM-yyyy") : "-"}</span></div>
                 <div><span className="text-muted-foreground">{lang === "bn" ? "সময়কাল: " : "Period: "}</span><span className="font-medium">

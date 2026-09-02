@@ -17,6 +17,12 @@ type Attendance struct {
 	CheckOut    *time.Time     `json:"check_out" gorm:"type:timestamp"`
 	TotalHours  *string        `json:"total_hours" gorm:"type:varchar(5)"`
 	OverTime    *string        `json:"over_time" gorm:"type:varchar(5)"`
+	// Status values: present (P), late (L), absent (A), half_day (H),
+	// weekend (W), holiday, on_leave (Lv). Leave days are LOCKED to Lv:
+	// only daily process (SyncLeaveLockedStatus) may set Lv and only
+	// DeleteLeave (ClearOnLeaveStatus) may revert it. Manual APIs must
+	// not write on_leave/Lv — they receive 403. Short form Lv is used
+	// in Excel/Job-Card exports via statusMap.
 	Status      string         `json:"status" gorm:"type:varchar(20);default:present"`
 	LateMinutes int            `json:"late_minutes" gorm:"type:int;default:0"`
 	PunchNumber *string        `json:"punch_number" gorm:"type:varchar(50)"`

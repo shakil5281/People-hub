@@ -92,7 +92,7 @@ func (h *EmployeeHandler) ExportExcel(c *gin.Context) {
 		query = query.Where("status = ?", v)
 	}
 	if v := c.Query("employee_id"); v != "" {
-		query = query.Where("employee_id ILIKE ?", "%"+v+"%")
+		query = query.Where("employee_id = ?", v)
 	}
 	if v := c.Query("gender"); v != "" {
 		query = query.Where("gender = ?", v)

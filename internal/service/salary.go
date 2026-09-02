@@ -28,6 +28,7 @@ type SalaryService struct {
 	otEarlyExitService *OtEarlyExitService
 	advanceRepo        *repository.AdvanceSalaryRepository
 	separationRepo     *repository.SeparationRepository
+	incrementRepo      *repository.SalaryIncrementRepository
 }
 
 func NewSalaryService(
@@ -50,6 +51,11 @@ func NewSalaryService(
 		advanceRepo:        advanceRepo,
 		separationRepo:     separationRepo,
 	}
+}
+
+// SetIncrementRepo injects increment repo for temporal salary (effective month logic)
+func (s *SalaryService) SetIncrementRepo(repo *repository.SalaryIncrementRepository) {
+	s.incrementRepo = repo
 }
 
 // MonthResult holds the aggregated result of processing a month
@@ -93,6 +99,21 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 	empIDs := make([]string, len(employees))
 	for i, e := range employees {
 		empIDs[i] = e.EmployeeID
+	}
+
+	// Temporal salary: effective increment as of month end (effective month → next increment)
+	// If increments exist with effective_date <= endStr, use their NewGross/Basic/House/Medical for that month.
+	// Before increment effective month → old salary; from effective month onward → new salary.
+	// If no effective ≤ month but future exists (live already mutated), use future's Previous* as old salary.
+	effectiveMap := make(map[string]*models.SalaryIncrement)
+	futureMap := make(map[string]*models.SalaryIncrement)
+	if s.incrementRepo != nil {
+		if effMap, effErr := s.incrementRepo.BatchEffectiveSalaries(companyID, empIDs, endStr); effErr == nil {
+			effectiveMap = effMap
+		}
+		if futMap, futErr := s.incrementRepo.BatchEarliestFutureIncrements(companyID, empIDs, endStr); futErr == nil {
+			futureMap = futMap
+		}
 	}
 
 	// Parallel fetch: Combined attendance+OT summary, AdvanceDeductions, and Early-Exit recompute
@@ -199,7 +220,25 @@ func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID s
 				sepDate = sep.Date
 			}
 		}
-		salary := s.calculateEmployeeSalary(emp, groupName, attMap[emp.EmployeeID], netOt, advDeduction, month, year, daysInMonth, sepDate, userID)
+		// Temporal effective salary: from effective month onward use New*; before first effective use Previous* (old salary)
+		effectiveEmp := emp
+		if eff, ok := effectiveMap[emp.EmployeeID]; ok && eff != nil {
+			effectiveEmp.GrossSalary = eff.NewGross
+			effectiveEmp.BasicSalary = eff.NewBasic
+			effectiveEmp.HouseRent = eff.NewHouse
+			effectiveEmp.MedicalAllowance = eff.NewMedical
+		} else if fut, ok := futureMap[emp.EmployeeID]; ok && fut != nil {
+			// No effective ≤ month but future exists → live already holds new, need old for this month
+			effectiveEmp.GrossSalary = fut.PreviousGross
+			effectiveEmp.BasicSalary = fut.PreviousBasic
+			effectiveEmp.HouseRent = fut.PreviousHouse
+			effectiveEmp.MedicalAllowance = fut.PreviousMedical
+			// Fallback if Previous* are zero (should not happen): keep live
+			if effectiveEmp.GrossSalary == 0 {
+				effectiveEmp.GrossSalary = emp.GrossSalary
+			}
+		}
+		salary := s.calculateEmployeeSalary(effectiveEmp, groupName, attMap[emp.EmployeeID], netOt, advDeduction, month, year, daysInMonth, sepDate, userID)
 		if salary.NetSalary <= 1000 {
 			toDeleteIDs = append(toDeleteIDs, salary.EmployeeID)
 			continue

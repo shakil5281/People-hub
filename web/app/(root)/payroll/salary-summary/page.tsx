@@ -78,22 +78,70 @@ export default function SalarySummaryPage() {
   const [exporting, setExporting] = React.useState(false)
   const [lang, setLang] = React.useState<"en" | "bn">("en")
 
+  const fetchSections = React.useCallback(async (deptId: string) => {
+    try {
+      const { data } = await sectionApi.list(deptId || undefined, { limit: "100" })
+      setSections(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setSections([]) }
+  }, [])
+
+  const fetchDesignations = React.useCallback(async (secId: string) => {
+    try {
+      const { data } = await designationApi.list(secId || undefined, { limit: "100" })
+      setDesignations(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setDesignations([]) }
+  }, [])
+
+  const fetchLines = React.useCallback(async (secId: string) => {
+    try {
+      const { data } = await lineApi.list(secId || undefined, { limit: "100" })
+      setLines(Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [])
+    } catch { setLines([]) }
+  }, [])
+
+  React.useEffect(() => {
+    if (!departmentId) {
+      setSections([])
+      setDesignations([])
+      setLines([])
+      setSectionId("")
+      setDesignationId("")
+      setLineId("")
+      return
+    }
+    fetchSections(departmentId)
+    setSectionId("")
+    setDesignationId("")
+    setLineId("")
+    setDesignations([])
+    setLines([])
+  }, [departmentId, fetchSections])
+
+  React.useEffect(() => {
+    if (!sectionId) {
+      setDesignations([])
+      setLines([])
+      setDesignationId("")
+      setLineId("")
+      return
+    }
+    fetchDesignations(sectionId)
+    fetchLines(sectionId)
+    setDesignationId("")
+    setLineId("")
+  }, [sectionId, fetchDesignations, fetchLines])
+
   React.useEffect(() => {
     Promise.all([
       companyApi.list({ limit: "100" }),
       departmentApi.list({ limit: "100" }),
-      sectionApi.list(undefined, { limit: "100" }),
-      designationApi.list(undefined, { limit: "100" }),
-      lineApi.list(undefined, { limit: "100" }),
       groupApi.list({ limit: "100" }),
-    ]).then(([cRes, dRes, secRes, desRes, lRes, gRes]) => {
+    ]).then(([cRes, dRes, gRes]) => {
       const clist = Array.isArray(cRes.data?.data) ? cRes.data.data : (Array.isArray(cRes.data) ? cRes.data : [])
       if (clist.length > 0) { setCompanies(clist); setCompanyId(clist[0].id) }
       if (Array.isArray(dRes.data?.data)) setDepartments(dRes.data.data)
-      if (Array.isArray(secRes.data?.data)) setSections(secRes.data.data)
-      if (Array.isArray(desRes.data?.data)) setDesignations(desRes.data.data)
-      if (Array.isArray(lRes.data?.data)) setLines(lRes.data.data)
       if (Array.isArray(gRes.data?.data)) setGroups(gRes.data.data)
+      else if (Array.isArray(gRes.data)) setGroups(gRes.data as Group[])
     }).catch(() => {})
   }, [])
 
@@ -177,21 +225,21 @@ export default function SalarySummaryPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Section</label>
-                <select value={sectionId} onChange={e => setSectionId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <select value={sectionId} onChange={e => setSectionId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" disabled={!departmentId}>
                   <option value="">All</option>
                   {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Designation</label>
-                <select value={designationId} onChange={e => setDesignationId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <select value={designationId} onChange={e => setDesignationId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" disabled={!sectionId}>
                   <option value="">All</option>
                   {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
                 </select>
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Line</label>
-                <select value={lineId} onChange={e => setLineId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                <select value={lineId} onChange={e => setLineId(e.target.value)} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" disabled={!sectionId}>
                   <option value="">All</option>
                   {lines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>

@@ -109,18 +109,27 @@ export default function IncrementPage() {
     return params
   }
 
+  const isExporting = exportingExcel || exportingPdf
+
   const handleExportExcel = async () => {
     if (!companyId) return toast.error("Please select a company")
+    if (isExporting) return
     setExportingExcel(true)
     try {
       const res = await salaryIncrementApi.exportExcel(buildExportParams())
-      const url = window.URL.createObjectURL(new Blob([res.data]))
+      const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
+      const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
       a.download = `increments_${format(new Date(), "yyyyMMdd_HHmmss")}.xlsx`
+      a.style.display = "none"
       document.body.appendChild(a)
       a.click()
-      a.remove()
+      // Delay revoke to avoid IDM/browser race and allow download to start
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url)
+        a.remove()
+      }, 1000)
       toast.success("Excel exported successfully")
     } catch {
       toast.error("Failed to export Excel")
@@ -131,16 +140,22 @@ export default function IncrementPage() {
 
   const handleExportPdf = async () => {
     if (!companyId) return toast.error("Please select a company")
+    if (isExporting) return
     setExportingPdf(true)
     try {
       const res = await salaryIncrementApi.exportPdf(buildExportParams())
-      const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' }))
+      const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type: "application/pdf" })
+      const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
       a.download = `increments_${format(new Date(), "yyyyMMdd_HHmmss")}.pdf`
+      a.style.display = "none"
       document.body.appendChild(a)
       a.click()
-      a.remove()
+      setTimeout(() => {
+        window.URL.revokeObjectURL(url)
+        a.remove()
+      }, 1000)
       toast.success("PDF exported successfully")
     } catch {
       toast.error("Failed to export PDF")
@@ -396,11 +411,11 @@ export default function IncrementPage() {
         </div>
         <div className="flex items-center gap-2">
           <ButtonGroup>
-            <Button onClick={handleExportExcel} disabled={exportingExcel} variant="outline" className="h-10">
+            <Button onClick={handleExportExcel} disabled={exportingExcel || exportingPdf} variant="outline" className="h-10">
               {exportingExcel ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileSpreadsheetIcon className="mr-2 h-4 w-4" />}
               Export Excel
             </Button>
-            <Button onClick={handleExportPdf} disabled={exportingPdf} variant="outline" className="h-10">
+            <Button onClick={handleExportPdf} disabled={exportingExcel || exportingPdf} variant="outline" className="h-10">
               {exportingPdf ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileTextIcon className="mr-2 h-4 w-4" />}
               Export PDF
             </Button>

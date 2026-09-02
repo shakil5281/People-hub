@@ -436,7 +436,7 @@ export default function LateAttendancePage() {
                             {statusMap[row.status] || row.status}
                           </Badge>
                         </td>
-                        <td className="px-3 py-2">{row.date}</td>
+                        <td className="px-3 py-2">{row.date ? row.date.slice(0,10).split("-").reverse().join("-") : "-"}</td>
                         <td className="px-3 py-2 text-right">
                           <Button variant="ghost" size="icon-sm" onClick={() => handleOpenEdit(row)}>
                             <PencilIcon className="h-3.5 w-3.5" />
@@ -482,7 +482,7 @@ export default function LateAttendancePage() {
             <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
               <div className="rounded-md border p-3 bg-muted/30 text-sm space-y-1">
                 <div className="font-semibold">{selected.employee_name} ({selected.employee_id})</div>
-                <div className="text-muted-foreground">Date: {selected.date} | Shift: {selected.shift_name || "General"}</div>
+                <div className="text-muted-foreground">Date: {selected.date ? selected.date.slice(0,10).split("-").reverse().join("-") : "-"} | Shift: {selected.shift_name || "General"}</div>
                 <div className="text-orange-600 font-medium">Late Minutes: {selected.late_minutes} min</div>
               </div>
 

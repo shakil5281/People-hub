@@ -199,6 +199,10 @@ func Connect(cfg *config.Config) {
 	// Daily Process — high-performance indexes & idempotency
 	// Unique partial index prevents duplicate attendance; enables UPSERT ON CONFLICT
 	silentDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS ux_attendances_employee_date ON attendances(employee_id, date) WHERE deleted_at IS NULL")
+	// Leave-lock design: attendance.status = 'on_leave' (Lv) is authoritative
+	// only via daily process (attendance_processor.SyncLeaveLockedStatus) and
+	// revertible only via DeleteLeave (ClearOnLeaveStatus). No other API may
+	// write Lv — enforced at handler (403) and repository guard.
 	// Punch lookup — primary query for daily process is badge_number + punch_time range
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_data_logs_badge_punch_time ON data_logs(badge_number, punch_time) WHERE deleted_at IS NULL")
 	// Separation lookup for eligibility (batch by employee_id)
@@ -210,6 +214,19 @@ func Connect(cfg *config.Config) {
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_leaves_employee_date ON leaves(employee_id, from_date, to_date) WHERE deleted_at IS NULL")
 	// Attendance bulk fetch by company+date range
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_attendances_company_date_range ON attendances(company_id, date, employee_id) WHERE deleted_at IS NULL")
+
+	// Salary increment promotion hierarchy (dept→sec→desig→line) — fast lookup for promo target validation
+	silentDB.Exec("ALTER TABLE salary_increments ADD COLUMN IF NOT EXISTS promo_department_id uuid")
+	silentDB.Exec("ALTER TABLE salary_increments ADD COLUMN IF NOT EXISTS promo_section_id uuid")
+	silentDB.Exec("ALTER TABLE salary_increments ADD COLUMN IF NOT EXISTS promo_line_id uuid")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_salary_increments_promo_dept ON salary_increments(promo_department_id) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_salary_increments_promo_sec ON salary_increments(promo_section_id) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_salary_increments_promo_line ON salary_increments(promo_line_id) WHERE deleted_at IS NULL")
+
+	// Salary increment effective-date lookup — supports temporal salary (effective month → next increment)
+	// Used by salary ProcessMonth to resolve gross as of month end: latest approved increment where effective_date <= endStr
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_salary_increments_effective_lookup ON salary_increments(employee_id, effective_date) WHERE status = 'approved' AND deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_salary_increments_company_effective ON salary_increments(company_id, effective_date) WHERE status = 'approved' AND deleted_at IS NULL")
 
 	// Tune connection pool — prevents salary process blocking on single connection (was 1m30s due to pool starvation)
 	if sqlDB, err := db.DB(); err == nil {

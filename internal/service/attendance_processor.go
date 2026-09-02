@@ -286,6 +286,15 @@ func (p *AttendanceProcessor) ProcessDateRange(startDate, endDate, companyID str
 			// not fatal — attendances already persisted
 		}
 	}
+	// Leave-lock repair: if approved leave exists but attendance status != Lv,
+	// force it to on_leave (Lv). This satisfies "daily process check employee
+	// leave already exist but status not leave then update" without allowing
+	// any other API to set Lv.
+	if n, err := p.attendanceRepo.SyncLeaveLockedStatus(startDate, endDate, companyID); err != nil {
+		log.Printf("[daily-process] leave-lock sync failed: %v", err)
+	} else if n > 0 {
+		log.Printf("[daily-process] leave-lock sync corrected %d rows to Lv for %s %s-%s", n, companyID, startDate, endDate)
+	}
 	persistDur := time.Since(persistStart)
 
 	// Build result
@@ -738,6 +747,12 @@ func (p *AttendanceProcessor) computeAttendance(
 	att.CheckIn = checkIn
 	att.CheckOut = checkOut
 	att.TotalHours = utils.CalcTotalHoursStr(checkIn, checkOut)
+	// SYSTEM DESIGN — Leave status lock:
+	// Leave days are locked to on_leave (Lv). Once a leave is approved,
+	// no API other than DeleteLeave may change the attendance status for
+	// those dates. Daily process is the sole writer that materializes Lv,
+	// and DeleteLeave is the sole writer that reverts it. Manual APIs are
+	// blocked from writing on_leave.
 	isSpecialDay := false
 	specialStatus := ""
 	if isGovHoliday {
@@ -749,6 +764,22 @@ func (p *AttendanceProcessor) computeAttendance(
 	} else if !isGenDuty && shift != nil && shift.WeekendDays != "" && utils.IsWeekend(date, shift.WeekendDays) {
 		isSpecialDay = true
 		specialStatus = "weekend"
+	}
+	// Leave lock takes highest precedence over weekend/holiday/present/absent.
+	// This ensures approved leaves are always shown as Lv if daily process
+	// has run, and the "check leave exists but status != Lv then update"
+	// condition is satisfied on every run.
+	if onLeaveSet[emp.EmployeeID] {
+		att.Status = "on_leave"
+		att.LateMinutes = 0
+		// Clear late/OT handling for leave days — leave overrides punches
+		zero := "0"
+		if att.OverTime == nil {
+			att.OverTime = &zero
+		} else {
+			*att.OverTime = "0"
+		}
+		return att
 	}
 	status := "present"
 	if isSpecialDay {

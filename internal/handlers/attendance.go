@@ -28,6 +28,25 @@ func NewAttendanceHandler(attendanceRepo *repository.AttendanceRepository, emplo
 	return &AttendanceHandler{attendanceRepo: attendanceRepo, employeeRepo: employeeRepo, dataLogRepo: dataLogRepo, separationRepo: separationRepo}
 }
 
+// isLeaveLocked checks if the given employee/date is covered by an approved leave.
+// Leave days are locked to on_leave (Lv) — only daily process may materialize Lv
+// and only DeleteLeave may revert it. Manual attendance APIs must be blocked.
+func (h *AttendanceHandler) isLeaveLocked(employeeID, date string) bool {
+	if employeeID == "" || date == "" {
+		return false
+	}
+	var count int64
+	database.DB.Model(&models.Leave{}).
+		Where("employee_id = ? AND status = 'approved' AND from_date <= ? AND to_date >= ? AND deleted_at IS NULL", employeeID, date, date).
+		Count(&count)
+	return count > 0
+}
+
+func isManualOnLeaveStatus(s string) bool {
+	ls := strings.ToLower(strings.TrimSpace(s))
+	return ls == "on_leave" || ls == "lv" || ls == "leave" || ls == "v"
+}
+
 type CreateAttendanceRequest struct {
 	EmployeeID string `json:"employee_id" binding:"required"`
 	CompanyID  string `json:"company_id" binding:"required"`
@@ -289,6 +308,18 @@ func (h *AttendanceHandler) Create(c *gin.Context) {
 		status = "present"
 	}
 
+	// SYSTEM DESIGN: Leave days are locked to Lv. Manual creation of
+	// on_leave/Lv is forbidden — only daily process may set it.
+	if isManualOnLeaveStatus(status) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "on_leave (Lv) status is locked — only daily process may set leave status. Delete leave to revert."})
+		return
+	}
+	// If an approved leave already covers this date, attendance is locked.
+	if h.isLeaveLocked(req.EmployeeID, req.Date) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "leave day is locked to Lv — cannot create/update attendance manually. Delete the approved leave first."})
+		return
+	}
+
 	userID := c.GetString("user_id")
 	var checkIn, checkOut *time.Time
 	if req.CheckIn != "" {
@@ -318,6 +349,11 @@ func (h *AttendanceHandler) Create(c *gin.Context) {
 
 	existing, err := h.attendanceRepo.FindByEmployeeAndDate(req.EmployeeID, req.Date)
 	if err == nil && existing != nil && existing.ID != "" {
+		// Lock check: existing Lv rows cannot be overwritten manually.
+		if existing.Status == "on_leave" || h.isLeaveLocked(existing.EmployeeID, existing.Date) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "leave day is locked to Lv — cannot update attendance manually. Delete the approved leave first."})
+			return
+		}
 		existing.CheckIn = checkIn
 		existing.CheckOut = checkOut
 		existing.Status = status
@@ -384,6 +420,28 @@ func (h *AttendanceHandler) Update(c *gin.Context) {
 	}
 
 	userID := c.GetString("user_id")
+	// Leave lock: existing Lv or approved-leave-covered date cannot be manually updated.
+	if attendance.Status == "on_leave" || h.isLeaveLocked(attendance.EmployeeID, attendance.Date) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "leave day is locked to Lv — cannot update attendance manually. Delete the approved leave first."})
+		return
+	}
+	if isManualOnLeaveStatus(req.Status) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "on_leave (Lv) status is locked — only daily process may set leave status."})
+		return
+	}
+	// Also check target date/employee if changed to a leave-locked day.
+	targetEmp := req.EmployeeID
+	if targetEmp == "" {
+		targetEmp = attendance.EmployeeID
+	}
+	targetDate := req.Date
+	if targetDate == "" {
+		targetDate = attendance.Date
+	}
+	if h.isLeaveLocked(targetEmp, targetDate) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "target date is locked to Lv by approved leave — cannot move attendance to leave day."})
+		return
+	}
 	attendance.EmployeeID = req.EmployeeID
 	attendance.CompanyID = req.CompanyID
 	attendance.Date = req.Date
@@ -552,6 +610,15 @@ func (h *AttendanceHandler) FixSingleLate(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "attendance record not found"})
 		return
 	}
+	// Leave lock: cannot fix Lv days.
+	if att.Status == "on_leave" || h.isLeaveLocked(att.EmployeeID, att.Date) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "leave day is locked to Lv — cannot fix attendance manually."})
+		return
+	}
+	if isManualOnLeaveStatus(req.Status) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "on_leave (Lv) status is locked — only daily process may set it."})
+		return
+	}
 
 	if req.CheckIn != "" {
 		if t, err := utils.ParseDateTime(req.CheckIn, req.Date); err == nil {
@@ -613,10 +680,16 @@ func (h *AttendanceHandler) FixBulkLate(c *gin.Context) {
 
 	userID := c.GetString("user_id")
 	count := 0
+	skippedLeaveLocked := 0
 
 	for _, item := range req.Items {
 		att, err := h.attendanceRepo.FindByID(item.AttendanceID)
 		if err != nil {
+			continue
+		}
+		// Leave lock: skip Lv days.
+		if att.Status == "on_leave" || h.isLeaveLocked(att.EmployeeID, att.Date) || isManualOnLeaveStatus(item.Status) {
+			skippedLeaveLocked++
 			continue
 		}
 		if item.CheckIn != "" {
@@ -649,7 +722,11 @@ func (h *AttendanceHandler) FixBulkLate(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": fmt.Sprintf("%d late records fixed", count), "fixed": count})
+	msg := fmt.Sprintf("%d late records fixed", count)
+	if skippedLeaveLocked > 0 {
+		msg += fmt.Sprintf(" (%d leave-locked Lv skipped)", skippedLeaveLocked)
+	}
+	c.JSON(http.StatusOK, gin.H{"message": msg, "fixed": count, "skipped_leave_locked": skippedLeaveLocked})
 }
 
 // DeleteAttendance godoc
@@ -1425,7 +1502,7 @@ func (h *AttendanceHandler) buildAbsentSummaryRows(startDate, endDate, companyID
 			Where("emp_shf.shift_id = ?", shiftID)
 	}
 	if employeeID != "" {
-		query = query.Where("attendances.employee_id LIKE ?", "%"+employeeID+"%")
+		query = query.Where("attendances.employee_id = ?", employeeID)
 	}
 
 	var rawAttendances []models.Attendance
@@ -1556,9 +1633,9 @@ func statusMap(s string) string {
 	case "absent":
 		return "A"
 	case "on_leave":
-		return "V"
+		return "Lv"
 	case "leave":
-		return "V"
+		return "Lv"
 	case "weekend":
 		return "W"
 	case "half_day":
@@ -1571,18 +1648,21 @@ func statusMap(s string) string {
 func addGroupedSheet(f *excelize.File, sheetName, companyName, companyAddress, dateDisplay string, attendances []models.Attendance, groupFn func(models.Attendance) string) {
 	f.NewSheet(sheetName)
 
-	nCols := 8
+	nCols := 11
 	cols := []struct {
 		header string
 		width  float64
 	}{
 		{"Employee ID", 14},
-		{"Name", 30},
-		{"Designation", 24},
-		{"In Time", 12},
-		{"Out Time", 12},
-		{"Late (Min)", 11},
-		{"OT (Hr)", 11},
+		{"Name", 26},
+		{"Designation", 18},
+		{"Section", 16},
+		{"Group", 14},
+		{"Shift", 14},
+		{"In Time", 11},
+		{"Out Time", 11},
+		{"Late (Min)", 10},
+		{"OT (Hr)", 10},
 		{"Status", 10},
 	}
 
@@ -1710,25 +1790,45 @@ func addGroupedSheet(f *excelize.File, sheetName, companyName, companyAddress, d
 			}
 			svl(3, designation)
 
+			sectionName := ""
+			if a.Employee.SectionRef != nil {
+				sectionName = a.Employee.SectionRef.Name
+			}
+			svl(4, sectionName)
+
+			groupName := ""
+			if a.Employee.GroupRef != nil {
+				groupName = a.Employee.GroupRef.Name
+			}
+			svl(5, groupName)
+
+			shiftName := ""
+			if a.Shift != nil {
+				shiftName = a.Shift.Name
+			} else if a.Employee.Shift != nil {
+				shiftName = a.Employee.Shift.Name
+			}
+			svc(6, shiftName)
+
 			checkIn := ""
 			if a.CheckIn != nil {
-				checkIn = a.CheckIn.Format("2006-01-02 15:04:05")
+				checkIn = a.CheckIn.Format("15:04")
 			}
-			svc(4, checkIn)
+			svc(7, checkIn)
 
 			checkOut := ""
 			if a.CheckOut != nil {
-				checkOut = a.CheckOut.Format("2006-01-02 15:04:05")
+				checkOut = a.CheckOut.Format("15:04")
 			}
-			svc(5, checkOut)
+			svc(8, checkOut)
 
-			svc(6, fmt.Sprintf("%d", a.LateMinutes))
+			svc(9, fmt.Sprintf("%d", a.LateMinutes))
 
 			overTime := ""
 			if a.OverTime != nil {
 				overTime = *a.OverTime
 			}
-			svc(7, overTime)
+			svc(10, overTime)
 
 			status := a.Status
 			if status == "" {
@@ -1741,10 +1841,10 @@ func addGroupedSheet(f *excelize.File, sheetName, companyName, companyAddress, d
 					Border:    thinBorder,
 					Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 				})
-				f.SetCellValue(sheetName, colNameAttendance(8)+strconv.Itoa(row), statusCode)
-				f.SetCellStyle(sheetName, colNameAttendance(8)+strconv.Itoa(row), colNameAttendance(8)+strconv.Itoa(row), redStyle)
+				f.SetCellValue(sheetName, colNameAttendance(11)+strconv.Itoa(row), statusCode)
+				f.SetCellStyle(sheetName, colNameAttendance(11)+strconv.Itoa(row), colNameAttendance(11)+strconv.Itoa(row), redStyle)
 			} else {
-				svc(8, statusCode)
+				svc(11, statusCode)
 			}
 
 			switch status {
@@ -1801,6 +1901,9 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 		Preload("Employee.Department").
 		Preload("Employee.SectionRef").
 		Preload("Employee.LineRef").
+		Preload("Employee.GroupRef").
+		Preload("Employee.Shift").
+		Preload("Shift").
 		Preload("Employee").
 		Where("attendances.date = ? AND attendances.deleted_at IS NULL", date)
 
@@ -1882,13 +1985,16 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 		center bool
 	}{
 		{"Employee ID", 14, true},
-		{"Name", 32, false},
-		{"Designation", 26, false},
-		{"In Time", 12, true},
-		{"Out Time", 12, true},
-		{"Late (Min)", 11, true},
-		{"OT (Hr)", 11, true},
-		{"Status", 12, true},
+		{"Name", 28, false},
+		{"Designation", 18, false},
+		{"Section", 16, false},
+		{"Group", 14, false},
+		{"Shift", 14, true},
+		{"In Time", 11, true},
+		{"Out Time", 11, true},
+		{"Late (Min)", 10, true},
+		{"OT (Hr)", 10, true},
+		{"Status", 11, true},
 	}
 
 	nCols := len(cols)
@@ -1966,25 +2072,45 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 		}
 		sv(3, designation)
 
+		sectionName := ""
+		if att.Employee.SectionRef != nil {
+			sectionName = att.Employee.SectionRef.Name
+		}
+		sv(4, sectionName)
+
+		groupName := ""
+		if att.Employee.GroupRef != nil {
+			groupName = att.Employee.GroupRef.Name
+		}
+		sv(5, groupName)
+
+		shiftName := ""
+		if att.Shift != nil {
+			shiftName = att.Shift.Name
+		} else if att.Employee.Shift != nil {
+			shiftName = att.Employee.Shift.Name
+		}
+		svc(6, shiftName)
+
 		checkIn := ""
 		if att.CheckIn != nil {
 			checkIn = att.CheckIn.Format("15:04")
 		}
-		svc(4, checkIn)
+		svc(7, checkIn)
 
 		checkOut := ""
 		if att.CheckOut != nil {
 			checkOut = att.CheckOut.Format("15:04")
 		}
-		svc(5, checkOut)
+		svc(8, checkOut)
 
-		svc(6, fmt.Sprintf("%d", att.LateMinutes))
+		svc(9, fmt.Sprintf("%d", att.LateMinutes))
 
 		overTime := ""
 		if att.OverTime != nil {
 			overTime = *att.OverTime
 		}
-		svc(7, overTime)
+		svc(10, overTime)
 
 		status := att.Status
 		if status == "" {
@@ -1997,10 +2123,10 @@ func (h *AttendanceHandler) ExportExcel(c *gin.Context) {
 				Border:    thinBorder,
 				Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 			})
-			f.SetCellValue(sheet, colNameAttendance(8)+strconv.Itoa(row), statusCode)
-			f.SetCellStyle(sheet, colNameAttendance(8)+strconv.Itoa(row), colNameAttendance(8)+strconv.Itoa(row), redStyle)
+			f.SetCellValue(sheet, colNameAttendance(11)+strconv.Itoa(row), statusCode)
+			f.SetCellStyle(sheet, colNameAttendance(11)+strconv.Itoa(row), colNameAttendance(11)+strconv.Itoa(row), redStyle)
 		} else {
-			svc(8, statusCode)
+			svc(11, statusCode)
 		}
 
 		summary[att.Status]++
@@ -3600,6 +3726,19 @@ func (h *AttendanceHandler) BulkUpdateMissing(c *gin.Context) {
 	if req.InTime == "" && req.OutTime == "" && req.Status == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "at least one of inTime, outTime or status must be provided"})
 		return
+	}
+	if isManualOnLeaveStatus(req.Status) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "on_leave (Lv) status is locked — only daily process may set leave status."})
+		return
+	}
+	// Pre-check: reject if any selected attendance is leave-locked.
+	for _, attID := range req.AttendanceIDs {
+		if att, err := h.attendanceRepo.FindByID(attID); err == nil && att != nil {
+			if att.Status == "on_leave" || h.isLeaveLocked(att.EmployeeID, att.Date) {
+				c.JSON(http.StatusForbidden, gin.H{"error": fmt.Sprintf("attendance %s on %s is locked to Lv — cannot bulk update leave day", att.EmployeeID, att.Date)})
+				return
+			}
+		}
 	}
 
 	userID := c.GetString("user_id")

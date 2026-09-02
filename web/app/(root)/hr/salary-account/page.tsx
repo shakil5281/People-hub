@@ -530,11 +530,11 @@ export default function SalaryAccountPage() {
                         {row.name_bn && <div className="text-xs text-muted-foreground">{row.name_bn}</div>}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
-                        {row.designation || "-"}
+                        {(() => { const v = row.designation as unknown; return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-" })()}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground hidden lg:table-cell">
-                        <div>{row.department || "-"}</div>
-                        {row.section && <div className="text-muted-foreground/75">{row.section}</div>}
+                        <div>{(() => { const v = row.department as unknown; return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-" })()}</div>
+                        {(() => { const v = row.section as unknown; const d = typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string; return d ? <div className="text-muted-foreground/75">{d}</div> : null })()}
                       </td>
                       <td className="px-4 py-3 text-right font-medium hidden sm:table-cell">
                         ৳{row.gross_salary?.toLocaleString() || "0"}

@@ -119,7 +119,7 @@ func (r *SalaryRepository) ListAllByMonthFiltered(f SalaryFilter) ([]models.Sala
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE shift_id = ?)", f.ShiftID)
 	}
 	if f.EmployeeID != "" {
-		query = query.Where("employee_id LIKE ?", "%"+f.EmployeeID+"%")
+		query = query.Where("employee_id = ?", f.EmployeeID)
 	}
 	if f.AccountType != "" {
 		if strings.EqualFold(f.AccountType, "hold") {
@@ -183,7 +183,7 @@ func (r *SalaryRepository) ListPayslips(f SalaryFilter, page, limit int) ([]mode
 		query = query.Where("employee_id IN (SELECT employee_id FROM employees WHERE shift_id = ?)", f.ShiftID)
 	}
 	if f.EmployeeID != "" {
-		query = query.Where("employee_id LIKE ?", "%"+f.EmployeeID+"%")
+		query = query.Where("employee_id = ?", f.EmployeeID)
 	}
 	var total int64
 	if err := query.Model(&models.Salary{}).Count(&total).Error; err != nil {

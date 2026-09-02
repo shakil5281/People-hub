@@ -657,6 +657,19 @@ func (r *AttendanceRepository) BulkUpdateMissing(attendanceIDs []string, inTime,
 				}
 				return err
 			}
+			// Leave lock: prevent manual edits to Lv days at DB layer.
+			if att.Status == "on_leave" {
+				return fmt.Errorf("attendance %s on %s is locked to Lv — cannot update via missing flow", att.EmployeeID, att.Date)
+			}
+			// Also block if approved leave covers this date (even if status not yet Lv)
+			var leaveCount int64
+			tx.Model(&models.Leave{}).Where("employee_id = ? AND status = 'approved' AND from_date <= ? AND to_date >= ? AND deleted_at IS NULL", att.EmployeeID, att.Date, att.Date).Count(&leaveCount)
+			if leaveCount > 0 {
+				return fmt.Errorf("attendance %s on %s is locked by approved leave (Lv)", att.EmployeeID, att.Date)
+			}
+			if status == "on_leave" || status == "Lv" || status == "leave" || status == "V" {
+				return fmt.Errorf("on_leave (Lv) status is locked — only daily process may set it")
+			}
 
 			if inTime != "" {
 				if att.CheckIn != nil {
@@ -798,15 +811,65 @@ func (r *AttendanceRepository) DeleteAll() error {
 }
 
 func (r *AttendanceRepository) UpdateStatusByEmployeeAndDateRange(employeeID, fromDate, toDate, status string) error {
+	// Guard: on_leave (Lv) is locked — only SyncLeaveLockedStatus (daily process)
+	// may set it. Direct calls are rejected to enforce "do not permission
+	// leave status update".
+	ls := status
+	if ls == "on_leave" || ls == "Lv" || ls == "lv" || ls == "V" || ls == "leave" {
+		return fmt.Errorf("on_leave (Lv) status is locked — only daily process may set it (and DeleteLeave may revert)")
+	}
 	return r.db.Model(&models.Attendance{}).
 		Where("employee_id = ? AND date >= ? AND date <= ? AND deleted_at IS NULL", employeeID, fromDate, toDate).
 		Update("status", status).Error
 }
 
 func (r *AttendanceRepository) ClearOnLeaveStatus(employeeID, fromDate, toDate string) error {
-	return r.db.Model(&models.Attendance{}).
-		Where("employee_id = ? AND date >= ? AND date <= ? AND status = 'on_leave' AND deleted_at IS NULL", employeeID, fromDate, toDate).
-		Update("status", "").Error
+	// SYSTEM DESIGN: Leave days are locked to on_leave (Lv) and can only be
+	// reverted via Leave Delete. This method is the SOLE place allowed to
+	// mutate leave-locked rows. It soft-deletes on_leave rows for the leave
+	// period so the daily process can recreate them with correct punch-based
+	// status (P/L/A/H/W). Hard status "" is avoided to prevent blank reports.
+	return r.db.Where("employee_id = ? AND date >= ? AND date <= ? AND status = 'on_leave' AND deleted_at IS NULL", employeeID, fromDate, toDate).
+		Delete(&models.Attendance{}).Error
+}
+
+// IsOnLeaveLocked checks if a given employee/date is within an approved leave range.
+// Used to enforce leave-day locking: manual attendance APIs must not overwrite Lv.
+func (r *AttendanceRepository) IsOnLeaveLocked(employeeID, date string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.Attendance{}).
+		Where("employee_id = ? AND date = ? AND status = 'on_leave' AND deleted_at IS NULL", employeeID, date).
+		Count(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
+
+// SyncLeaveLockedStatus enforces the daily-process leave-lock condition:
+// "check employee leave already exist but status not leave then update then status".
+// It finds attendances in [startDate,endDate] where an approved leave covers
+// the date but status != on_leave, and forces them to on_leave (Lv).
+// This is safe to run even when computeAttendance already handled Lv — it acts
+// as a repair for pre-existing rows that were created before leave approval.
+func (r *AttendanceRepository) SyncLeaveLockedStatus(startDate, endDate, companyID string) (int64, error) {
+	res := r.db.Exec(`
+		UPDATE attendances
+		SET status = 'on_leave', late_minutes = 0, over_time = '0', updated_at = NOW()
+		WHERE deleted_at IS NULL
+		  AND status != 'on_leave'
+		  AND date BETWEEN ? AND ?
+		  AND (company_id = ? OR ? = '')
+		  AND EXISTS (
+		    SELECT 1 FROM leaves l
+		    WHERE l.employee_id = attendances.employee_id
+		      AND l.status = 'approved'
+		      AND l.deleted_at IS NULL
+		      AND l.from_date <= attendances.date
+		      AND l.to_date >= attendances.date
+		  )
+	`, startDate, endDate, companyID, companyID)
+	return res.RowsAffected, res.Error
 }
 
 func (r *AttendanceRepository) CountByDateOnly(date string) (int64, error) {
@@ -963,7 +1026,7 @@ func (r *AttendanceRepository) MonthlyReport(startDate, endDate, companyID, depa
 		query = query.Where("employees.shift_id = ?", shiftID)
 	}
 	if employeeID != "" {
-		query = query.Where("employees.employee_id LIKE ?", "%"+employeeID+"%")
+		query = query.Where("employees.employee_id = ?", employeeID)
 	}
 	var results []map[string]interface{}
 	err := query.Group("attendances.employee_id, employees.employee_id, employees.name_en, designations.name, departments.name, shifts.name").
@@ -1202,7 +1265,7 @@ func (r *AttendanceRepository) ListCustom(startDate, endDate, companyID, departm
 		base = base.Where("status = ?", status)
 	}
 	if employeeID != "" {
-		base = base.Where("employee_id ILIKE ?", "%"+employeeID+"%")
+		base = base.Where("employee_id = ?", employeeID)
 	}
 	var total int64
 	if err := base.Count(&total).Error; err != nil {

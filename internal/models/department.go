@@ -19,7 +19,7 @@ type Department struct {
 	CreatedBy *string        `json:"created_by" gorm:"type:uuid"`
 	UpdatedBy *string        `json:"updated_by" gorm:"type:uuid"`
 
-	Company   Company    `json:"company" gorm:"foreignKey:CompanyID"`
-	Employees []Employee `json:"employees" gorm:"foreignKey:DepartmentID"`
+	Company   *Company   `json:"company,omitempty" gorm:"foreignKey:CompanyID"`
+	Employees []Employee `json:"employees,omitempty" gorm:"foreignKey:DepartmentID"`
 	Sections  []Section  `json:"sections,omitempty" gorm:"foreignKey:DepartmentID"`
 }

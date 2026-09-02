@@ -130,6 +130,15 @@ export default function SalarySheetPage() {
   }, [])
 
   React.useEffect(() => {
+    if (!departmentId) {
+      setSections([])
+      setDesignations([])
+      setLines([])
+      setSectionId("")
+      setDesignationId("")
+      setLineId("")
+      return
+    }
     fetchSections(departmentId)
     setSectionId("")
     setDesignationId("")
@@ -139,6 +148,13 @@ export default function SalarySheetPage() {
   }, [departmentId, fetchSections])
 
   React.useEffect(() => {
+    if (!sectionId) {
+      setDesignations([])
+      setLines([])
+      setDesignationId("")
+      setLineId("")
+      return
+    }
     fetchDesignations(sectionId)
     fetchLines(sectionId)
     setDesignationId("")
@@ -451,21 +467,21 @@ export default function SalarySheetPage() {
             </div>
             <div className="flex flex-col gap-1.5">
               <label className={labelCls}>Section</label>
-              <select value={sectionId} onChange={e => setSectionId(e.target.value)} className={selectCls}>
+              <select value={sectionId} onChange={e => setSectionId(e.target.value)} className={selectCls} disabled={!departmentId}>
                 <option value="">All</option>
                 {sections.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
               <label className={labelCls}>Designation</label>
-              <select value={designationId} onChange={e => setDesignationId(e.target.value)} className={selectCls}>
+              <select value={designationId} onChange={e => setDesignationId(e.target.value)} className={selectCls} disabled={!sectionId}>
                 <option value="">All</option>
                 {designations.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
               </select>
             </div>
             <div className="flex flex-col gap-1.5">
               <label className={labelCls}>Line</label>
-              <select value={lineId} onChange={e => setLineId(e.target.value)} className={selectCls}>
+              <select value={lineId} onChange={e => setLineId(e.target.value)} className={selectCls} disabled={!sectionId}>
                 <option value="">All</option>
                 {lines.map(l => (
                   <option key={l.id} value={l.id}>
