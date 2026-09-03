@@ -90,6 +90,7 @@ func Connect(cfg *config.Config) {
 		&models.NightBill{},
 		&models.NightBillEmployeeList{},
 		&models.EmployeeMigration{},
+		&models.EarnedLeavePolicy{}, &models.EarnedLeaveLedger{}, &models.EarnedLeaveBalance{}, &models.EarnedLeaveSalarySheet{}, &models.EarnedLeaveSalaryItem{},
 	)
 	// Ensure new tables were created; if not, create them explicitly.
 	db.Exec("CREATE TABLE IF NOT EXISTS punishments (id uuid PRIMARY KEY DEFAULT gen_random_uuid())")
@@ -112,6 +113,7 @@ func Connect(cfg *config.Config) {
 		&models.EmployeeMigration{},
 		&models.Roster{},
 		&models.OtEarlyExitExemption{},
+		&models.EarnedLeavePolicy{}, &models.EarnedLeaveLedger{}, &models.EarnedLeaveBalance{}, &models.EarnedLeaveSalarySheet{}, &models.EarnedLeaveSalaryItem{},
 	)
 
 	// Use silent session for ALTER statements to avoid noisy ERROR logs when tables don't exist yet
@@ -137,6 +139,9 @@ func Connect(cfg *config.Config) {
 	alterCol("ot_early_exit_deductions", "employee_id")
 	alterCol("night_bill_employee_lists", "employee_id")
 	alterCol("rosters", "employee_id")
+	alterCol("earned_leave_ledgers", "employee_id")
+	alterCol("earned_leave_balances", "employee_id")
+	alterCol("earned_leave_salary_items", "employee_id")
 	// Recreate employee_id unique index as partial so soft-deleted records don't block re-adding an employee.
 	silentDB.Exec("DROP INDEX IF EXISTS idx_night_bill_employee_lists_employee_id")
 	silentDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_night_bill_employee_lists_employee_id ON night_bill_employee_lists(employee_id) WHERE deleted_at IS NULL")
@@ -227,6 +232,16 @@ func Connect(cfg *config.Config) {
 	// Used by salary ProcessMonth to resolve gross as of month end: latest approved increment where effective_date <= endStr
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_salary_increments_effective_lookup ON salary_increments(employee_id, effective_date) WHERE status = 'approved' AND deleted_at IS NULL")
 	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_salary_increments_company_effective ON salary_increments(company_id, effective_date) WHERE status = 'approved' AND deleted_at IS NULL")
+
+	// Earned Leave — performance & idempotency
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_el_policy_company ON earned_leave_policies(company_id, status) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_el_ledger_company_period ON earned_leave_ledgers(company_id, period, transaction_type) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_el_ledger_emp_date ON earned_leave_ledgers(employee_id, transaction_date) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_el_balance_emp_year ON earned_leave_balances(company_id, employee_id, year) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE INDEX IF NOT EXISTS idx_el_sheet_company_period ON earned_leave_salary_sheets(company_id, period) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS ux_el_ledger_company_employee_period_type ON earned_leave_ledgers(company_id, employee_id, period, transaction_type) WHERE transaction_type = 'ACCRUAL' AND deleted_at IS NULL")
+	silentDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS ux_el_sheet_company_period ON earned_leave_salary_sheets(company_id, period_year, period_month) WHERE deleted_at IS NULL")
+	silentDB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS ux_el_item_sheet_employee ON earned_leave_salary_items(sheet_id, employee_id) WHERE deleted_at IS NULL")
 
 	// Tune connection pool — prevents salary process blocking on single connection (was 1m30s due to pool starvation)
 	if sqlDB, err := db.DB(); err == nil {

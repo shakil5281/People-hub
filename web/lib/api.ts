@@ -546,6 +546,27 @@ export const advanceSalaryApi = {
   exportPdf: (params?: Record<string, string>) => api.get("/salary/advances/export/pdf", { params, responseType: "blob" }),
 }
 
+export const earnedLeaveApi = {
+  // Policy
+  listPolicies: (params?: Record<string, string>) => api.get("/earned-leaves/policies", { params }),
+  createPolicy: (data: Record<string, unknown>) => api.post("/earned-leaves/policies", data),
+  // Accrual
+  accrualProcess: (data: { company_id: string; period: string }) => api.post("/earned-leaves/accrual/process", data),
+  // Balance & Ledger
+  balance: (params: Record<string, string>) => api.get("/earned-leaves/balance", { params }),
+  ledger: (params?: Record<string, string>) => api.get("/earned-leaves/ledger", { params }),
+  // Adjustment & Encashment
+  adjustment: (data: Record<string, unknown>) => api.post("/earned-leaves/adjustment", data),
+  encashment: (data: Record<string, unknown>) => api.post("/earned-leaves/encashment", data),
+  // Salary Sheet
+  generateSalarySheet: (data: { company_id: string; month: number; year: number }) => api.post("/earned-leaves/salary-sheet/generate", data),
+  listSalarySheets: (params?: Record<string, string>) => api.get("/earned-leaves/salary-sheet", { params }),
+  getSalarySheet: (id: string) => api.get(`/earned-leaves/salary-sheet/${id}`),
+  approveSheet: (id: string) => api.post(`/earned-leaves/salary-sheet/${id}/approve`),
+  finalizeSheet: (id: string) => api.post(`/earned-leaves/salary-sheet/${id}/finalize`),
+  reverseSheet: (id: string) => api.post(`/earned-leaves/salary-sheet/${id}/reverse`),
+}
+
 export const punishmentApi = {
   list: (params?: Record<string, string>) => api.get("/punishments", { params }),
   create: (data: Record<string, unknown>) => api.post("/punishments", data),

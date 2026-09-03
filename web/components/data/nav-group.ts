@@ -40,6 +40,9 @@ ClipboardCheckIcon,
   CoffeeIcon,
   GiftIcon,
   ArrowRightLeftIcon,
+  LeafIcon,
+  WalletIcon,
+  BookOpenIcon,
 } from "lucide-react"
 
 export const monthlyReportNav = [
@@ -110,6 +113,15 @@ export const payrollNav = [
   { title: "Eid Bonus", url: "/payroll/eid-bonus", icon: GiftIcon },
 ] as const satisfies { title: string; url: string; icon: LucideIcon }[]
 
+export const earnedLeaveNav = [
+  { title: "Dashboard", url: "/earned-leave", icon: LeafIcon },
+  { title: "EL Policy", url: "/earned-leave/policy", icon: BookOpenIcon },
+  { title: "EL Accrual", url: "/earned-leave/accrual", icon: RefreshCwIcon },
+  { title: "EL Balance", url: "/earned-leave/balance", icon: WalletIcon },
+  { title: "EL Ledger", url: "/earned-leave/ledger", icon: FileTextIcon },
+  { title: "EL Salary Sheet", url: "/earned-leave/salary-sheet", icon: FileSpreadsheetIcon },
+] as const satisfies { title: string; url: string; icon: LucideIcon }[]
+
 export const collectDataNav = [
   { title: "Log Collect", url: "/collect-data/log-collect", icon: DatabaseIcon },
   { title: "Daily Process", url: "/collect-data/daily-process", icon: RefreshCwIcon },
@@ -148,6 +160,12 @@ export const navGroup = [
     icon: CalendarDaysIcon,
     url: "#",
     items: leaveNav.map(({ title, url }) => ({ title, url })),
+  },
+  {
+    title: "Earned Leave",
+    icon: LeafIcon,
+    url: "#",
+    items: earnedLeaveNav.map(({ title, url }) => ({ title, url })),
   },
   {
     title: "Payroll",

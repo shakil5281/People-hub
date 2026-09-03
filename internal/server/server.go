@@ -102,6 +102,14 @@ func New(cfg *config.Config) *gin.Engine {
 	salaryService := service.NewSalaryService(employeeRepo, attendanceRepo, salaryRepo, groupRepo, otEarlyExitRepo, otEarlyExitService, advanceSalaryRepo, separationRepo)
 	salaryService.SetIncrementRepo(salaryIncrementRepo)
 	salaryHandler := handlers.NewSalaryHandler(salaryService, salaryRepo)
+
+	// Earned Leave module
+	earnedLeavePolicyRepo := repository.NewEarnedLeavePolicyRepository(database.DB)
+	earnedLeaveLedgerRepo := repository.NewEarnedLeaveLedgerRepository(database.DB)
+	earnedLeaveBalanceRepo := repository.NewEarnedLeaveBalanceRepository(database.DB)
+	earnedLeaveSalaryRepo := repository.NewEarnedLeaveSalaryRepository(database.DB)
+	earnedLeaveService := service.NewEarnedLeaveService(earnedLeavePolicyRepo, earnedLeaveLedgerRepo, earnedLeaveBalanceRepo, earnedLeaveSalaryRepo, employeeRepo, separationRepo, leaveRepo, database.DB)
+	earnedLeaveHandler := handlers.NewEarnedLeaveHandler(earnedLeaveService, earnedLeavePolicyRepo, earnedLeaveLedgerRepo, earnedLeaveSalaryRepo)
 	otEarlyExitHandler := handlers.NewOtEarlyExitHandler(otEarlyExitRepo, otEarlyExitService)
 	
 	salaryIncrementHandler := handlers.NewSalaryIncrementHandler(salaryIncrementRepo, employeeRepo)
@@ -159,7 +167,7 @@ func New(cfg *config.Config) *gin.Engine {
 	// Swagger UI
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
-	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, postOfficeHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, advanceSalaryHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, rosterHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, missingAttendanceHandler, otEarlyExitHandler, nightBillHandler, nightBillEmployeeListHandler, migrationHandler, zktecoSyncHandler, salaryAccountImportHandler, cfg.JWTSecret)
+	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, postOfficeHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, advanceSalaryHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, rosterHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, missingAttendanceHandler, otEarlyExitHandler, nightBillHandler, nightBillEmployeeListHandler, migrationHandler, zktecoSyncHandler, salaryAccountImportHandler, earnedLeaveHandler, cfg.JWTSecret)
 
 	return r
 }

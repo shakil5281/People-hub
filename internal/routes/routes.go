@@ -55,6 +55,7 @@ func Setup(
 	migrationHandler *handlers.MigrationHandler,
 	zktecoSyncHandler *handlers.ZKTecoSyncHandler,
 	salaryAccountImportHandler *handlers.SalaryAccountImportHandler,
+	earnedLeaveHandler *handlers.EarnedLeaveHandler,
 	jwtSecret string,
 ) {
 	r.GET("/health", handlers.HealthCheck)
@@ -695,6 +696,30 @@ func Setup(
 		systemLog.GET("/:id", systemLogHandler.GetByID)
 		systemLog.DELETE("", systemLogHandler.Delete)
 		systemLog.DELETE("/purge", systemLogHandler.Purge)
+	}
+
+	// Earned Leave (EL) — Policy, Ledger, Salary Sheet
+	el := api.Group("/earned-leaves")
+	el.Use(middleware.AuthMiddleware(jwtSecret))
+	{
+		// Policy
+		el.POST("/policies", earnedLeaveHandler.CreatePolicy)
+		el.GET("/policies", earnedLeaveHandler.ListPolicies)
+		// Accrual
+		el.POST("/accrual/process", earnedLeaveHandler.AccrualProcess)
+		// Balance & Ledger
+		el.GET("/balance", earnedLeaveHandler.GetBalance)
+		el.GET("/ledger", earnedLeaveHandler.ListLedger)
+		// Adjustment & Encashment
+		el.POST("/adjustment", earnedLeaveHandler.CreateAdjustment)
+		el.POST("/encashment", earnedLeaveHandler.CreateEncashment)
+		// Salary Sheet
+		el.POST("/salary-sheet/generate", earnedLeaveHandler.GenerateSalarySheet)
+		el.GET("/salary-sheet", earnedLeaveHandler.ListSheets)
+		el.GET("/salary-sheet/:id", earnedLeaveHandler.GetSheet)
+		el.POST("/salary-sheet/:id/approve", earnedLeaveHandler.ApproveSheet)
+		el.POST("/salary-sheet/:id/finalize", earnedLeaveHandler.FinalizeSheet)
+		el.POST("/salary-sheet/:id/reverse", earnedLeaveHandler.ReverseSheet)
 	}
 }
 
