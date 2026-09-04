@@ -84,6 +84,7 @@ export default function IncrementPage() {
   const [month, setMonth] = React.useState(new Date().getMonth() + 1)
   const [year, setYear] = React.useState(new Date().getFullYear())
   const [status, setStatus] = React.useState("")
+  const [employeeId, setEmployeeId] = React.useState("")
 
   const [data, setData] = React.useState<IncrementRecord[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -97,6 +98,7 @@ export default function IncrementPage() {
 
   const buildExportParams = () => {
     const params: Record<string, string> = { company_id: companyId }
+    if (employeeId.trim()) params.employee_id = employeeId.trim()
     if (departmentId) params.department_id = departmentId
     if (sectionId) params.section_id = sectionId
     if (designationId) params.designation_id = designationId
@@ -231,7 +233,7 @@ export default function IncrementPage() {
     } finally {
       setLoading(false)
     }
-  }, [companyId, departmentId, sectionId, designationId, lineId, groupId, month, year, status])
+  }, [companyId, employeeId, departmentId, sectionId, designationId, lineId, groupId, month, year, status])
 
   React.useEffect(() => {
     const init = async () => {
@@ -388,6 +390,7 @@ export default function IncrementPage() {
   const handleSearch = () => { fetchData() }
 
   const handleReset = () => {
+    setEmployeeId("")
     setDepartmentId("")
     setSectionId("")
     setDesignationId("")
@@ -506,6 +509,18 @@ export default function IncrementPage() {
                   <option value="">All</option>
                   {lines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
                 </select>
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className={labelCls}>Employee ID</label>
+                <div className="relative">
+                  <SearchIcon className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    value={employeeId}
+                    onChange={e => setEmployeeId(e.target.value)}
+                    placeholder="Search by Employee ID..."
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent pl-8 pr-3 py-1 text-sm shadow-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
               </div>
             </div>
             <div className="mt-4 flex items-center justify-end gap-2">

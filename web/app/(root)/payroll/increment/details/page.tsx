@@ -107,6 +107,11 @@ interface IncrementSummary {
   last_increment_date: string
   last_increment_amount: number
   initial_gross: number
+  first_time_gross: number
+  first_time_basic: number
+  first_time_house: number
+  first_time_medical: number
+  first_time_date: string
   total_records: number
 }
 
@@ -181,6 +186,11 @@ export default function IncrementDetailsPage() {
     last_increment_date: "",
     last_increment_amount: 0,
     initial_gross: 0,
+    first_time_gross: 0,
+    first_time_basic: 0,
+    first_time_house: 0,
+    first_time_medical: 0,
+    first_time_date: "",
     total_records: 0,
   })
 
@@ -362,14 +372,37 @@ export default function IncrementDetailsPage() {
     if (!employee) return
     setExporting(true)
     try {
-      const res = await salaryIncrementApi.exportExcel({
+      const params: Record<string, string> = {
         company_id: employee.company_id || "",
-        department_id: employee.department_id || "",
-      })
+        employee_id: employee.employee_id,
+      }
+      if (filters.year) params.year = filters.year
+      if (filters.month) params.month = filters.month
+      const res = await salaryIncrementApi.exportExcel(params)
       downloadExport(res, `increment_details_${employee.employee_id}.xlsx`)
       toast.success("Increment details exported to Excel")
     } catch {
       toast.error("Failed to export Excel")
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  const handleExportPdf = async () => {
+    if (!employee) return
+    setExporting(true)
+    try {
+      const params: Record<string, string> = {
+        company_id: employee.company_id || "",
+        employee_id: employee.employee_id,
+      }
+      if (filters.year) params.year = filters.year
+      if (filters.month) params.month = filters.month
+      const res = await salaryIncrementApi.exportPdf(params)
+      downloadExport(res, `increment_details_${employee.employee_id}.pdf`)
+      toast.success("Increment details exported to PDF")
+    } catch {
+      toast.error("Failed to export PDF")
     } finally {
       setExporting(false)
     }
@@ -420,15 +453,26 @@ export default function IncrementDetailsPage() {
               </Button>
             </Link>
             {employee && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleExportExcel}
-                disabled={exporting || loading}
-              >
-                <FileSpreadsheetIcon className="h-4 w-4 mr-1.5 text-emerald-600" />
-                {exporting ? "Exporting..." : "Export Excel"}
-              </Button>
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportExcel}
+                  disabled={exporting || loading}
+                >
+                  <FileSpreadsheetIcon className="h-4 w-4 mr-1.5 text-emerald-600" />
+                  {exporting ? "Exporting..." : "Export Excel"}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExportPdf}
+                  disabled={exporting || loading}
+                >
+                  <FileSpreadsheetIcon className="h-4 w-4 mr-1.5 text-rose-600" />
+                  {exporting ? "Exporting..." : "Export PDF"}
+                </Button>
+              </>
             )}
             <div className="md:hidden">
               <Sheet open={mobileFilterOpen} onOpenChange={setMobileFilterOpen}>
@@ -606,8 +650,25 @@ export default function IncrementDetailsPage() {
               </CardContent>
             </Card>
 
-            {/* Increment Summary - 4 KPI Metric Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+            {/* Increment Summary - 5 KPI Metric Cards with First Time Salary */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+              <Card className="shadow-xs bg-linear-to-br from-slate-50 to-gray-50 dark:from-slate-900/50 dark:to-gray-900/30 border-slate-200 dark:border-slate-800">
+                <CardContent className="p-4 flex items-center justify-between">
+                  <div className="space-y-1">
+                    <p className="text-xs font-medium text-slate-700 dark:text-slate-400">First Time Salary</p>
+                    <p className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                      ৳{Number(summary.first_time_gross || summary.initial_gross || 0).toLocaleString()}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {summary.first_time_date ? format(new Date(summary.first_time_date), "dd MMM yyyy") : employee.joining_date ? format(new Date(employee.joining_date), "dd MMM yyyy") : "Joining"}
+                    </p>
+                  </div>
+                  <div className="h-10 w-10 rounded-full bg-slate-500/10 text-slate-600 dark:text-slate-400 flex items-center justify-center">
+                    <LayersIcon className="h-5 w-5" />
+                  </div>
+                </CardContent>
+              </Card>
+
               <Card className="shadow-xs bg-linear-to-br from-blue-50/50 to-indigo-50/30 dark:from-blue-950/20 dark:to-indigo-950/10 border-blue-200/60 dark:border-blue-900/40">
                 <CardContent className="p-4 flex items-center justify-between">
                   <div className="space-y-1">
@@ -631,7 +692,7 @@ export default function IncrementDetailsPage() {
                       +৳{Number(summary.total_increment_amount || 0).toLocaleString()}
                     </p>
                     <p className="text-[11px] text-muted-foreground">
-                      Starting gross: ৳{Number(summary.initial_gross || 0).toLocaleString()}
+                      Starting gross: ৳{Number(summary.first_time_gross || summary.initial_gross || 0).toLocaleString()}
                     </p>
                   </div>
                   <div className="h-10 w-10 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
@@ -761,7 +822,37 @@ export default function IncrementDetailsPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y">
+                      {/* First Time Salary - initial joining salary before any increments */}
+                      {employee && (summary.first_time_gross > 0 || summary.initial_gross > 0) && (
+                        <tr className="bg-slate-50 dark:bg-slate-900/30 font-medium border-b-2 border-slate-200 dark:border-slate-700">
+                          <td className="px-4 py-3 text-slate-600 dark:text-slate-400">0</td>
+                          <td className="px-4 py-3 whitespace-nowrap text-slate-600">
+                            {summary.first_time_date ? format(new Date(summary.first_time_date), "dd MMM yyyy") : employee.joining_date ? format(new Date(employee.joining_date), "dd MMM yyyy") : "-"}
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap font-semibold text-slate-700 dark:text-slate-300">
+                            {summary.first_time_date ? format(new Date(summary.first_time_date), "dd MMM yyyy") : "-"}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge className="bg-slate-600 hover:bg-slate-700 text-white text-xs">Initial</Badge>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-muted-foreground">
+                            {employee.designation_name || "-"} <span className="text-[10px]">(Joining)</span>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono text-slate-500">—</td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-600">—</td>
+                          <td className="px-4 py-3 text-right font-mono font-bold text-slate-900 dark:text-slate-100">
+                            ৳{Number(summary.first_time_gross || summary.initial_gross || 0).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <Badge variant="outline" className="bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-300 text-xs">First Time</Badge>
+                          </td>
+                          <td className="px-4 py-3 max-w-[180px] truncate text-xs text-muted-foreground" title="First time salary at joining">
+                            Joining Salary
+                          </td>
+                        </tr>
+                      )}
                       {increments.length === 0 ? (
+                        summary.first_time_gross > 0 || summary.initial_gross > 0 ? null : (
                         <tr>
                           <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
                             <div className="flex flex-col items-center justify-center gap-1.5">
@@ -771,6 +862,7 @@ export default function IncrementDetailsPage() {
                             </div>
                           </td>
                         </tr>
+                        )
                       ) : (
                         increments.map((inc, i) => {
                           const prevDesig = inc.previous_designation?.name || "-"

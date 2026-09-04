@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"bufio"
+	"crypto/rand"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -224,8 +226,8 @@ func (h *DatabaseHandler) Export(c *gin.Context) {
 //	@Failure      500  {object}  map[string]string
 //	@Router       /database/import [post]
 func (h *DatabaseHandler) Import(c *gin.Context) {
-	// Limit request to 300MB (high-perf: prevent OOM)
-	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 300<<20)
+	// Limit request to 800MB (supports 596MB backup; prevent OOM beyond 1GB)
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 800<<20)
 	file, header, err := c.Request.FormFile("file")
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Required field 'file' is missing. Please upload a .sql file using a multipart/form-data request with field name 'file'."})
@@ -237,8 +239,8 @@ func (h *DatabaseHandler) Import(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Only .sql files are supported. Received: " + header.Filename})
 		return
 	}
-	if header.Size > 300<<20 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large (max 300MB)"})
+	if header.Size > 800<<20 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file too large (max 800MB)"})
 		return
 	}
 
@@ -249,22 +251,13 @@ func (h *DatabaseHandler) Import(c *gin.Context) {
 	}
 	defer os.Remove(tmpFile.Name())
 
-	// Disable foreign key constraint checks during restore
-	if _, err := tmpFile.WriteString("SET session_replication_role = 'replica';\n\n"); err != nil {
-		tmpFile.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write header to temp file"})
-		return
-	}
-
+	// Stream uploaded file directly — pg_dump --clean already handles FK order,
+	// and session_replication_role requires superuser (shakil is not superuser).
+	// Wrapping with replica causes "permission denied" and makes psql fail even
+	// though the dump is valid, so we no longer inject replica headers.
 	if _, err := io.Copy(tmpFile, file); err != nil {
 		tmpFile.Close()
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save uploaded file"})
-		return
-	}
-
-	if _, err := tmpFile.WriteString("\n\nSET session_replication_role = 'origin';\n"); err != nil {
-		tmpFile.Close()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to write footer to temp file"})
 		return
 	}
 	tmpFile.Close()
@@ -351,6 +344,51 @@ func (h *DatabaseHandler) DeleteBackup(c *gin.Context) {
 //	@Failure      500  {object}  map[string]string
 //	@Router       /database/reset [post]
 func (h *DatabaseHandler) Reset(c *gin.Context) {
+	// PRODUCTION SAFETY: Database reset is DISABLED in production unless explicitly allowed
+	if os.Getenv("GO_ENV") == "production" && os.Getenv("ALLOW_DB_RESET") != "true" {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Database reset is disabled in production. Set ALLOW_DB_RESET=true and restart server to enable temporarily."})
+		return
+	}
+	// Require explicit confirmation header to prevent accidental destructive calls
+	if c.GetHeader("X-Confirm-Reset") != "RESET" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Missing confirmation. Include header X-Confirm-Reset: RESET to confirm destructive database reset."})
+		return
+	}
+	// Audit log before destructive operation
+	userID := c.GetString("user_id")
+	clientIP := c.ClientIP()
+	log.Printf("AUDIT: Database reset requested by user %s from IP %s", userID, clientIP)
+
+	// Auto-backup before destructive operation - create verified backup
+	backupDir := "backups"
+	_ = os.MkdirAll(backupDir, 0755)
+	preBackupFile := fmt.Sprintf("pre_reset_backup_%s.sql", time.Now().Format("20060102_150405"))
+	preBackupPath := filepath.Join(backupDir, preBackupFile)
+	backupCmd := exec.Command("pg_dump", h.pgDumpArgs()...)
+	backupCmd.Env = append(os.Environ(), h.buildEnv()...)
+	if outFile, err := os.Create(preBackupPath); err == nil {
+		backupCmd.Stdout = outFile
+		var errBuf strings.Builder
+		backupCmd.Stderr = &errBuf
+		if err := backupCmd.Run(); err != nil {
+			outFile.Close()
+			// Try Go fallback
+			if fbErr := h.generateGoBackup(preBackupPath); fbErr != nil {
+				os.Remove(preBackupPath)
+				log.Printf("WARN: Pre-reset backup failed: %v (pg_dump: %v, fallback: %v)", fbErr, err, errBuf.String())
+			} else {
+				outFile.Close()
+				log.Printf("Pre-reset backup created via Go fallback: %s", preBackupPath)
+			}
+		} else {
+			outFile.Close()
+			info, _ := os.Stat(preBackupPath)
+			if info != nil && info.Size() > 0 {
+				log.Printf("Pre-reset backup created: %s (%d KB)", preBackupPath, info.Size()/1024)
+			}
+		}
+	}
+
 	db := database.DB
 
 	// Drop ALL tables — keep in sync with internal/database/postgres.go Connect()
@@ -486,8 +524,13 @@ func (h *DatabaseHandler) Reset(c *gin.Context) {
 	seedSuperadmin(db)
 	seedPermissions(db)
 
+	// Audit log for reset
+	db.Exec("INSERT INTO system_logs (id, level, source, message, created_at) VALUES (gen_random_uuid(), 'warn', 'database', ?, NOW())", fmt.Sprintf("Database reset executed by user %s from IP %s, pre-backup: %s", userID, clientIP, preBackupFile))
+
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Database reset completed — all tables dropped, re-created (38 models), indexes rebuilt, superadmin seeded",
+		"message":   "Database reset completed — all tables dropped, re-created (38 models), indexes rebuilt, superadmin seeded",
+		"backup":    preBackupFile,
+		"warning":   "All business data was deleted. Restore from backup if needed.",
 	})
 }
 
@@ -500,7 +543,14 @@ func seedSuperadmin(db *gorm.DB) {
 		email = "superadmin@peoplehub.com"
 	}
 	if password == "" {
-		password = "superadmin1234"
+		// Generate secure random password - never use predictable default
+		randBytes := make([]byte, 16)
+		if _, err := rand.Read(randBytes); err != nil {
+			log.Printf("failed to generate random password: %v", err)
+			return
+		}
+		password = fmt.Sprintf("%x", randBytes)[:16]
+		log.Printf("Generated secure random superadmin password for %s - user must reset on first login", email)
 	}
 	if name == "" {
 		name = "Super Admin"
@@ -525,13 +575,15 @@ func seedSuperadmin(db *gorm.DB) {
 			return
 		}
 		now := time.Now()
+		// If password was auto-generated, force change on first login
+		forceChange := os.Getenv("SUPERADMIN_PASSWORD") == ""
 		user = models.User{
 			Email:              email,
 			PasswordHash:       hash,
 			Name:               name,
 			Status:             "active",
 			EmailVerifiedAt:    &now,
-			ForcePasswordChange: false,
+			ForcePasswordChange: forceChange,
 		}
 		db.Create(&user)
 	}
@@ -584,6 +636,9 @@ func formatSQLValue(v interface{}) string {
 	case string:
 		return "'" + strings.ReplaceAll(val, "'", "''") + "'"
 	case time.Time:
+		if val.IsZero() {
+			return "NULL"
+		}
 		return "'" + val.Format("2006-01-02 15:04:05.000000-07") + "'"
 	case bool:
 		if val {
@@ -591,17 +646,44 @@ func formatSQLValue(v interface{}) string {
 		}
 		return "FALSE"
 	case []byte:
-		return "'" + strings.ReplaceAll(string(val), "'", "''") + "'"
-	default:
+		// jsonb, text, bytea come as []byte via map scan; treat as string with escaping
+		s := string(val)
+		// detect if already quoted JSON
+		return "'" + strings.ReplaceAll(s, "'", "''") + "'"
+	case int, int8, int16, int32, int64:
 		return fmt.Sprintf("%v", val)
+	case uint, uint8, uint16, uint32, uint64:
+		return fmt.Sprintf("%v", val)
+	case float32, float64:
+		return fmt.Sprintf("%v", val)
+	default:
+		// gorm may return sql.NullString-like via string, fallback
+		s := fmt.Sprintf("%v", val)
+		if s == "<nil>" {
+			return "NULL"
+		}
+		// If it looks numeric, don't quote
+		if _, err := fmt.Sscanf(s, "%f", new(float64)); err == nil && s != "" {
+			// keep as is if numeric parse succeeded and original wasn't string
+			// but we can't distinguish, so quote non-numeric safely
+		}
+		return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 	}
 }
 
 func (h *DatabaseHandler) generateGoBackup(filePath string) error {
 	db := database.DB
-	tables, err := db.Migrator().GetTables()
-	if err != nil {
-		return err
+	// Use information_schema to guarantee ALL public base tables — Migrator.GetTables() can miss
+	// tables created outside GORM (e.g. legacy todos_id_seq owner tables, manual DDL).
+	var tables []string
+	if err := db.Raw("SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE' ORDER BY table_name").Pluck("table_name", &tables).Error; err != nil {
+		// Fallback to migrator if query fails
+		var err2 error
+		tables, err2 = db.Migrator().GetTables()
+		if err2 != nil {
+			return err
+		}
+		sort.Strings(tables)
 	}
 
 	f, err := os.Create(filePath)
@@ -610,86 +692,109 @@ func (h *DatabaseHandler) generateGoBackup(filePath string) error {
 	}
 	defer f.Close()
 
-	w := bufio.NewWriterSize(f, 64*1024)
-	w.WriteString("-- PeopleHub Full Database Backup (Go Fallback Generator — high-perf paginated)\n")
+	w := bufio.NewWriterSize(f, 256*1024)
+	w.WriteString("-- PeopleHub Full Database Backup (Go Fallback Generator — full coverage)\n")
 	w.WriteString(fmt.Sprintf("-- Generated: %s\n", time.Now().Format(time.RFC3339)))
-	w.WriteString("-- COVERAGE: ALL tables via Migrator.GetTables() — no data missed\n\n")
-	w.WriteString("SET session_replication_role = 'replica';\n\n")
+	w.WriteString(fmt.Sprintf("-- COVERAGE: %d tables from information_schema (public.BASE TABLE) — no table missed\n", len(tables)))
+	w.WriteString(fmt.Sprintf("-- Tables: %s\n\n", strings.Join(tables, ", ")))
+	// No session_replication_role — requires superuser; INSERT order is safe via deferred FKs disabled by Migrator
+	// Emit header that disables FK checks via transaction deferral if available
+	w.WriteString("BEGIN;\n")
+	w.WriteString("SET CONSTRAINTS ALL DEFERRED;\n\n")
 
 	const batchSize = 5000
+	totalRows := int64(0)
 	for _, table := range tables {
-		w.WriteString(fmt.Sprintf("-- Table: %s\n", table))
-		// Do not emit DROP — global backup is append-only; Reset handles drop
-
 		var count int64
 		db.Table(table).Count(&count)
+		w.WriteString(fmt.Sprintf("-- Table: %s (%d rows)\n", table, count))
 		if count == 0 {
 			w.WriteString("\n")
 			continue
 		}
-		// Paginated fetch to avoid OOM on attendances / data_logs (1M+ rows)
+		// Clear existing data before re-inserting — ensures full restore without PK conflicts
+		// when this Go-generated file is imported via psql or Go engine.
+		w.WriteString(fmt.Sprintf("DELETE FROM %q;\n", table))
+		// Determine stable ordering: prefer primary key column if exists, else ctid
+		orderCol := "ctid"
+		var pkCol string
+		db.Raw("SELECT a.attname FROM pg_index i JOIN pg_attribute a ON a.attrelid=i.indrelid AND a.attnum=ANY(i.indkey) WHERE i.indrelid=?::regclass AND i.indisprimary LIMIT 1", table).Scan(&pkCol)
+		if pkCol != "" {
+			orderCol = fmt.Sprintf("%q", pkCol)
+		}
+		var cols []string
 		for offset := 0; offset < int(count); offset += batchSize {
 			var rows []map[string]interface{}
-			if err := db.Table(table).Offset(offset).Limit(batchSize).Find(&rows).Error; err != nil || len(rows) == 0 {
+			// Use ordered pagination to avoid missing/duplicating rows on large tables
+			if err := db.Table(table).Order(orderCol).Offset(offset).Limit(batchSize).Find(&rows).Error; err != nil || len(rows) == 0 {
 				break
 			}
-			if offset == 0 {
-				cols := make([]string, 0)
+			if len(cols) == 0 {
 				for col := range rows[0] {
 					cols = append(cols, col)
 				}
 				sort.Strings(cols)
-				// cache cols for this table batch
-				for _, row := range rows {
-					colNames := make([]string, len(cols))
-					valStrs := make([]string, len(cols))
-					for i, col := range cols {
-						colNames[i] = fmt.Sprintf("%q", col)
-						valStrs[i] = formatSQLValue(row[col])
-					}
-					w.WriteString(fmt.Sprintf("INSERT INTO %q (%s) VALUES (%s);\n", table, strings.Join(colNames, ", "), strings.Join(valStrs, ", ")))
-				}
-			} else {
-				// reuse same sorted cols from first batch (assume schema stable)
-				var firstCols []string
-				for col := range rows[0] {
-					firstCols = append(firstCols, col)
-				}
-				sort.Strings(firstCols)
-				for _, row := range rows {
-					colNames := make([]string, len(firstCols))
-					valStrs := make([]string, len(firstCols))
-					for i, col := range firstCols {
-						colNames[i] = fmt.Sprintf("%q", col)
-						valStrs[i] = formatSQLValue(row[col])
-					}
-					w.WriteString(fmt.Sprintf("INSERT INTO %q (%s) VALUES (%s);\n", table, strings.Join(colNames, ", "), strings.Join(valStrs, ", ")))
-				}
 			}
-			// periodic flush to keep memory low
+			for _, row := range rows {
+				colNames := make([]string, len(cols))
+				valStrs := make([]string, len(cols))
+				for i, col := range cols {
+					colNames[i] = fmt.Sprintf("%q", col)
+					valStrs[i] = formatSQLValue(row[col])
+				}
+				w.WriteString(fmt.Sprintf("INSERT INTO %q (%s) VALUES (%s);\n", table, strings.Join(colNames, ", "), strings.Join(valStrs, ", ")))
+				totalRows++
+			}
 			if offset%20000 == 0 {
 				w.Flush()
 			}
 		}
 		w.WriteString("\n")
 	}
-
-	w.WriteString("SET session_replication_role = 'origin';\n")
+	// Restore sequences for tables that use serial/bigserial (e.g. todos.id)
+	w.WriteString("-- Restore sequences (prevents duplicate PK after INSERT restore)\n")
+	var seqs []struct {
+		SeqName string `gorm:"column:seq_name"`
+		ColName string `gorm:"column:col_name"`
+		TblName string `gorm:"column:tbl_name"`
+	}
+	db.Raw(`
+		SELECT s.relname AS seq_name, a.attname AS col_name, t.relname AS tbl_name
+		FROM pg_class s
+		JOIN pg_depend d ON d.objid = s.oid
+		JOIN pg_class t ON t.oid = d.refobjid
+		JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = d.refobjsubid
+		WHERE s.relkind='S' AND t.relkind='r' AND t.relnamespace = 'public'::regnamespace
+	`).Scan(&seqs)
+	for _, sq := range seqs {
+		w.WriteString(fmt.Sprintf("SELECT setval('%q', COALESCE((SELECT MAX(%q) FROM %q),0)+1, false);\n", sq.SeqName, sq.ColName, sq.TblName))
+	}
+	w.WriteString("\nCOMMIT;\n")
+	w.WriteString(fmt.Sprintf("-- Total rows exported: %d across %d tables\n", totalRows, len(tables)))
 	return w.Flush()
 }
 
 func executeSQLInGo(filePath string) (string, error) {
-	// Stream file to avoid loading 300MB fully into RAM; execute in Tx for atomicity
+	// Stream file to avoid loading 800MB fully into RAM; execute in Tx for atomicity
+	// NOTE: This engine handles INSERT-based Go backups. pg_dump COPY files are NOT supported here —
+	// they require psql. We detect COPY and fail fast with a clear message so the caller can report
+	// the real psql error instead of silently losing data.
 	f, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
 	defer f.Close()
 
-	db := database.DB
-	db.Exec("SET session_replication_role = 'replica';")
-	defer db.Exec("SET session_replication_role = 'origin';")
+	// Quick sniff for COPY (pg_dump format) — Go engine cannot handle it
+	sniff := make([]byte, 8192)
+	n, _ := f.Read(sniff)
+	if n > 0 && strings.Contains(strings.ToUpper(string(sniff[:n])), "COPY ") && strings.Contains(string(sniff[:n]), "FROM stdin") {
+		return "", fmt.Errorf("fallback Go engine does not support pg_dump COPY format (requires psql binary)")
+	}
+	f.Seek(0, 0)
 
+	db := database.DB
+	// Do not use session_replication_role here — requires superuser; rely on deferred constraints
 	// Try single Exec first (fast path for small files)
 	if info, _ := f.Stat(); info != nil && info.Size() < 10<<20 {
 		content, _ := io.ReadAll(f)

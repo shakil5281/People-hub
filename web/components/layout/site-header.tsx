@@ -18,6 +18,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { authApi, notificationApi, companyApi } from "@/lib/api"
+import { withBasePath } from "@/lib/utils"
 import {
   SearchIcon,
   SettingsIcon,
@@ -45,18 +46,34 @@ export function SiteHeader() {
   const [companyName, setCompanyName] = React.useState("")
 
   React.useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
+    if (!token) {
+      setLoading(false)
+      // auto redirect to login if token not exist (client guard, proxy also does server redirect)
+      const isPublic = window.location.pathname.includes("/login") || window.location.pathname.includes("/register")
+      if (!isPublic) {
+        window.location.href = "/login"
+      }
+      return
+    }
     authApi.me()
       .then((res) => setUser(res.data))
-      .catch(() => {})
+      .catch(() => {
+        // token not valid (401) is handled by axios interceptor → clearAuthAndRedirect
+      })
       .finally(() => setLoading(false))
   }, [])
 
   React.useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
+    if (!token) return
     const fetchCount = async () => {
       try {
         const { data } = await notificationApi.unreadCount()
         setNotifCount(data.count)
-      } catch {}
+      } catch {
+        // 401/429 are handled globally by axios interceptor — don't retry flood
+      }
     }
     fetchCount()
     const interval = setInterval(fetchCount, 30000)
@@ -64,6 +81,8 @@ export function SiteHeader() {
   }, [])
 
   React.useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
+    if (!token) return
     companyApi.list({ limit: "1" })
       .then((res) => {
         const companies = res.data?.data
@@ -75,14 +94,21 @@ export function SiteHeader() {
   const handleLogout = async () => {
     setLoggingOut(true)
     try {
-      await authApi.logout()
+      const refreshToken = localStorage.getItem("refresh_token") || ""
+      await authApi.logout({ refresh_token: refreshToken })
     } catch {
+      // logout endpoint now clears cookie even if token missing/invalid, so ignore 400
     } finally {
-      localStorage.removeItem("access_token")
-      localStorage.removeItem("refresh_token")
-      document.cookie = "auth_token=; path=/; max-age=0"
+      try {
+        localStorage.removeItem("access_token")
+        localStorage.removeItem("refresh_token")
+      } catch {}
+      document.cookie = "auth_token=; path=/; max-age=0; SameSite=Lax"
+      document.cookie = "auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; SameSite=Lax"
       toast.success("Logged out successfully")
-      router.push("/login")
+      setTimeout(() => {
+        window.location.href = withBasePath("/login")
+      }, 300)
     }
   }
 

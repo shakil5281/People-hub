@@ -43,6 +43,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// Set HttpOnly auth cookie for proxy (replaces dummy auth_token=1)
+	isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("auth_token", resp.AccessToken, 900, "/", "", isSecure, true)
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -73,6 +78,10 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
+	isSecure := c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https"
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("auth_token", resp.AccessToken, 900, "/", "", isSecure, true)
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -89,18 +98,17 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 // @Router       /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	var req struct {
-		RefreshToken string `json:"refresh_token" binding:"required"`
+		RefreshToken string `json:"refresh_token"`
 	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Allow logout even without body or with missing token — always clear cookie
+	_ = c.ShouldBindJSON(&req)
+
+	if req.RefreshToken != "" {
+		_ = h.authService.Logout(req.RefreshToken)
 	}
 
-	if err := h.authService.Logout(req.RefreshToken); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to logout"})
-		return
-	}
-
+	c.SetSameSite(http.SameSiteLaxMode)
+	c.SetCookie("auth_token", "", -1, "/", "", false, true)
 	c.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 }
 

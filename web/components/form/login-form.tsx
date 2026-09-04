@@ -32,7 +32,9 @@ export function LoginForm({
       localStorage.setItem("access_token", data.access_token)
       localStorage.setItem("refresh_token", data.refresh_token)
 
-      document.cookie = `auth_token=1; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`
+      // Set proxy cookie with real JWT (validated by proxy) - replaces insecure dummy auth_token=1
+      // Note: HttpOnly not possible via document.cookie; backend also sets HttpOnly cookie for API domain
+      document.cookie = `auth_token=${data.access_token}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`
 
       const redirectTo = new URLSearchParams(window.location.search).get("redirect") || "/"
       if (data.user.force_password_change) {

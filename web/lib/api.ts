@@ -35,7 +35,10 @@ export interface AuthResponse {
 export const authApi = {
   login: (data: LoginRequest) => api.post<AuthResponse>("/auth/login", data),
   register: (data: RegisterRequest) => api.post<AuthResponse>("/auth/register", data),
-  logout: () => api.post("/auth/logout"),
+  logout: (data?: { refresh_token: string }) => {
+    const token = data?.refresh_token || (typeof window !== "undefined" ? localStorage.getItem("refresh_token") || "" : "")
+    return api.post("/auth/logout", { refresh_token: token })
+  },
   me: () => api.get("/auth/me"),
   updateProfile: (data: Record<string, unknown>) => api.put("/auth/profile", data),
   changePassword: (data: { current_password: string; new_password: string }) => api.put("/auth/change-password", data),

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pquerna/otp/totp"
 	"github.com/shakil5281/peoplehub-api/internal/auth"
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"github.com/shakil5281/peoplehub-api/internal/repository"
@@ -85,12 +86,18 @@ func (s *AuthService) Login(req LoginRequest, ip, userAgent string) (*LoginRespo
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Check MFA
+	// Check MFA - TOTP verification (fail-closed)
 	if user.MFAEnabled {
 		if req.MFACode == "" {
 			return nil, errors.New("mfa code required")
 		}
-		// TODO: validate TOTP code against user.MFASecret
+		if user.MFASecret == "" {
+			return nil, errors.New("mfa not properly configured - contact administrator")
+		}
+		if !totp.Validate(req.MFACode, user.MFASecret) {
+			_ = s.userRepo.IncrementFailedAttempts(user.ID)
+			return nil, errors.New("invalid mfa code")
+		}
 	}
 
 	// Reset failed attempts

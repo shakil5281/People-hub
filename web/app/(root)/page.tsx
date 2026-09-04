@@ -48,9 +48,17 @@ export default function HomePage() {
   const [loading, setLoading] = React.useState(true)
 
   React.useEffect(() => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null
+    if (!token) {
+      setLoading(false)
+      return
+    }
     dashboardApi.stats()
       .then((res) => setData(res.data))
-      .catch(() => toast.error("Failed to load dashboard"))
+      .catch((err: unknown) => {
+        const status = (err as { response?: { status?: number } })?.response?.status
+        if (status !== 401 && status !== 429) toast.error("Failed to load dashboard")
+      })
       .finally(() => setLoading(false))
   }, [])
 

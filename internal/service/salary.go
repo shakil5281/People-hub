@@ -69,7 +69,21 @@ type MonthResult struct {
 // ProcessMonth calculates and upserts salaries for all active employees.
 // If deductEarlyExit is true (default), early-exit shortfall hours are deducted from monthly OT.
 // If deductEarlyExit is false, shortfalls are NOT deducted from OT ("do not pay less" formula).
+// Concurrency is protected by PostgreSQL advisory xact lock per company+month to prevent duplicate processing.
 func (s *SalaryService) ProcessMonth(companyID string, month, year int, userID string, deductEarlyExit bool) (*MonthResult, error) {
+	// Advisory lock per company+month (transaction-scoped, auto-released on commit/rollback)
+	// Use hash of companyID + year*100+month to generate int64 key
+	var lockKey int64 = int64(year*100+month) * 1000000
+	for _, ch := range companyID {
+		lockKey = lockKey*31 + int64(ch)
+	}
+	lockKey = lockKey & 0x7fffffffffffffff // positive only
+	var locked bool
+	if err := s.salaryRepo.DB().Raw("SELECT pg_try_advisory_xact_lock(?)", lockKey).Scan(&locked).Error; err == nil {
+		if !locked {
+			return nil, fmt.Errorf("salary processing already in progress for %04d-%02d", year, month)
+		}
+	}
 	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
 	endDate := startDate.AddDate(0, 1, -1)
 	startStr := startDate.Format("2006-01-02")
@@ -322,38 +336,11 @@ func (s *SalaryService) calculateEmployeeSalary(
 	weekendDays := 0
 	totalDays := 0
 
-	// Determine active working window in this month:
-	// Start day: from 1, or joining date if joined in this month
-	startDay := 1
-	if !emp.JoiningDate.IsZero() && emp.JoiningDate.Year() == year && int(emp.JoiningDate.Month()) == month {
-		startDay = emp.JoiningDate.Day()
-	}
+	// Working Days is ALWAYS calendar days in month (e.g. August = 31) per requirement
+	// "salary process by current month total working day".
+	totalDays = daysInMonth
 
-	// Cutoff day: end of month (daysInMonth), or separation date if separated in this month
-	cutoffDay := daysInMonth
-	if sepDateStr != "" {
-		if sepTime, err := time.Parse("2006-01-02", sepDateStr); err == nil {
-			if sepTime.Year() == year && int(sepTime.Month()) == month {
-				cutoffDay = sepTime.Day()
-			}
-		}
-	} else if emp.ResignDate != nil && !emp.ResignDate.IsZero() {
-		if emp.ResignDate.Year() == year && int(emp.ResignDate.Month()) == month {
-			cutoffDay = emp.ResignDate.Day()
-		}
-	}
-
-	// Total expected/eligible days for this employee in the month (e.g. up to separation date)
-	effectiveDays := cutoffDay - startDay + 1
-	if effectiveDays < 0 {
-		effectiveDays = 0
-	}
-	if effectiveDays > daysInMonth {
-		effectiveDays = daysInMonth
-	}
-
-	totalDays = effectiveDays
-
+	halfDayCount := 0
 	if att != nil {
 		presentDays = toInt(att["present"])
 		absentDays = toInt(att["absent"])
@@ -361,10 +348,12 @@ func (s *SalaryService) calculateEmployeeSalary(
 		leaveDays = toInt(att["leave"])
 		holidayDays = toInt(att["holiday"])
 		weekendDays = toInt(att["weekend"])
+		halfDayCount = toInt(att["half_day"])
 	}
 
-	// Paid days in month = Present + Late + Weekend + Leave + Holiday.
-	paidDays := presentDays + lateDays + weekendDays + leaveDays + holidayDays
+	// Paid days: half_day counts as 1 for absent inference (prevents false absent),
+	// but deduction will add 0.5 per half_day later to reflect half salary.
+	paidDays := presentDays + lateDays + weekendDays + leaveDays + holidayDays + halfDayCount
 	if totalDays > 0 && paidDays < totalDays {
 		calcAbsent := totalDays - paidDays
 		if calcAbsent > absentDays {
@@ -372,14 +361,15 @@ func (s *SalaryService) calculateEmployeeSalary(
 		}
 	}
 
-	// Absent deduction:
-	// Daily rate is calculated based on calendar days in month: gross / daysInMonth
-	// Total unworked days = absent days within working window + unworked days outside window (before joining / after separation)
-	unworkedDays := (daysInMonth - totalDays) + absentDays
+	// Absent deduction: calendar-based — perDay = gross / daysInMonth
 	absentDeduction := float64(0)
 	if daysInMonth > 0 {
 		perDaySalary := gross / float64(daysInMonth)
-		absentDeduction = perDaySalary * float64(unworkedDays)
+		absentDeduction = perDaySalary * float64(absentDays)
+		// Half-day: each half_day was counted as full paid above, so add 0.5 day deduction
+		if halfDayCount > 0 {
+			absentDeduction += perDaySalary * 0.5 * float64(halfDayCount)
+		}
 	}
 
 	// Late attendance salary deduction:

@@ -13,16 +13,30 @@ export function proxy(request: NextRequest) {
 
   const token = request.cookies.get("auth_token")?.value
 
+  // Validate token is real JWT (not dummy "1") and not expired
+  const isValidToken = (() => {
+    if (!token || token === "1") return false
+    try {
+      const parts = token.split(".")
+      if (parts.length !== 3) return false
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")))
+      if (payload.exp && Date.now() >= payload.exp * 1000) return false
+      return true
+    } catch {
+      return false
+    }
+  })()
+
   const isPublic = publicPaths.some((p) => pathname === p || pathname.startsWith(p + "/"))
 
   if (isPublic) {
-    if (token) {
+    if (isValidToken) {
       return NextResponse.redirect(new URL(`${basePath}/`, request.url))
     }
     return NextResponse.next()
   }
 
-  if (!token) {
+  if (!isValidToken) {
     const loginUrl = new URL(`${basePath}/login`, request.url)
     loginUrl.searchParams.set("redirect", pathname)
     return NextResponse.redirect(loginUrl)

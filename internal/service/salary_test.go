@@ -142,30 +142,29 @@ func TestCalculateEmployeeSalary_SeparationDate(t *testing.T) {
 
 	res := s.calculateEmployeeSalary(emp, "Worker", att, 0, 0, 8, 2026, daysInMonth, sepDate, "user-1")
 
-	// TotalDays must be 15 (up to separation date)
-	if res.TotalDays != 15 {
-		t.Errorf("TotalDays got = %v, want = 15", res.TotalDays)
+	// Calendar Working Days is always daysInMonth (31) per new spec
+	if res.TotalDays != 31 {
+		t.Errorf("TotalDays got = %v, want = 31", res.TotalDays)
 	}
 
-	// AbsentDays must be 0 (worked all eligible days before separation)
-	if res.AbsentDays != 0 {
-		t.Errorf("AbsentDays got = %v, want = 0", res.AbsentDays)
+	// Calendar absent = 31 - 15 paid = 16 (days after separation count as absent)
+	if res.AbsentDays != 16 {
+		t.Errorf("AbsentDays got = %v, want = 16", res.AbsentDays)
 	}
 
-	// Unworked days outside separation window = 31 - 15 = 16 days
-	// Absent deduction = (31000 / 31) * 16 = 16000
+	// Absent deduction = (31000 / 31) * 16 = 16000 (calendar)
 	expectedAbsentDeduct := (31000.0 / 31.0) * 16.0
 	if res.AbsentDeduction != expectedAbsentDeduct {
 		t.Errorf("AbsentDeduction got = %v, want = %v", res.AbsentDeduction, expectedAbsentDeduct)
 	}
 
-	// Attendance bonus should be awarded because 0 absent days and present > 0
-	if res.AttendanceBonus != 725 {
-		t.Errorf("AttendanceBonus got = %v, want = 725", res.AttendanceBonus)
+	// Calendar bonus: absent 16 => no bonus (window bonus would be 725, but calendar has absent)
+	if res.AttendanceBonus != 0 {
+		t.Errorf("AttendanceBonus got = %v, want = 0", res.AttendanceBonus)
 	}
 
-	// NetSalary = Gross (31000) - 16000 + 725 = 15725
-	expectedNetSalary := (31000.0 - expectedAbsentDeduct) + 725.0
+	// NetSalary = Gross (31000) - 16000 + 0 = 15000 (calendar, no bonus)
+	expectedNetSalary := 31000.0 - expectedAbsentDeduct
 	if res.NetSalary != expectedNetSalary {
 		t.Errorf("NetSalary got = %v, want = %v", res.NetSalary, expectedNetSalary)
 	}

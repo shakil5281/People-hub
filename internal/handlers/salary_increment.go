@@ -51,14 +51,15 @@ type BulkApplyRequest struct {
 // @Security     BearerAuth
 // @Produce      json
 // @Param        company_id     query string true  "Company ID"
+// @Param        employee_id    query string false "Search by employee_id (business key) — partial match"
 // @Param        department_id  query string false "Filter by department"
 // @Param        section_id     query string false "Filter by section"
 // @Param        designation_id query string false "Filter by designation"
 // @Param        line_id        query string false "Filter by line"
 // @Param        group_id       query string false "Filter by group"
 // @Param        increment_type query string false "Filter by increment type"
-// @Param        month          query int    false "Filter by month (1-12)"
-// @Param        year           query int    false "Filter by year"
+// @Param        month          query int    false "Filter by month (1-12) — Effective Date"
+// @Param        year           query int    false "Filter by year — Effective Date"
 // @Param        status         query string false "Filter by status"
 // @Success      200  {object}  map[string]interface{}
 // @Failure      500  {object}  map[string]string
@@ -75,6 +76,7 @@ func (h *SalaryIncrementHandler) List(c *gin.Context) {
 
 	increments, err := h.incrementRepo.List(repository.IncrementFilter{
 		CompanyID:     companyID,
+		EmployeeID:    strings.TrimSpace(c.Query("employee_id")),
 		DepartmentID:  c.Query("department_id"),
 		SectionID:     c.Query("section_id"),
 		DesignationID: c.Query("designation_id"),
@@ -180,7 +182,21 @@ func (h *SalaryIncrementHandler) GetIncrementDetails(c *gin.Context) {
 	totalPromotionsCount := 0
 	lastIncrementDate := ""
 	lastIncrementAmount := 0.0
-
+	firstTimeGross := 0.0
+	firstTimeBasic := 0.0
+	firstTimeHouse := 0.0
+	firstTimeMedical := 0.0
+	firstTimeDate := ""
+	// Track earliest approved increment for first time salary
+	var earliestIncrement *models.SalaryIncrement
+	for i := len(allIncrements) - 1; i >= 0; i-- {
+		inc := allIncrements[i]
+		if strings.EqualFold(inc.Status, "approved") {
+			if earliestIncrement == nil {
+				earliestIncrement = &allIncrements[i]
+			}
+		}
+	}
 	for _, inc := range allIncrements {
 		if strings.EqualFold(inc.Status, "approved") {
 			totalIncrementAmount += inc.IncrementAmount
@@ -201,6 +217,32 @@ func (h *SalaryIncrementHandler) GetIncrementDetails(c *gin.Context) {
 	initialGross := emp.GrossSalary - totalIncrementAmount
 	if initialGross < 0 {
 		initialGross = emp.GrossSalary
+	}
+	// First time salary: earliest previous salary before any increment, or joining salary
+	if earliestIncrement != nil {
+		firstTimeGross = earliestIncrement.PreviousGross
+		firstTimeBasic = earliestIncrement.PreviousBasic
+		firstTimeHouse = earliestIncrement.PreviousHouse
+		firstTimeMedical = earliestIncrement.PreviousMedical
+		firstTimeDate = earliestIncrement.EffectiveDate
+		if firstTimeDate == "" {
+			firstTimeDate = earliestIncrement.IncrementDate
+		}
+		// Fallback if previous values are zero (migrated data may have 0), use initialGross
+		if firstTimeGross == 0 {
+			firstTimeGross = initialGross
+		}
+	} else {
+		firstTimeGross = emp.GrossSalary
+		firstTimeBasic = emp.BasicSalary
+		firstTimeHouse = emp.HouseRent
+		firstTimeMedical = emp.MedicalAllowance
+		if !emp.JoiningDate.IsZero() {
+			firstTimeDate = emp.JoiningDate.Format("2006-01-02")
+		}
+	}
+	if firstTimeDate == "" && !emp.JoiningDate.IsZero() {
+		firstTimeDate = emp.JoiningDate.Format("2006-01-02")
 	}
 
 	// Format employee profile
@@ -282,6 +324,11 @@ func (h *SalaryIncrementHandler) GetIncrementDetails(c *gin.Context) {
 			"last_increment_date":    lastIncrementDate,
 			"last_increment_amount":  lastIncrementAmount,
 			"initial_gross":          initialGross,
+			"first_time_gross":       firstTimeGross,
+			"first_time_basic":       firstTimeBasic,
+			"first_time_house":       firstTimeHouse,
+			"first_time_medical":     firstTimeMedical,
+			"first_time_date":        firstTimeDate,
 			"total_records":          len(filteredIncrements),
 		},
 		"increments": filteredIncrements,

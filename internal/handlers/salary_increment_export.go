@@ -21,11 +21,12 @@ import (
 
 // ExportExcel godoc
 // @Summary      Export increment report to Excel
-// @Description  Download salary increment report as Excel file
+// @Description  Download salary increment report as Excel file. When employee_id is provided, only that employee's increments are exported (used by Increment Details page).
 // @Tags         Salary
 // @Security     BearerAuth
 // @Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
 // @Param        company_id     query string true  "Company ID"
+// @Param        employee_id    query string false "Filter by employee ID (business key) — when set, exports only that employee"
 // @Param        department_id  query string false "Filter by department"
 // @Param        section_id     query string false "Filter by section"
 // @Param        designation_id query string false "Filter by designation"
@@ -50,6 +51,7 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 
 	increments, err := h.incrementRepo.List(repository.IncrementFilter{
 		CompanyID:     companyID,
+		EmployeeID:    strings.TrimSpace(c.Query("employee_id")),
 		DepartmentID:  c.Query("department_id"),
 		SectionID:     c.Query("section_id"),
 		DesignationID: c.Query("designation_id"),
@@ -67,6 +69,34 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 
 	var company models.Company
 	_ = database.DB.First(&company, "id = ?", companyID).Error
+
+	// First-time salary map per employee for report
+	firstGrossMap := make(map[string]float64)
+	if len(increments) > 0 {
+		empIDs := make([]string, 0, len(increments))
+		seen := make(map[string]bool)
+		for _, inc := range increments {
+			if !seen[inc.EmployeeID] {
+				seen[inc.EmployeeID] = true
+				empIDs = append(empIDs, inc.EmployeeID)
+			}
+		}
+		type fr struct {
+			EmployeeID    string  `gorm:"column:employee_id"`
+			PreviousGross float64 `gorm:"column:previous_gross"`
+		}
+		var frs []fr
+		if err := database.DB.Raw(`SELECT DISTINCT ON (employee_id) employee_id, previous_gross FROM salary_increments WHERE employee_id IN ? AND deleted_at IS NULL ORDER BY employee_id, effective_date ASC, created_at ASC`, empIDs).Scan(&frs).Error; err == nil {
+			for _, r := range frs {
+				firstGrossMap[r.EmployeeID] = r.PreviousGross
+			}
+		}
+		for _, inc := range increments {
+			if _, ok := firstGrossMap[inc.EmployeeID]; !ok || firstGrossMap[inc.EmployeeID] == 0 {
+				firstGrossMap[inc.EmployeeID] = inc.PreviousGross
+			}
+		}
+	}
 
 	f := excelize.NewFile()
 	sheetName := "Increments"
@@ -94,9 +124,6 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 	})
 	showGrid := false
 	_ = f.SetSheetView(sheetName, -1, &excelize.ViewOptions{ShowGridLines: &showGrid})
-	_ = f.SetHeaderFooter(sheetName, &excelize.HeaderFooterOptions{
-		OddFooter: "&LProduction manager&CAdmin (A.G.M)&RApproved By",
-	})
 
 	styleTitle, _ := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 16},
@@ -107,125 +134,123 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	styleHeader, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 10, Color: "FFFFFF"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"4472C4"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true, Size: 10, Color: "000000"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
 	})
 	styleCenter, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "000000"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	styleLeft, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "000000"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	})
 	styleRight, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Color: "000000"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "right", Vertical: "center"},
 	})
 	styleSection, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 11, Color: "FFFFFF"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"5B9BD5"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true, Size: 11, Color: "000000"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	})
 	styleTotal, _ := f.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10, Color: "000000"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"FFF2CC"}, Pattern: 1},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	styleTotalLeft, _ := f.NewStyle(&excelize.Style{
 		Font: &excelize.Font{Bold: true, Size: 10, Color: "000000"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"FFF2CC"}, Pattern: 1},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	})
 	styleGrand, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 11, Color: "FFFFFF"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"4472C4"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true, Size: 11, Color: "000000"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
 	styleGrandLeft, _ := f.NewStyle(&excelize.Style{
-		Font: &excelize.Font{Bold: true, Size: 11, Color: "FFFFFF"},
-		Fill: excelize.Fill{Type: "pattern", Color: []string{"4472C4"}, Pattern: 1},
+		Font: &excelize.Font{Bold: true, Size: 11, Color: "000000"},
 		Border: []excelize.Border{
-			{Type: "top", Color: "000000", Style: 1},
-			{Type: "bottom", Color: "000000", Style: 1},
-			{Type: "left", Color: "000000", Style: 1},
-			{Type: "right", Color: "000000", Style: 1},
+			{Type: "top", Color: "404040", Style: 1},
+			{Type: "bottom", Color: "404040", Style: 1},
+			{Type: "left", Color: "404040", Style: 1},
+			{Type: "right", Color: "404040", Style: 1},
 		},
 		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
 	})
 
-	f.SetColWidth(sheetName, "A", "A", 15)
-	f.SetColWidth(sheetName, "B", "B", 25)
-	f.SetColWidth(sheetName, "C", "C", 22)
-	f.SetColWidth(sheetName, "D", "D", 20)
-	f.SetColWidth(sheetName, "E", "E", 15)
-	f.SetColWidth(sheetName, "F", "F", 15)
-	f.SetColWidth(sheetName, "G", "G", 18)
-	f.SetColWidth(sheetName, "H", "H", 15)
-	f.SetColWidth(sheetName, "I", "I", 15)
+	f.SetColWidth(sheetName, "A", "A", 13)
+	f.SetColWidth(sheetName, "B", "B", 22)
+	f.SetColWidth(sheetName, "C", "C", 20)
+	f.SetColWidth(sheetName, "D", "D", 18)
+	f.SetColWidth(sheetName, "E", "E", 14)
+	f.SetColWidth(sheetName, "F", "F", 13)
+	f.SetColWidth(sheetName, "G", "G", 13)
+	f.SetColWidth(sheetName, "H", "H", 13)
+	f.SetColWidth(sheetName, "I", "I", 13)
+	f.SetColWidth(sheetName, "J", "J", 14)
 
-	f.MergeCell(sheetName, "A1", "I1")
+	f.MergeCell(sheetName, "A1", "J1")
 	f.SetCellValue(sheetName, "A1", company.CompanyNameEn)
 	f.SetCellStyle(sheetName, "A1", "A1", styleTitle)
 	f.SetRowHeight(sheetName, 1, 26)
 
-	f.MergeCell(sheetName, "A2", "I2")
+	f.MergeCell(sheetName, "A2", "J2")
 	f.SetCellValue(sheetName, "A2", company.AddressEn)
 	f.SetCellStyle(sheetName, "A2", "A2", styleSubtitle)
 	f.SetRowHeight(sheetName, 2, 20)
 
-	f.MergeCell(sheetName, "A3", "I3")
+	f.MergeCell(sheetName, "A3", "J3")
 	f.SetCellValue(sheetName, "A3", "Salary Increments Report")
 	f.SetCellStyle(sheetName, "A3", "A3", styleSubtitle)
 	f.SetRowHeight(sheetName, 3, 20)
 
-	f.MergeCell(sheetName, "A4", "I4")
+	f.MergeCell(sheetName, "A4", "J4")
 	f.SetCellValue(sheetName, "A4", fmt.Sprintf("Report Date: %s", time.Now().Format("02-01-2006")))
 	f.SetCellStyle(sheetName, "A4", "A4", styleSubtitle)
 	f.SetRowHeight(sheetName, 4, 18)
@@ -253,7 +278,7 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 		return strings.ToLower(sections[i]) < strings.ToLower(sections[j])
 	})
 
-	headers := []string{"Employee ID", "Name", "Designation", "Department", "Joining Date", "Current Gross", "Increment Amount", "New Gross", "Increment Date"}
+	headers := []string{"Employee ID", "Name", "Designation", "Department", "Joining Date", "First Salary", "Previous Gross", "Increment Amount", "New Gross", "Increment Date"}
 
 	row := 6
 	// If no grouping (empty), still render single header
@@ -266,14 +291,14 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 		f.SetRowHeight(sheetName, row, 25)
 		row++
 	} else {
-		var grandPrev, grandIncAmt, grandNew float64
+		var grandFirst, grandPrev, grandIncAmt, grandNew float64
 		grandCount := 0
 		for _, secName := range sections {
 			list := sectionMap[secName]
 			// Section header row
-			f.MergeCell(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("I%d", row))
+			f.MergeCell(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("J%d", row))
 			f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("Section: %s (%d)", secName, len(list)))
-			f.SetCellStyle(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("I%d", row), styleSection)
+			f.SetCellStyle(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("J%d", row), styleSection)
 			f.SetRowHeight(sheetName, row, 25)
 			row++
 
@@ -286,11 +311,15 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 			f.SetRowHeight(sheetName, row, 25)
 			row++
 
-			var secPrev, secIncAmt, secNew float64
+			var secFirst, secPrev, secIncAmt, secNew float64
 			for _, inc := range list {
 				joiningDate := ""
 				if !inc.Employee.JoiningDate.IsZero() {
 					joiningDate = inc.Employee.JoiningDate.Format("02-01-2006")
+				}
+				firstGross := firstGrossMap[inc.EmployeeID]
+				if firstGross == 0 {
+					firstGross = inc.PreviousGross
 				}
 				f.SetCellValue(sheetName, fmt.Sprintf("A%d", row), inc.EmployeeID)
 				f.SetCellStyle(sheetName, fmt.Sprintf("A%d", row), fmt.Sprintf("A%d", row), styleCenter)
@@ -306,16 +335,20 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 				f.SetCellStyle(sheetName, fmt.Sprintf("D%d", row), fmt.Sprintf("D%d", row), styleLeft)
 				f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), joiningDate)
 				f.SetCellStyle(sheetName, fmt.Sprintf("E%d", row), fmt.Sprintf("E%d", row), styleCenter)
-				f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), inc.PreviousGross)
+				f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), firstGross)
 				f.SetCellStyle(sheetName, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), styleRight)
-				f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), inc.IncrementAmount)
+				f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), inc.PreviousGross)
 				f.SetCellStyle(sheetName, fmt.Sprintf("G%d", row), fmt.Sprintf("G%d", row), styleRight)
-				f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), inc.NewGross)
+				f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), inc.IncrementAmount)
 				f.SetCellStyle(sheetName, fmt.Sprintf("H%d", row), fmt.Sprintf("H%d", row), styleRight)
-				f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), utils.FormatBillDate(inc.IncrementDate))
-				f.SetCellStyle(sheetName, fmt.Sprintf("I%d", row), fmt.Sprintf("I%d", row), styleCenter)
+				f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), inc.NewGross)
+				f.SetCellStyle(sheetName, fmt.Sprintf("I%d", row), fmt.Sprintf("I%d", row), styleRight)
+				f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), utils.FormatBillDate(inc.IncrementDate))
+				f.SetCellStyle(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("J%d", row), styleCenter)
 				f.SetRowHeight(sheetName, row, 25)
 				row++
+				secFirst += firstGross
+				secFirst += firstGross
 				secPrev += inc.PreviousGross
 				secIncAmt += inc.IncrementAmount
 				secNew += inc.NewGross
@@ -331,16 +364,20 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 			f.SetCellStyle(sheetName, fmt.Sprintf("D%d", row), fmt.Sprintf("D%d", row), styleTotal)
 			f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), "")
 			f.SetCellStyle(sheetName, fmt.Sprintf("E%d", row), fmt.Sprintf("E%d", row), styleTotal)
-			f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), secPrev)
+			f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), secFirst)
 			f.SetCellStyle(sheetName, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), styleTotal)
-			f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), secIncAmt)
+			f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), secPrev)
 			f.SetCellStyle(sheetName, fmt.Sprintf("G%d", row), fmt.Sprintf("G%d", row), styleTotal)
-			f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), secNew)
+			f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), secIncAmt)
 			f.SetCellStyle(sheetName, fmt.Sprintf("H%d", row), fmt.Sprintf("H%d", row), styleTotal)
-			f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), "")
+			f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), secNew)
 			f.SetCellStyle(sheetName, fmt.Sprintf("I%d", row), fmt.Sprintf("I%d", row), styleTotal)
+			f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), "")
+			f.SetCellStyle(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("J%d", row), styleTotal)
 			f.SetRowHeight(sheetName, row, 25)
 			row++
+			grandFirst += secFirst
+			grandFirst += secFirst
 			grandPrev += secPrev
 			grandIncAmt += secIncAmt
 			grandNew += secNew
@@ -359,26 +396,19 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 		f.SetCellStyle(sheetName, fmt.Sprintf("D%d", row), fmt.Sprintf("D%d", row), styleGrand)
 		f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), "")
 		f.SetCellStyle(sheetName, fmt.Sprintf("E%d", row), fmt.Sprintf("E%d", row), styleGrand)
-		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), grandPrev)
+		f.SetCellValue(sheetName, fmt.Sprintf("F%d", row), grandFirst)
 		f.SetCellStyle(sheetName, fmt.Sprintf("F%d", row), fmt.Sprintf("F%d", row), styleGrand)
-		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), grandIncAmt)
+		f.SetCellValue(sheetName, fmt.Sprintf("G%d", row), grandPrev)
 		f.SetCellStyle(sheetName, fmt.Sprintf("G%d", row), fmt.Sprintf("G%d", row), styleGrand)
-		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), grandNew)
+		f.SetCellValue(sheetName, fmt.Sprintf("H%d", row), grandIncAmt)
 		f.SetCellStyle(sheetName, fmt.Sprintf("H%d", row), fmt.Sprintf("H%d", row), styleGrand)
-		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), "")
+		f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), grandNew)
 		f.SetCellStyle(sheetName, fmt.Sprintf("I%d", row), fmt.Sprintf("I%d", row), styleGrand)
+		f.SetCellValue(sheetName, fmt.Sprintf("J%d", row), "")
+		f.SetCellStyle(sheetName, fmt.Sprintf("J%d", row), fmt.Sprintf("J%d", row), styleGrand)
 		f.SetRowHeight(sheetName, row, 26)
 		row++
 	}
-
-	// Signatures - adjusted for 9 cols: B, E, I
-	row += 2
-	f.SetCellValue(sheetName, fmt.Sprintf("B%d", row), "______________________")
-	f.SetCellValue(sheetName, fmt.Sprintf("B%d", row+1), "Production manager")
-	f.SetCellValue(sheetName, fmt.Sprintf("E%d", row), "______________________")
-	f.SetCellValue(sheetName, fmt.Sprintf("E%d", row+1), "Admin (A.G.M)")
-	f.SetCellValue(sheetName, fmt.Sprintf("I%d", row), "______________________")
-	f.SetCellValue(sheetName, fmt.Sprintf("I%d", row+1), "Approved By")
 
 	filename := fmt.Sprintf("increments_%s.xlsx", time.Now().Format("20060102_150405"))
 	var buf bytes.Buffer
@@ -401,11 +431,12 @@ func (h *SalaryIncrementHandler) ExportExcel(c *gin.Context) {
 
 // ExportPDF godoc
 // @Summary      Export increment report to PDF
-// @Description  Download salary increment report as PDF file
+// @Description  Download salary increment report as PDF file. When employee_id is provided, only that employee's increments are exported.
 // @Tags         Salary
 // @Security     BearerAuth
 // @Produce      application/pdf
 // @Param        company_id     query string true  "Company ID"
+// @Param        employee_id    query string false "Filter by employee ID (business key) — when set, exports only that employee"
 // @Param        department_id  query string false "Filter by department"
 // @Param        section_id     query string false "Filter by section"
 // @Param        designation_id query string false "Filter by designation"
@@ -430,6 +461,7 @@ func (h *SalaryIncrementHandler) ExportPDF(c *gin.Context) {
 
 	increments, err := h.incrementRepo.List(repository.IncrementFilter{
 		CompanyID:     companyID,
+		EmployeeID:    strings.TrimSpace(c.Query("employee_id")),
 		DepartmentID:  c.Query("department_id"),
 		SectionID:     c.Query("section_id"),
 		DesignationID: c.Query("designation_id"),
@@ -490,19 +522,7 @@ func (h *SalaryIncrementHandler) ExportPDF(c *gin.Context) {
 	})
 
 	pdf.SetFooterFunc(func() {
-		pdf.SetY(-25)
-		pdf.SetFont("Arial", "", 9)
-
-		// Signatures - Production manager, Admin (A.G.M), Approved By
-		pdf.CellFormat(92, 8, "_________________________", "", 0, "C", false, 0, "")
-		pdf.CellFormat(92, 8, "_________________________", "", 0, "C", false, 0, "")
-		pdf.CellFormat(93, 8, "_________________________", "", 1, "C", false, 0, "")
-
-		pdf.CellFormat(92, 5, "Production manager", "", 0, "C", false, 0, "")
-		pdf.CellFormat(92, 5, "Admin (A.G.M)", "", 0, "C", false, 0, "")
-		pdf.CellFormat(93, 5, "Approved By", "", 1, "C", false, 0, "")
-
-		// Page number
+		// Page number only — signatures removed
 		pdf.SetY(-12)
 		pdf.SetFont("Arial", "I", 8)
 		pdf.CellFormat(0, 10, fmt.Sprintf("Page %d", pdf.PageNo()), "", 0, "C", false, 0, "")
@@ -514,25 +534,23 @@ func (h *SalaryIncrementHandler) ExportPDF(c *gin.Context) {
 	headers := []string{"Emp ID", "Name", "Designation", "Joining Date", "Current Gross", "Inc. Amount", "New Gross", "Inc. Date"}
 	widths := []float64{22, 48, 42, 28, 32, 32, 33, 40} // sum 277
 
-	// Helper to render table header
+	// Helper to render table header — no fill, black text, darker border 25% (64,64,64)
 	renderHeader := func() {
 		pdf.SetFont("Arial", "B", 9)
-		pdf.SetFillColor(68, 114, 196)
-		pdf.SetTextColor(255, 255, 255)
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetDrawColor(64, 64, 64)
 		for i, str := range headers {
-			pdf.CellFormat(widths[i], 9, str, "1", 0, "C", true, 0, "")
+			pdf.CellFormat(widths[i], 9, str, "1", 0, "C", false, 0, "")
 		}
 		pdf.Ln(-1)
-		pdf.SetTextColor(0, 0, 0)
 	}
 
-	// Helper to render section title
+	// Helper to render section title — no fill, black text, darker border
 	renderSection := func(secName string, count int) {
 		pdf.SetFont("Arial", "B", 10)
-		pdf.SetFillColor(91, 155, 213)
-		pdf.SetTextColor(255, 255, 255)
-		pdf.CellFormat(277, 9, fmt.Sprintf("Section: %s (%d)", secName, count), "1", 1, "L", true, 0, "")
 		pdf.SetTextColor(0, 0, 0)
+		pdf.SetDrawColor(64, 64, 64)
+		pdf.CellFormat(277, 9, fmt.Sprintf("Section: %s (%d)", secName, count), "1", 1, "L", false, 0, "")
 	}
 
 	if len(increments) == 0 {
@@ -581,22 +599,23 @@ func (h *SalaryIncrementHandler) ExportPDF(c *gin.Context) {
 				secIncAmt += inc.IncrementAmount
 				secNew += inc.NewGross
 			}
-			// Section Total
+			// Section Total — no fill, black text, darker border
 			if pdf.GetY()+rowH > 180 {
 				pdf.AddPage()
 				renderHeader()
 				pdf.SetFont("Arial", "", 9)
 			}
 			pdf.SetFont("Arial", "B", 9)
-			pdf.SetFillColor(255, 242, 204)
-			pdf.CellFormat(widths[0], rowH, "", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(widths[1], rowH, fmt.Sprintf("Total (%d)", len(list)), "1", 0, "L", true, 0, "")
-			pdf.CellFormat(widths[2], rowH, "", "1", 0, "L", true, 0, "")
-			pdf.CellFormat(widths[3], rowH, "", "1", 0, "C", true, 0, "")
-			pdf.CellFormat(widths[4], rowH, fmt.Sprintf("%.2f", secPrev), "1", 0, "R", true, 0, "")
-			pdf.CellFormat(widths[5], rowH, fmt.Sprintf("%.2f", secIncAmt), "1", 0, "R", true, 0, "")
-			pdf.CellFormat(widths[6], rowH, fmt.Sprintf("%.2f", secNew), "1", 0, "R", true, 0, "")
-			pdf.CellFormat(widths[7], rowH, "", "1", 0, "C", true, 0, "")
+			pdf.SetTextColor(0, 0, 0)
+			pdf.SetDrawColor(64, 64, 64)
+			pdf.CellFormat(widths[0], rowH, "", "1", 0, "C", false, 0, "")
+			pdf.CellFormat(widths[1], rowH, fmt.Sprintf("Total (%d)", len(list)), "1", 0, "L", false, 0, "")
+			pdf.CellFormat(widths[2], rowH, "", "1", 0, "L", false, 0, "")
+			pdf.CellFormat(widths[3], rowH, "", "1", 0, "C", false, 0, "")
+			pdf.CellFormat(widths[4], rowH, fmt.Sprintf("%.2f", secPrev), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(widths[5], rowH, fmt.Sprintf("%.2f", secIncAmt), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(widths[6], rowH, fmt.Sprintf("%.2f", secNew), "1", 0, "R", false, 0, "")
+			pdf.CellFormat(widths[7], rowH, "", "1", 0, "C", false, 0, "")
 			pdf.Ln(-1)
 			pdf.SetFont("Arial", "", 9)
 			grandPrev += secPrev
@@ -605,21 +624,21 @@ func (h *SalaryIncrementHandler) ExportPDF(c *gin.Context) {
 			grandCount += len(list)
 			pdf.Ln(4)
 		}
-		// Grand Total
+		// Grand Total — no fill, black text, darker border
 		if pdf.GetY()+10 > 180 {
 			pdf.AddPage()
 		}
 		pdf.SetFont("Arial", "B", 10)
-		pdf.SetFillColor(68, 114, 196)
-		pdf.SetTextColor(255, 255, 255)
-		pdf.CellFormat(widths[0], 10, "", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(widths[1], 10, fmt.Sprintf("Grand Total (%d)", grandCount), "1", 0, "L", true, 0, "")
-		pdf.CellFormat(widths[2], 10, "", "1", 0, "L", true, 0, "")
-		pdf.CellFormat(widths[3], 10, "", "1", 0, "C", true, 0, "")
-		pdf.CellFormat(widths[4], 10, fmt.Sprintf("%.2f", grandPrev), "1", 0, "R", true, 0, "")
-		pdf.CellFormat(widths[5], 10, fmt.Sprintf("%.2f", grandIncAmt), "1", 0, "R", true, 0, "")
-		pdf.CellFormat(widths[6], 10, fmt.Sprintf("%.2f", grandNew), "1", 0, "R", true, 0, "")
-		pdf.CellFormat(widths[7], 10, "", "1", 0, "C", true, 0, "")
+		pdf.SetTextColor(0, 0, 0)
+		pdf.SetDrawColor(64, 64, 64)
+		pdf.CellFormat(widths[0], 10, "", "1", 0, "C", false, 0, "")
+		pdf.CellFormat(widths[1], 10, fmt.Sprintf("Grand Total (%d)", grandCount), "1", 0, "L", false, 0, "")
+		pdf.CellFormat(widths[2], 10, "", "1", 0, "L", false, 0, "")
+		pdf.CellFormat(widths[3], 10, "", "1", 0, "C", false, 0, "")
+		pdf.CellFormat(widths[4], 10, fmt.Sprintf("%.2f", grandPrev), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[5], 10, fmt.Sprintf("%.2f", grandIncAmt), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[6], 10, fmt.Sprintf("%.2f", grandNew), "1", 0, "R", false, 0, "")
+		pdf.CellFormat(widths[7], 10, "", "1", 0, "C", false, 0, "")
 		pdf.Ln(-1)
 		pdf.SetTextColor(0, 0, 0)
 	}

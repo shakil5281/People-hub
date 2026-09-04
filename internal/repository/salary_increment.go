@@ -1,7 +1,7 @@
 package repository
 
 import (
-	"fmt"
+	"time"
 
 	"github.com/shakil5281/peoplehub-api/internal/models"
 	"gorm.io/gorm"
@@ -17,6 +17,7 @@ func NewSalaryIncrementRepository(db *gorm.DB) *SalaryIncrementRepository {
 
 type IncrementFilter struct {
 	CompanyID     string
+	EmployeeID    string
 	DepartmentID  string
 	SectionID     string
 	DesignationID string
@@ -42,6 +43,10 @@ func (r *SalaryIncrementRepository) List(f IncrementFilter) ([]models.SalaryIncr
 	if f.IncrementType != "" {
 		query = query.Where("salary_increments.increment_type = ?", f.IncrementType)
 	}
+	if f.EmployeeID != "" {
+		// Partial match support for search input (e.g. "224" matches "2244")
+		query = query.Where("salary_increments.employee_id ILIKE ?", "%"+f.EmployeeID+"%")
+	}
 
 	if f.DepartmentID != "" {
 		query = query.Where("salary_increments.employee_id IN (SELECT employee_id FROM employees WHERE department_id = ?)", f.DepartmentID)
@@ -59,13 +64,19 @@ func (r *SalaryIncrementRepository) List(f IncrementFilter) ([]models.SalaryIncr
 		query = query.Where("salary_increments.employee_id IN (SELECT employee_id FROM employees WHERE group_id = ?)", f.GroupID)
 	}
 	if f.Month > 0 && f.Year > 0 {
-		monthStr := fmt.Sprintf("%02d", f.Month)
-		yearStr := fmt.Sprintf("%d", f.Year)
-		query = query.Where("(salary_increments.effective_date::text LIKE ? OR salary_increments.created_at::text LIKE ?)", yearStr+"-"+monthStr+"%", yearStr+"-"+monthStr+"%")
+		start := time.Date(f.Year, time.Month(f.Month), 1, 0, 0, 0, 0, time.UTC)
+		end := start.AddDate(0, 1, 0)
+		query = query.Where("salary_increments.effective_date >= ? AND salary_increments.effective_date < ?", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	} else if f.Year > 0 {
+		start := time.Date(f.Year, 1, 1, 0, 0, 0, 0, time.UTC)
+		end := start.AddDate(1, 0, 0)
+		query = query.Where("salary_increments.effective_date >= ? AND salary_increments.effective_date < ?", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	} else if f.Month > 0 {
+		query = query.Where("EXTRACT(MONTH FROM salary_increments.effective_date::date) = ?", f.Month)
 	}
 
 	var incs []models.SalaryIncrement
-	err := query.Order("salary_increments.created_at DESC").Find(&incs).Error
+	err := query.Order("salary_increments.effective_date DESC, salary_increments.created_at DESC").Find(&incs).Error
 	return incs, err
 }
 
@@ -141,12 +152,15 @@ func (r *SalaryIncrementRepository) ListByEmployee(employeeID string, year, mont
 		Where("salary_increments.employee_id = ? AND salary_increments.deleted_at IS NULL", employeeID)
 
 	if year > 0 && month > 0 {
-		monthStr := fmt.Sprintf("%02d", month)
-		yearStr := fmt.Sprintf("%d", year)
-		query = query.Where("(salary_increments.effective_date::text LIKE ? OR salary_increments.increment_date::text LIKE ? OR salary_increments.created_at::text LIKE ?)", yearStr+"-"+monthStr+"%", yearStr+"-"+monthStr+"%", yearStr+"-"+monthStr+"%")
+		start := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		end := start.AddDate(0, 1, 0)
+		query = query.Where("salary_increments.effective_date >= ? AND salary_increments.effective_date < ?", start.Format("2006-01-02"), end.Format("2006-01-02"))
 	} else if year > 0 {
-		yearStr := fmt.Sprintf("%d", year)
-		query = query.Where("(salary_increments.effective_date::text LIKE ? OR salary_increments.increment_date::text LIKE ? OR salary_increments.created_at::text LIKE ?)", yearStr+"-%", yearStr+"-%", yearStr+"-%")
+		start := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+		end := start.AddDate(1, 0, 0)
+		query = query.Where("salary_increments.effective_date >= ? AND salary_increments.effective_date < ?", start.Format("2006-01-02"), end.Format("2006-01-02"))
+	} else if month > 0 {
+		query = query.Where("EXTRACT(MONTH FROM salary_increments.effective_date::date) = ?", month)
 	}
 
 	var incs []models.SalaryIncrement

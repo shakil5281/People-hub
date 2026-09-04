@@ -78,8 +78,9 @@ func Setup(
 		nightBillProcess.POST("/process", nightBillHandler.ProcessFromConfig)
 	}
 
-	// Public auth routes
+	// Public auth routes - rate limited to prevent brute force
 	auth := api.Group("/auth")
+	auth.Use(middleware.AuthRateLimit())
 	{
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
@@ -212,22 +213,16 @@ func Setup(
 		dashboard.GET("/stats", dashboardHandler.GetStats)
 	}
 
-	// Protected database routes
+	// Protected database routes - all require super_admin (contain PII/full dumps)
 	database := api.Group("/database")
-	database.Use(middleware.AuthMiddleware(jwtSecret))
+	database.Use(middleware.AuthMiddleware(jwtSecret), middleware.RequireRole("super_admin"))
 	{
 		database.GET("/backups", databaseHandler.ListBackups)
 		database.GET("/export", databaseHandler.Export)
-
-		// Admin-only destructive database operations
-		databaseAdmin := database.Group("")
-		databaseAdmin.Use(middleware.RequireRole("super_admin"))
-		{
-			databaseAdmin.POST("/backup", databaseHandler.Backup)
-			databaseAdmin.POST("/import", databaseHandler.Import)
-			databaseAdmin.POST("/reset", databaseHandler.Reset)
-			databaseAdmin.DELETE("/backups", databaseHandler.DeleteBackup)
-		}
+		database.POST("/backup", databaseHandler.Backup)
+		database.POST("/import", databaseHandler.Import)
+		database.POST("/reset", databaseHandler.Reset)
+		database.DELETE("/backups", databaseHandler.DeleteBackup)
 	}
 
 	// Protected address routes

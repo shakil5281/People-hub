@@ -1,6 +1,7 @@
 package server
 
 import (
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -157,15 +158,35 @@ func New(cfg *config.Config) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
+	r.Use(middleware.SecurityHeaders())
 	r.Use(middleware.CORSMiddleware())
 	r.Use(middleware.Logger())
 	r.Use(middleware.AuditMiddleware())
+	// Global rate limit: 300 req/min per IP — 100 was too low for dashboard + header concurrent fetches (4 parallel = 960/min flood)
+	r.Use(middleware.RateLimit(300, time.Minute))
 
-	// Serve uploaded files
-	r.Static("/uploads", "./uploads")
+	// Serve uploaded files - PROTECTED: require auth, no anonymous enumeration
+	// Old: r.Static("/uploads", "./uploads") - REMOVED for security
+	uploads := r.Group("/uploads")
+	uploads.Use(middleware.AuthMiddleware(jwtCfg.Secret))
+	uploads.GET("/*filepath", func(c *gin.Context) {
+		filepath := c.Param("filepath")
+		// Prevent path traversal - gin already cleans, but double check
+		if filepath == "" {
+			c.JSON(404, gin.H{"error": "file not found"})
+			return
+		}
+		c.File("./uploads" + filepath)
+	})
 
-	// Swagger UI
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	// Swagger UI - protected in production, open in development
+	if os.Getenv("GO_ENV") == "production" {
+		swagger := r.Group("/swagger")
+		swagger.Use(middleware.AuthMiddleware(jwtCfg.Secret), middleware.RequireRole("super_admin"))
+		swagger.GET("/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	} else {
+		r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	}
 
 	routes.Setup(r, authHandler, employeeHandler, companyHandler, shiftHandler, groupHandler, floorHandler, deptHandler, sectionHandler, desigHandler, lineHandler, orgImportHandler, dashboardHandler, databaseHandler, attendanceHandler, dataLogHandler, divisionHandler, districtHandler, upazilaHandler, unionHandler, postOfficeHandler, requirementHandler, separationHandler, idCardHandler, leaveHandler, salaryHandler, salaryIncrementHandler, advanceSalaryHandler, eidBonusHandler, employeeImportHandler, tempShiftHandler, rosterHandler, userHandler, roleHandler, settingsHandler, punishmentHandler, dailyScheduleHandler, tiffinBillHandler, holidayHandler, systemLogHandler, notificationHandler, missingAttendanceHandler, otEarlyExitHandler, nightBillHandler, nightBillEmployeeListHandler, migrationHandler, zktecoSyncHandler, salaryAccountImportHandler, earnedLeaveHandler, cfg.JWTSecret)
 

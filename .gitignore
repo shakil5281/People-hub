@@ -26,10 +26,31 @@ web/dist/
 web/build/
 web/.next/
 
-# Environment and config
+# Environment and config - NEVER commit real secrets
 .env
 .env.local
+.env.production
 .env.*.local
+.env.*.production
+
+# Database and backups - PII, never commit
+backups/
+tmp/
+bin/
+*.db
+peoplehub.db
+*.sql
+!migrations/*.sql
+
+# Build artifacts
+peoplehub.exe
+peoplehub-gateway.exe
+server.exe
+/wwwroot/
+
+# Deploy secrets - use templates
+deploy/*service*.xml
+!deploy/*.xml.template
 
 # IDEs
 .vscode/
