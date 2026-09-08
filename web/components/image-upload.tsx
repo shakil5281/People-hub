@@ -4,7 +4,7 @@ import * as React from "react"
 import { UploadIcon, XIcon, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { uploadApi } from "@/lib/api"
-import { getUploadBaseUrl } from "@/lib/utils"
+import { resolveUploadUrl } from "@/lib/utils"
 
 interface ImageUploadProps {
   value?: string
@@ -46,18 +46,7 @@ export function ImageUpload({ value, onChange, label = "Upload Image", accept = 
     setError("")
   }
 
-  const baseUrl = getUploadBaseUrl()
-  const resolveUrl = (val?: string) => {
-    if (!val) return ""
-    if (val.startsWith("http://") || val.startsWith("https://") || val.startsWith("blob:") || val.startsWith("data:")) {
-      return val
-    }
-    if (val.startsWith("/")) {
-      return `${baseUrl}${val}`
-    }
-    return `${baseUrl}/${val}`
-  }
-  const imageUrl = resolveUrl(value)
+  const imageUrl = resolveUploadUrl(value)
 
   return (
     <div className="space-y-2">

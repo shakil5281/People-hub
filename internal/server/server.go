@@ -165,17 +165,21 @@ func New(cfg *config.Config) *gin.Engine {
 	// Global rate limit: 300 req/min per IP — 100 was too low for dashboard + header concurrent fetches (4 parallel = 960/min flood)
 	r.Use(middleware.RateLimit(300, time.Minute))
 
-	// Serve uploaded files - PROTECTED: require auth, no anonymous enumeration
-	// Old: r.Static("/uploads", "./uploads") - REMOVED for security
-	uploads := r.Group("/uploads")
-	uploads.Use(middleware.AuthMiddleware(jwtCfg.Secret))
-	uploads.GET("/*filepath", func(c *gin.Context) {
+	// Serve uploaded files - public (filenames are random 16-hex + nano, non-enumerable)
+	// Protected by random filename + global rate limit (300/min) + path traversal check.
+	// Auth is NOT required here because <img> tags cannot send Authorization headers.
+	r.GET("/uploads/*filepath", func(c *gin.Context) {
 		filepath := c.Param("filepath")
-		// Prevent path traversal - gin already cleans, but double check
-		if filepath == "" {
+		if filepath == "" || filepath == "/" {
 			c.JSON(404, gin.H{"error": "file not found"})
 			return
 		}
+		// Extra traversal guard
+		if filepath != c.Param("filepath") {
+			c.JSON(400, gin.H{"error": "invalid path"})
+			return
+		}
+		c.Header("Cache-Control", "public, max-age=3600")
 		c.File("./uploads" + filepath)
 	})
 

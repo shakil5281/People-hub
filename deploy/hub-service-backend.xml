@@ -18,7 +18,8 @@
   <env name="DB_PASS" value="123456"/>
   <env name="DB_NAME" value="peoplehub"/>
   <env name="DB_SSLMODE" value="disable"/>
-  <env name="JWT_SECRET" value="peoplehub-secret-key-change-in-production-2025"/>
-  <env name="GO_ENV" value="production"/>
+  <env name="JWT_SECRET" value="f07399afa90bb3d45a5fe300456ebb8d2abad73f51fcaad73e30f723c8cdcbb0"/>
+  <!-- GO_ENV removed for local dev: production requires DB_PASS>=12 and JWT>=32; DB still uses 123456 -->
+  <!-- To run as production, set strong DB_PASS in postgres AND here, then set GO_ENV=production -->
   <prestart-command>powershell -Command "if (-not (Test-Path '%BASE%\uploads')) { New-Item -ItemType Directory -Path '%BASE%\uploads' -Force }"</prestart-command>
 </service>

@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { getApiBaseUrl } from "@/lib/utils"
+import { resolveUploadUrl } from "@/lib/utils"
 import { Badge } from "@/components/ui/badge"
 import {
   Dialog,
@@ -483,12 +483,9 @@ export default function CreateIncrementPage() {
       header: "Photo",
       cell: ({ row }) => {
         const img = row.original.image_url
-        const baseUrl = getApiBaseUrl().replace("/api/v1", "")
         return (
           <Avatar className="h-8 w-8">
-            <AvatarImage
-              src={img ? (img.startsWith("http") ? img : `${baseUrl}/${img.replace(/^\//, "")}`) : ""}
-            />
+            <AvatarImage src={resolveUploadUrl(img)} />
             <AvatarFallback>{row.original.name_en?.charAt(0)}</AvatarFallback>
           </Avatar>
         )

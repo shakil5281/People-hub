@@ -33,7 +33,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { employeeApi } from "@/lib/api"
-import { cn, getUploadBaseUrl } from "@/lib/utils"
+import { cn, resolveUploadUrl } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface AddressItem {
@@ -564,14 +564,7 @@ export default function EmployeeProfilePage() {
 
   const imageInitial = employee.name_en?.charAt(0)?.toUpperCase() || "?"
   const totalAttendance = attendance.reduce((sum, a) => sum + a.count, 0)
-  const baseUrl = getUploadBaseUrl()
-  const fullImageUrl = employee.image_url
-    ? employee.image_url.startsWith("http")
-      ? employee.image_url
-      : employee.image_url.startsWith("/")
-      ? `${baseUrl}${employee.image_url}`
-      : `${baseUrl}/${employee.image_url}`
-    : ""
+  const fullImageUrl = resolveUploadUrl(employee.image_url)
 
   return (
     <div className="flex flex-col gap-4 pb-8 md:gap-6 md:pb-10">

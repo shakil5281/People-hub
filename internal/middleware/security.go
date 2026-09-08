@@ -25,7 +25,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		}
 		// Basic CSP allowing self, inline scripts for Next.js, and images
 		// Adjust if you add external CDNs
-		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'")
+		h.Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; font-src 'self' data:; connect-src 'self' http: https:; frame-ancestors 'none'")
 		c.Next()
 	}
 }

@@ -13,7 +13,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Company, statusOptions } from "../data/company-data"
 import { CompanyForm } from "../form/company-form"
 import { companyApi } from "@/lib/api"
-import { getUploadBaseUrl } from "@/lib/utils"
+import { resolveUploadUrl } from "@/lib/utils"
 
 export function CompanyTable() {
   const router = useRouter()
@@ -205,9 +205,12 @@ export function CompanyTable() {
                       <TableCell>
                         {company.signature ? (
                           <img
-                            src={company.signature.startsWith("/uploads") ? `${getUploadBaseUrl()}${company.signature}` : company.signature}
+                            src={resolveUploadUrl(company.signature)}
                             alt="Signature"
                             className="h-10 w-24 rounded border object-contain"
+                            onError={(e) => {
+                              ;(e.target as HTMLImageElement).style.display = "none"
+                            }}
                           />
                         ) : (
                           <span className="text-xs text-muted-foreground">No signature</span>
