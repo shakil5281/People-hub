@@ -15,7 +15,7 @@ import (
 )
 
 // @title           PeopleHub API
-// @version         1.1
+// @version         1.4.0
 // @description     Enterprise HR Management & Payroll System API.
 //
 // @contact.name   PeopleHub Team
