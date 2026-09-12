@@ -256,6 +256,7 @@ export const attendanceApi = {
   fixBulkLate: (data: Record<string, unknown>) => api.post("/attendance/fix-bulk-late", data),
   absent: (params: Record<string, string>) => api.get("/attendance/absent", { params }),
   exportAbsentExcel: (params?: Record<string, string>) => api.get("/attendance/absent/export/excel", { params, responseType: "blob" }),
+  exportContinuousAbsentExcel: (params?: Record<string, string>) => api.get("/attendance/continuous-absent/export/excel", { params, responseType: "blob" }),
   exportMissingExcel: (params?: Record<string, string>) => api.get("/attendance/missing/export/excel", { params, responseType: "blob" }),
   summary: (params?: Record<string, string>) => api.get("/attendance/summary", { params }),
   exportSummaryExcel: (params?: Record<string, string>) => api.get("/attendance/summary/export/excel", { params, responseType: "blob" }),

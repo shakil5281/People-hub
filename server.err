@@ -1,0 +1,8 @@
+2026/09/09 16:38:47 WARN: Using default JWT_SECRET - set a strong JWT_SECRET in .env.local for development
+2026/09/09 16:38:47 WARN: Using default DB_PASS=123456 - set a strong password in .env.local
+2026/09/09 16:39:39 Notification checker started — running every 2h0m0s
+2026/09/09 16:39:39 Notification checker: running checks...
+2026/09/09 16:39:39 Server starting on :5000
+2026/09/09 17:22:49 Shutting down server...
+2026/09/09 17:22:50 Database connection closed
+2026/09/09 17:22:50 Server exited gracefully

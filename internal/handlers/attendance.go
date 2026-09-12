@@ -2269,30 +2269,46 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 		return
 	}
 
-	contMap := h.buildLastContinuousAbsentMap(startDate, endDate, companyFilter)
-	for i := range rows {
-		if c, ok := contMap[rows[i].EmployeeID]; ok && c > 0 {
-			rows[i].TotalAbsent = c
-		}
-	}
-
 	f := excelize.NewFile()
 	sheet := "Absent Report"
 	index, _ := f.GetSheetIndex("Sheet1")
 	f.SetActiveSheet(index)
 	f.SetSheetName("Sheet1", sheet)
 
-	nCols := 6
-	cols := []struct {
+	isDaily := c.Query("mode") == "daily"
+	var nCols int
+	var cols []struct {
 		header string
 		width  float64
-	}{
-		{"Sl", 8},
-		{"Employee ID", 12},
-		{"Name", 28},
-		{"Designation", 22},
-		{"Status", 12},
-		{"Total Absent", 12},
+	}
+	if isDaily {
+		nCols = 6
+		cols = []struct {
+			header string
+			width  float64
+		}{
+			{"Sl", 8},
+			{"Employee ID", 12},
+			{"Name", 28},
+			{"Designation", 22},
+			{"Status", 12},
+			{"Total Absent", 12},
+		}
+	} else {
+		nCols = 8
+		cols = []struct {
+			header string
+			width  float64
+		}{
+			{"Sl", 6},
+			{"Employee ID", 13},
+			{"Name", 24},
+			{"Designation", 18},
+			{"Department", 16},
+			{"Section", 16},
+			{"Total Absent", 12},
+			{"Absent Dates (dd/mm/yyyy)", 38},
+		}
 	}
 
 	borderColor := "808080"
@@ -2330,6 +2346,11 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "FF0000"},
 		Border:    thinBorder,
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	wrapLeft, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 10, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Vertical: "center", WrapText: true},
 	})
 
 	companyName := company.CompanyNameEn
@@ -2381,7 +2402,7 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	}
 	f.SetRowHeight(sheet, 5, 36)
 
-	// Data rows
+	// Data rows — parity with DataTable for absent-status (8 cols), legacy for daily (6 cols)
 	for rowIdx, sr := range rows {
 		row := rowIdx + 6
 		svc := func(c int, v string) {
@@ -2392,16 +2413,27 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
 			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
 		}
-
-		svc(1, fmt.Sprintf("%d", rowIdx+1))
-		svc(2, sr.EmployeeID)
-		svl(3, sr.EmployeeName)
-		svl(4, sr.Designation)
-		f.SetCellValue(sheet, colNameAttendance(5)+strconv.Itoa(row), "Absent")
-		f.SetCellStyle(sheet, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyle)
-		f.SetCellValue(sheet, colNameAttendance(6)+strconv.Itoa(row), sr.TotalAbsent)
-		f.SetCellStyle(sheet, colNameAttendance(6)+strconv.Itoa(row), colNameAttendance(6)+strconv.Itoa(row), redStyle)
-
+		if isDaily {
+			svc(1, fmt.Sprintf("%d", rowIdx+1))
+			svc(2, sr.EmployeeID)
+			svl(3, sr.EmployeeName)
+			svl(4, sr.Designation)
+			f.SetCellValue(sheet, colNameAttendance(5)+strconv.Itoa(row), "Absent")
+			f.SetCellStyle(sheet, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyle)
+			f.SetCellValue(sheet, colNameAttendance(6)+strconv.Itoa(row), sr.TotalAbsent)
+			f.SetCellStyle(sheet, colNameAttendance(6)+strconv.Itoa(row), colNameAttendance(6)+strconv.Itoa(row), redStyle)
+		} else {
+			svc(1, fmt.Sprintf("%d", rowIdx+1))
+			svc(2, sr.EmployeeID)
+			svl(3, sr.EmployeeName)
+			svl(4, sr.Designation)
+			svl(5, sr.Department)
+			svl(6, sr.Section)
+			f.SetCellValue(sheet, colNameAttendance(7)+strconv.Itoa(row), sr.TotalAbsent)
+			f.SetCellStyle(sheet, colNameAttendance(7)+strconv.Itoa(row), colNameAttendance(7)+strconv.Itoa(row), redStyle)
+			f.SetCellValue(sheet, colNameAttendance(8)+strconv.Itoa(row), sr.AbsentDates)
+			f.SetCellStyle(sheet, colNameAttendance(8)+strconv.Itoa(row), colNameAttendance(8)+strconv.Itoa(row), wrapLeft)
+		}
 		f.SetRowHeight(sheet, row, 25)
 	}
 
@@ -2433,25 +2465,46 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 		FitToHeight: &fitHeight,
 	})
 
-	// --- Grouped Sheets ---
-	addGroupedAbsentSheet(f, "Department Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
-		if sr.Department != "" {
-			return sr.Department
-		}
-		return "-"
-	})
-	addGroupedAbsentSheet(f, "Section Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
-		if sr.Section != "" {
-			return sr.Section
-		}
-		return "-"
-	})
-	addGroupedAbsentSheet(f, "Designation Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
-		if sr.Designation != "" {
-			return sr.Designation
-		}
-		return "-"
-	})
+	// --- Grouped Sheets --- keep daily 6-col vs absent-status 8-col
+	if isDaily {
+		addGroupedAbsentSheetDaily(f, "Department Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+			if sr.Department != "" {
+				return sr.Department
+			}
+			return "-"
+		})
+		addGroupedAbsentSheetDaily(f, "Section Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+			if sr.Section != "" {
+				return sr.Section
+			}
+			return "-"
+		})
+		addGroupedAbsentSheetDaily(f, "Designation Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+			if sr.Designation != "" {
+				return sr.Designation
+			}
+			return "-"
+		})
+	} else {
+		addGroupedAbsentSheet(f, "Department Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+			if sr.Department != "" {
+				return sr.Department
+			}
+			return "-"
+		})
+		addGroupedAbsentSheet(f, "Section Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+			if sr.Section != "" {
+				return sr.Section
+			}
+			return "-"
+		})
+		addGroupedAbsentSheet(f, "Designation Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+			if sr.Designation != "" {
+				return sr.Designation
+			}
+			return "-"
+		})
+	}
 
 	// --- Page Setup ---
 	for _, s := range f.GetSheetList() {
@@ -2481,6 +2534,485 @@ func (h *AttendanceHandler) ExportAbsentExcel(c *gin.Context) {
 	formattedDate := parsedDate.Format("02-01-2006")
 	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"Absent List %s.xlsx\"", formattedDate))
 	f.Write(c.Writer)
+}
+
+// buildContinuousAbsentRows returns summary rows where TotalAbsent is the continuous streak up to endDate.
+// It uses LATERAL to find last present date per employee and counts absent days after it.
+// Only employees who are absent on endDate (current date) are included.
+func (h *AttendanceHandler) buildContinuousAbsentRows(endDate, companyID, departmentID, sectionID, designationID, lineID, groupID, shiftID, employeeID string, minAbsent int) ([]absentSummaryRow, error) {
+	type rawRow struct {
+		EmployeeID string `gorm:"column:employee_id"`
+		Cnt        int    `gorm:"column:cnt"`
+	}
+	var raws []rawRow
+	query := `
+		SELECT a.employee_id, COUNT(*)::int AS cnt
+		FROM attendances a
+		LEFT JOIN LATERAL (
+			SELECT MAX(date) AS last_present
+			FROM attendances
+			WHERE employee_id = a.employee_id
+			  AND date <= ?
+			  AND status IN ('present','late','half_day')
+			  AND deleted_at IS NULL
+		) lp ON true
+		JOIN employees e ON e.employee_id = a.employee_id AND e.deleted_at IS NULL
+		WHERE a.date <= ?
+		  AND a.status = 'absent'
+		  AND a.deleted_at IS NULL
+		  AND (lp.last_present IS NULL OR a.date > lp.last_present)
+		  AND EXISTS (SELECT 1 FROM attendances a2 WHERE a2.employee_id = a.employee_id AND a2.date = ? AND a2.status = 'absent' AND a2.deleted_at IS NULL)
+	`
+	args := []interface{}{endDate, endDate, endDate}
+	if companyID != "" {
+		query += ` AND a.company_id = ?`
+		args = append(args, companyID)
+	}
+	if departmentID != "" {
+		query += ` AND e.department_id = ?`
+		args = append(args, departmentID)
+	}
+	if sectionID != "" {
+		query += ` AND e.section_id = ?`
+		args = append(args, sectionID)
+	}
+	if designationID != "" {
+		query += ` AND e.designation_id = ?`
+		args = append(args, designationID)
+	}
+	if lineID != "" {
+		query += ` AND e.line_id = ?`
+		args = append(args, lineID)
+	}
+	if groupID != "" {
+		query += ` AND e.group_id = ?`
+		args = append(args, groupID)
+	}
+	if shiftID != "" {
+		query += ` AND e.shift_id = ?`
+		args = append(args, shiftID)
+	}
+	if employeeID != "" {
+		query += ` AND a.employee_id = ?`
+		args = append(args, employeeID)
+	}
+	query += ` GROUP BY a.employee_id`
+	if minAbsent > 0 {
+		query += fmt.Sprintf(` HAVING COUNT(*) >= %d`, minAbsent)
+	}
+	query += ` ORDER BY LENGTH(a.employee_id) ASC, a.employee_id ASC`
+	if err := database.DB.Raw(query, args...).Scan(&raws).Error; err != nil {
+		return nil, err
+	}
+	if len(raws) == 0 {
+		return []absentSummaryRow{}, nil
+	}
+	ids := make([]string, 0, len(raws))
+	cntMap := make(map[string]int, len(raws))
+	for _, r := range raws {
+		ids = append(ids, r.EmployeeID)
+		cntMap[r.EmployeeID] = r.Cnt
+	}
+	var emps []models.Employee
+	if err := database.DB.Preload("DesignationRef").Preload("Department").Preload("SectionRef").Where("employee_id IN ? AND deleted_at IS NULL", ids).Find(&emps).Error; err != nil {
+		return nil, err
+	}
+	empMap := make(map[string]*models.Employee, len(emps))
+	for i := range emps {
+		empMap[emps[i].EmployeeID] = &emps[i]
+	}
+	rows := make([]absentSummaryRow, 0, len(raws))
+	for _, r := range raws {
+		emp := empMap[r.EmployeeID]
+		desig, dept, sec, name := "", "", "", ""
+		if emp != nil {
+			name = emp.NameEn
+			if emp.DesignationRef != nil {
+				desig = emp.DesignationRef.Name
+			}
+			if emp.Department != nil {
+				dept = emp.Department.Name
+			}
+			if emp.SectionRef != nil {
+				sec = emp.SectionRef.Name
+			}
+		}
+		rows = append(rows, absentSummaryRow{
+			ID:           r.EmployeeID,
+			EmployeeID:   r.EmployeeID,
+			EmployeeName: name,
+			Designation:  desig,
+			Department:   dept,
+			Section:      sec,
+			TotalAbsent:  cntMap[r.EmployeeID],
+			Employee:     emp,
+		})
+	}
+	return rows, nil
+}
+
+// ExportContinuousAbsentExcel godoc
+//
+//	@Summary      Export continuous absent to Excel
+//	@Description  Export continuously absent employees (streak from last present up to given date) to Excel
+//	@Tags         Attendance
+//	@Security     BearerAuth
+//	@Produce      application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+//	@Param        date query string false "Date (YYYY-MM-DD) - continuous up to this date, defaults to today"
+//	@Param        end_date query string false "Alias for date"
+//	@Param        start_date query string false "Alias for date"
+//	@Param        company_id query string false "Filter by company"
+//	@Param        department_id query string false "Filter by department"
+//	@Param        section_id query string false "Filter by section"
+//	@Param        designation_id query string false "Filter by designation"
+//	@Param        line_id query string false "Filter by line"
+//	@Param        group_id query string false "Filter by group"
+//	@Param        shift_id query string false "Filter by shift"
+//	@Param        employee_id query string false "Filter by employee"
+//	@Param        min_absent query int false "Minimum continuous absent days"
+//	@Success      200  {file}  binary
+//	@Router       /attendance/continuous-absent/export/excel [get]
+func (h *AttendanceHandler) ExportContinuousAbsentExcel(c *gin.Context) {
+	endDate := c.Query("date")
+	if endDate == "" {
+		endDate = c.Query("end_date")
+	}
+	if endDate == "" {
+		endDate = c.Query("start_date")
+	}
+	if endDate == "" {
+		endDate = time.Now().Format("2006-01-02")
+	}
+	companyFilter := c.Query("company_id")
+	departmentFilter := c.Query("department_id")
+	sectionFilter := c.Query("section_id")
+	designationFilter := c.Query("designation_id")
+	lineFilter := c.Query("line_id")
+	groupFilter := c.Query("group_id")
+	shiftFilter := c.Query("shift_id")
+	employeeFilter := c.Query("employee_id")
+	minAbsentStr := c.Query("min_absent")
+	minAbsent, _ := strconv.Atoi(minAbsentStr)
+
+	var company models.Company
+	if companyFilter != "" {
+		database.DB.Where("id = ?", companyFilter).First(&company)
+	}
+	if company.CompanyNameEn == "" {
+		database.DB.First(&company)
+	}
+
+	rows, err := h.buildContinuousAbsentRows(endDate, companyFilter, departmentFilter, sectionFilter, designationFilter, lineFilter, groupFilter, shiftFilter, employeeFilter, minAbsent)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	f := excelize.NewFile()
+	sheet := "Continuous Absent"
+	index, _ := f.GetSheetIndex("Sheet1")
+	f.SetActiveSheet(index)
+	f.SetSheetName("Sheet1", sheet)
+
+	nCols := 6
+	cols := []struct {
+		header string
+		width  float64
+	}{
+		{"Sl", 6},
+		{"Employee ID", 10},
+		{"Name", 29},
+		{"Designation", 17},
+		{"Status", 9},
+		{"Continuous Absent", 11},
+	}
+
+	borderColor := "808080"
+	thinBorder := []excelize.Border{
+		{Type: "left", Color: borderColor, Style: 1},
+		{Type: "top", Color: borderColor, Style: 1},
+		{Type: "bottom", Color: borderColor, Style: 1},
+		{Type: "right", Color: borderColor, Style: 1},
+	}
+
+	companyNameStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 20, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	normalCenter, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
+	})
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+		Border:    thinBorder,
+	})
+	dataCenter, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+	dataLeft, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Vertical: "center", WrapText: true},
+	})
+	redStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "FF0000"},
+		Border:    thinBorder,
+		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true},
+	})
+
+	companyName := company.CompanyNameEn
+	if companyName == "" {
+		companyName = "Company Name"
+	}
+	companyAddress := company.AddressEn
+	if companyAddress == "" {
+		companyAddress = "Company Address"
+	}
+
+	dateDisplay := formatDateDDMMYYYY(endDate)
+	endCol := colNameAttendance(nCols)
+
+	f.SetCellValue(sheet, "A1", companyName)
+	f.MergeCell(sheet, "A1", endCol+"1")
+	f.SetCellStyle(sheet, "A1", endCol+"1", companyNameStyle)
+	f.SetRowHeight(sheet, 1, 32)
+
+	f.SetCellValue(sheet, "A2", companyAddress)
+	f.MergeCell(sheet, "A2", endCol+"2")
+	f.SetCellStyle(sheet, "A2", endCol+"2", normalCenter)
+	f.SetRowHeight(sheet, 2, 20)
+
+	f.SetCellValue(sheet, "A3", "Absent Report")
+	f.MergeCell(sheet, "A3", endCol+"3")
+	f.SetCellStyle(sheet, "A3", endCol+"3", normalCenter)
+	f.SetRowHeight(sheet, 3, 20)
+
+	f.SetCellValue(sheet, "A4", dateDisplay)
+	f.MergeCell(sheet, "A4", endCol+"4")
+	f.SetCellStyle(sheet, "A4", endCol+"4", normalCenter)
+	f.SetRowHeight(sheet, 4, 20)
+
+	for i, c := range cols {
+		cell := colNameAttendance(i+1) + "5"
+		f.SetCellValue(sheet, cell, c.header)
+		f.SetCellStyle(sheet, cell, cell, headerStyle)
+		f.SetColWidth(sheet, colNameAttendance(i+1), colNameAttendance(i+1), c.width)
+	}
+	f.SetRowHeight(sheet, 5, 36)
+
+	for rowIdx, sr := range rows {
+		row := rowIdx + 6
+		svc := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+		}
+		svl := func(c int, v string) {
+			f.SetCellValue(sheet, colNameAttendance(c)+strconv.Itoa(row), v)
+			f.SetCellStyle(sheet, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+		}
+		svc(1, fmt.Sprintf("%d", rowIdx+1))
+		svc(2, sr.EmployeeID)
+		svl(3, sr.EmployeeName)
+		svl(4, sr.Designation)
+		f.SetCellValue(sheet, colNameAttendance(5)+strconv.Itoa(row), "Absent")
+		f.SetCellStyle(sheet, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyle)
+		f.SetCellValue(sheet, colNameAttendance(6)+strconv.Itoa(row), sr.TotalAbsent)
+		f.SetCellStyle(sheet, colNameAttendance(6)+strconv.Itoa(row), colNameAttendance(6)+strconv.Itoa(row), redStyle)
+		f.SetRowHeight(sheet, row, 25)
+	}
+
+	lastRow := len(rows) + 5
+	footerRow := lastRow + 2
+	footerStyle, _ := f.NewStyle(&excelize.Style{
+		Font:      &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"},
+		Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"},
+	})
+	f.SetCellValue(sheet, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Continuously Absent Employees: %d", len(rows)))
+	f.MergeCell(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
+	f.SetCellStyle(sheet, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
+	f.SetRowHeight(sheet, footerRow, 22)
+
+	fitToPage := true
+	f.SetSheetProps(sheet, &excelize.SheetPropsOptions{
+		FitToPage: &fitToPage,
+	})
+	orientation := "portrait"
+	paperSize := 9
+	fitWidth := 1
+	fitHeight := 0
+	f.SetPageLayout(sheet, &excelize.PageLayoutOptions{
+		Size:        &paperSize,
+		Orientation: &orientation,
+		FitToWidth:  &fitWidth,
+		FitToHeight: &fitHeight,
+	})
+
+	addGroupedContinuousAbsentSheet(f, "Department Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+		if sr.Department != "" {
+			return sr.Department
+		}
+		return "-"
+	})
+	addGroupedContinuousAbsentSheet(f, "Section Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+		if sr.Section != "" {
+			return sr.Section
+		}
+		return "-"
+	})
+	addGroupedContinuousAbsentSheet(f, "Designation Wise", companyName, companyAddress, dateDisplay, rows, func(sr absentSummaryRow) string {
+		if sr.Designation != "" {
+			return sr.Designation
+		}
+		return "-"
+	})
+
+	for _, s := range f.GetSheetList() {
+		fitToPage := false
+		f.SetSheetProps(s, &excelize.SheetPropsOptions{
+			FitToPage: &fitToPage,
+		})
+		orientation := "portrait"
+		paperSize := 9
+		f.SetPageLayout(s, &excelize.PageLayoutOptions{
+			Orientation: &orientation,
+			Size:        &paperSize,
+		})
+		f.SetPageMargins(s, &excelize.PageLayoutMarginsOptions{
+			Left:   func(f float64) *float64 { return &f }(0.7),
+			Right:  func(f float64) *float64 { return &f }(0.7),
+			Top:    func(f float64) *float64 { return &f }(0.75),
+			Bottom: func(f float64) *float64 { return &f }(0.75),
+			Header: func(f float64) *float64 { return &f }(0.3),
+			Footer: func(f float64) *float64 { return &f }(0.3),
+		})
+		f.SetSheetView(s, -1, &excelize.ViewOptions{ShowGridLines: func(b bool) *bool { return &b }(false)})
+	}
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	parsedDate2, _ := time.Parse("2006-01-02", endDate)
+	formattedDate2 := parsedDate2.Format("02-01-2006")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=\"Continuous Absent %s.xlsx\"", formattedDate2))
+	f.Write(c.Writer)
+}
+
+func addGroupedContinuousAbsentSheet(f *excelize.File, sheetName, companyName, companyAddress, dateDisplay string, rows []absentSummaryRow, groupFn func(absentSummaryRow) string) {
+	f.NewSheet(sheetName)
+	nCols := 6
+	cols := []struct {
+		header string
+		width  float64
+	}{
+		{"Sl", 6},
+		{"Employee ID", 10},
+		{"Name", 29},
+		{"Designation", 17},
+		{"Status", 9},
+		{"Continuous Absent", 11},
+	}
+	thinBorder := []excelize.Border{
+		{Type: "left", Color: "808080", Style: 1},
+		{Type: "top", Color: "808080", Style: 1},
+		{Type: "bottom", Color: "808080", Style: 1},
+		{Type: "right", Color: "808080", Style: 1},
+	}
+	companyNameStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 20, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
+	normalCenter, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
+	headerStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true}, Border: thinBorder})
+	dataCenter, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"}, Border: thinBorder, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true}})
+	dataLeft, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"}, Border: thinBorder, Alignment: &excelize.Alignment{Vertical: "center", WrapText: true}})
+	redStyleG, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "FF0000"}, Border: thinBorder, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true}})
+	groupHeaderStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
+	endCol := colNameAttendance(nCols)
+	f.SetCellValue(sheetName, "A1", companyName)
+	f.MergeCell(sheetName, "A1", endCol+"1")
+	f.SetCellStyle(sheetName, "A1", endCol+"1", companyNameStyle)
+	f.SetRowHeight(sheetName, 1, 32)
+	f.SetCellValue(sheetName, "A2", companyAddress)
+	f.MergeCell(sheetName, "A2", endCol+"2")
+	f.SetCellStyle(sheetName, "A2", endCol+"2", normalCenter)
+	f.SetRowHeight(sheetName, 2, 20)
+	f.SetCellValue(sheetName, "A3", sheetName+" Absent Report")
+	f.MergeCell(sheetName, "A3", endCol+"3")
+	f.SetCellStyle(sheetName, "A3", endCol+"3", normalCenter)
+	f.SetRowHeight(sheetName, 3, 20)
+	f.SetCellValue(sheetName, "A4", dateDisplay)
+	f.MergeCell(sheetName, "A4", endCol+"4")
+	f.SetCellStyle(sheetName, "A4", endCol+"4", normalCenter)
+	f.SetRowHeight(sheetName, 4, 20)
+	for i, c := range cols {
+		cell := colNameAttendance(i+1) + "5"
+		f.SetCellValue(sheetName, cell, c.header)
+		f.SetCellStyle(sheetName, cell, cell, headerStyle)
+		f.SetColWidth(sheetName, colNameAttendance(i+1), colNameAttendance(i+1), c.width)
+	}
+	f.SetRowHeight(sheetName, 5, 36)
+	grouped := make(map[string][]absentSummaryRow)
+	var groupOrder []string
+	for _, r := range rows {
+		name := groupFn(r)
+		if name == "" {
+			name = "-"
+		}
+		if _, ok := grouped[name]; !ok {
+			groupOrder = append(groupOrder, name)
+		}
+		grouped[name] = append(grouped[name], r)
+	}
+	row := 6
+	sl := 1
+	for _, groupName := range groupOrder {
+		list := grouped[groupName]
+		f.SetCellValue(sheetName, "A"+strconv.Itoa(row), groupName+" ("+fmt.Sprintf("%d", len(list))+")")
+		f.MergeCell(sheetName, "A"+strconv.Itoa(row), endCol+strconv.Itoa(row))
+		f.SetCellStyle(sheetName, "A"+strconv.Itoa(row), endCol+strconv.Itoa(row), groupHeaderStyle)
+		f.SetRowHeight(sheetName, row, 22)
+		row++
+		for _, sr := range list {
+			svc := func(c int, v string) {
+				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
+				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+			}
+			svl := func(c int, v string) {
+				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
+				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+			}
+			svc(1, fmt.Sprintf("%d", sl))
+			svc(2, sr.EmployeeID)
+			svl(3, sr.EmployeeName)
+			svl(4, sr.Designation)
+			f.SetCellValue(sheetName, colNameAttendance(5)+strconv.Itoa(row), "Absent")
+			f.SetCellStyle(sheetName, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyleG)
+			f.SetCellValue(sheetName, colNameAttendance(6)+strconv.Itoa(row), sr.TotalAbsent)
+			f.SetCellStyle(sheetName, colNameAttendance(6)+strconv.Itoa(row), colNameAttendance(6)+strconv.Itoa(row), redStyleG)
+			sl++
+			f.SetRowHeight(sheetName, row, 25)
+			row++
+		}
+	}
+	footerRow := row + 1
+	footerStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
+	f.SetCellValue(sheetName, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Continuously Absent Employees: %d", len(rows)))
+	f.MergeCell(sheetName, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
+	f.SetCellStyle(sheetName, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
+	f.SetRowHeight(sheetName, footerRow, 22)
+	fitToPage := true
+	f.SetSheetProps(sheetName, &excelize.SheetPropsOptions{
+		FitToPage: &fitToPage,
+	})
+	orientation := "portrait"
+	paperSize := 9
+	fitWidth := 1
+	fitHeight := 0
+	f.SetPageLayout(sheetName, &excelize.PageLayoutOptions{
+		Size:        &paperSize,
+		Orientation: &orientation,
+		FitToWidth:  &fitWidth,
+		FitToHeight: &fitHeight,
+	})
 }
 
 // ExportMissingAttendanceExcel godoc
@@ -3233,17 +3765,19 @@ func (h *AttendanceHandler) buildLastContinuousAbsentMap(startDate, endDate, com
 func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddress, dateDisplay string, rows []absentSummaryRow, groupFn func(absentSummaryRow) string) {
 	f.NewSheet(sheetName)
 
-	nCols := 6
+	nCols := 8
 	cols := []struct {
 		header string
 		width  float64
 	}{
-		{"Sl", 8},
-		{"Employee ID", 12},
-		{"Name", 28},
-		{"Designation", 22},
-		{"Status", 12},
+		{"Sl", 6},
+		{"Employee ID", 13},
+		{"Name", 24},
+		{"Designation", 18},
+		{"Department", 16},
+		{"Section", 16},
 		{"Total Absent", 12},
+		{"Absent Dates (dd/mm/yyyy)", 38},
 	}
 
 	thinBorder := []excelize.Border{
@@ -3332,10 +3866,13 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 			svc(2, sr.EmployeeID)
 			svl(3, sr.EmployeeName)
 			svl(4, sr.Designation)
-			f.SetCellValue(sheetName, colNameAttendance(5)+strconv.Itoa(row), "Absent")
-			f.SetCellStyle(sheetName, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyleG)
-			f.SetCellValue(sheetName, colNameAttendance(6)+strconv.Itoa(row), sr.TotalAbsent)
-			f.SetCellStyle(sheetName, colNameAttendance(6)+strconv.Itoa(row), colNameAttendance(6)+strconv.Itoa(row), redStyleG)
+			svl(5, sr.Department)
+			svl(6, sr.Section)
+			f.SetCellValue(sheetName, colNameAttendance(7)+strconv.Itoa(row), sr.TotalAbsent)
+			f.SetCellStyle(sheetName, colNameAttendance(7)+strconv.Itoa(row), colNameAttendance(7)+strconv.Itoa(row), redStyleG)
+			wrapLeft, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Size: 10, Family: "Calibri", Color: "000000"}, Border: thinBorder, Alignment: &excelize.Alignment{Vertical: "center", WrapText: true}})
+			f.SetCellValue(sheetName, colNameAttendance(8)+strconv.Itoa(row), sr.AbsentDates)
+			f.SetCellStyle(sheetName, colNameAttendance(8)+strconv.Itoa(row), colNameAttendance(8)+strconv.Itoa(row), wrapLeft)
 
 			sl++
 			f.SetRowHeight(sheetName, row, 25)
@@ -3364,6 +3901,122 @@ func addGroupedAbsentSheet(f *excelize.File, sheetName, companyName, companyAddr
 		Orientation: &orientation,
 		FitToWidth:  &fitWidth,
 		FitToHeight: &fitHeight,
+	})
+}
+
+func addGroupedAbsentSheetDaily(f *excelize.File, sheetName, companyName, companyAddress, dateDisplay string, rows []absentSummaryRow, groupFn func(absentSummaryRow) string) {
+	f.NewSheet(sheetName)
+	nCols := 6
+	cols := []struct {
+		header string
+		width  float64
+	}{
+		{"Sl", 8},
+		{"Employee ID", 12},
+		{"Name", 28},
+		{"Designation", 22},
+		{"Status", 12},
+		{"Total Absent", 12},
+	}
+	thinBorder := []excelize.Border{
+		{Type: "left", Color: "808080", Style: 1},
+		{Type: "top", Color: "808080", Style: 1},
+		{Type: "bottom", Color: "808080", Style: 1},
+		{Type: "right", Color: "808080", Style: 1},
+	}
+	companyNameStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 20, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
+	normalCenter, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"}})
+	headerStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true}, Border: thinBorder})
+	dataCenter, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"}, Border: thinBorder, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true}})
+	dataLeft, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Size: 11, Family: "Calibri", Color: "000000"}, Border: thinBorder, Alignment: &excelize.Alignment{Vertical: "center", WrapText: true}})
+	redStyleG, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "FF0000"}, Border: thinBorder, Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center", WrapText: true}})
+	groupHeaderStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
+	endCol := colNameAttendance(nCols)
+	f.SetCellValue(sheetName, "A1", companyName)
+	f.MergeCell(sheetName, "A1", endCol+"1")
+	f.SetCellStyle(sheetName, "A1", endCol+"1", companyNameStyle)
+	f.SetRowHeight(sheetName, 1, 32)
+	f.SetCellValue(sheetName, "A2", companyAddress)
+	f.MergeCell(sheetName, "A2", endCol+"2")
+	f.SetCellStyle(sheetName, "A2", endCol+"2", normalCenter)
+	f.SetRowHeight(sheetName, 2, 20)
+	f.SetCellValue(sheetName, "A3", sheetName+" ABSENT REPORT")
+	f.MergeCell(sheetName, "A3", endCol+"3")
+	f.SetCellStyle(sheetName, "A3", endCol+"3", normalCenter)
+	f.SetRowHeight(sheetName, 3, 20)
+	f.SetCellValue(sheetName, "A4", "Date: "+dateDisplay)
+	f.MergeCell(sheetName, "A4", endCol+"4")
+	f.SetCellStyle(sheetName, "A4", endCol+"4", normalCenter)
+	f.SetRowHeight(sheetName, 4, 20)
+	for i, c := range cols {
+		cell := colNameAttendance(i+1) + "5"
+		f.SetCellValue(sheetName, cell, c.header)
+		f.SetCellStyle(sheetName, cell, cell, headerStyle)
+		f.SetColWidth(sheetName, colNameAttendance(i+1), colNameAttendance(i+1), c.width)
+	}
+	f.SetRowHeight(sheetName, 5, 36)
+	grouped := make(map[string][]absentSummaryRow)
+	var groupOrder []string
+	for _, r := range rows {
+		name := groupFn(r)
+		if name == "" {
+			name = "-"
+		}
+		if _, ok := grouped[name]; !ok {
+			groupOrder = append(groupOrder, name)
+		}
+		grouped[name] = append(grouped[name], r)
+	}
+	row := 6
+	sl := 1
+	for _, groupName := range groupOrder {
+		list := grouped[groupName]
+		f.SetCellValue(sheetName, "A"+strconv.Itoa(row), groupName+" ("+fmt.Sprintf("%d", len(list))+")")
+		f.MergeCell(sheetName, "A"+strconv.Itoa(row), endCol+strconv.Itoa(row))
+		f.SetCellStyle(sheetName, "A"+strconv.Itoa(row), endCol+strconv.Itoa(row), groupHeaderStyle)
+		f.SetRowHeight(sheetName, row, 22)
+		row++
+		for _, sr := range list {
+			svc := func(c int, v string) {
+				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
+				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataCenter)
+			}
+			svl := func(c int, v string) {
+				f.SetCellValue(sheetName, colNameAttendance(c)+strconv.Itoa(row), v)
+				f.SetCellStyle(sheetName, colNameAttendance(c)+strconv.Itoa(row), colNameAttendance(c)+strconv.Itoa(row), dataLeft)
+			}
+			svc(1, fmt.Sprintf("%d", sl))
+			svc(2, sr.EmployeeID)
+			svl(3, sr.EmployeeName)
+			svl(4, sr.Designation)
+			f.SetCellValue(sheetName, colNameAttendance(5)+strconv.Itoa(row), "Absent")
+			f.SetCellStyle(sheetName, colNameAttendance(5)+strconv.Itoa(row), colNameAttendance(5)+strconv.Itoa(row), redStyleG)
+			f.SetCellValue(sheetName, colNameAttendance(6)+strconv.Itoa(row), sr.TotalAbsent)
+			f.SetCellStyle(sheetName, colNameAttendance(6)+strconv.Itoa(row), colNameAttendance(6)+strconv.Itoa(row), redStyleG)
+			sl++
+			f.SetRowHeight(sheetName, row, 25)
+			row++
+		}
+	}
+	footerRow := row + 1
+	footerStyle, _ := f.NewStyle(&excelize.Style{Font: &excelize.Font{Bold: true, Size: 11, Family: "Calibri", Color: "000000"}, Alignment: &excelize.Alignment{Horizontal: "left", Vertical: "center"}})
+	f.SetCellValue(sheetName, "A"+strconv.Itoa(footerRow), fmt.Sprintf("Total Absent Employees: %d", len(rows)))
+	f.MergeCell(sheetName, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow))
+	f.SetCellStyle(sheetName, "A"+strconv.Itoa(footerRow), endCol+strconv.Itoa(footerRow), footerStyle)
+	f.SetRowHeight(sheetName, footerRow, 22)
+	fitToPage := true
+	f.SetSheetProps(sheetName, &excelize.SheetPropsOptions{
+		FitToPage: &fitToPage,
+	})
+	orientation2 := "portrait"
+	paperSize2 := 9
+	fitWidth2 := 1
+	fitHeight2 := 0
+	f.SetPageLayout(sheetName, &excelize.PageLayoutOptions{
+		Size:        &paperSize2,
+		Orientation: &orientation2,
+		FitToWidth:  &fitWidth2,
+		FitToHeight: &fitHeight2,
 	})
 }
 

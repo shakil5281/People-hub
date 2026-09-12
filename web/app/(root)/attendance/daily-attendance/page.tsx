@@ -294,21 +294,28 @@ export default function DailyAttendancePage() {
 
   const buildAbsentExportParams = () => {
     const date = filters.date || today
-    return { start_date: date, end_date: date }
+    const params: Record<string, string> = { date }
+    const filterKeys = ["company_id", "department_id", "section_id", "designation_id", "line_id", "group_id", "shift_id", "employee_id"]
+    for (const key of filterKeys) {
+      if (filters[key]) params[key] = filters[key]
+    }
+    return params
   }
 
   const handleExportAbsent = async () => {
     setExportingAbsent(true)
     try {
-      const res = await attendanceApi.exportAbsentExcel(buildAbsentExportParams())
+      const res = await attendanceApi.exportContinuousAbsentExcel(buildAbsentExportParams())
       const blob = new Blob([res.data], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" })
       const url = URL.createObjectURL(blob)
       const a = document.createElement("a")
       a.href = url
+      document.body.appendChild(a)
       const dateStr = filters.date || today
       const formattedDate = dateStr.split('-').reverse().join('-')
-      a.download = `Absent List ${formattedDate}.xlsx`
+      a.download = `Continuous Absent ${formattedDate}.xlsx`
       a.click()
+      document.body.removeChild(a)
       URL.revokeObjectURL(url)
     } catch {
       setError("Failed to export absent report")

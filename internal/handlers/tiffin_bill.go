@@ -18,13 +18,13 @@ func NewTiffinBillHandler(tiffinBillRepo *repository.TiffinBillRepository) *Tiff
 }
 
 type CreateTiffinBillRequest struct {
-	CompanyID  string  "json:\"company_id\" binding:\"required\""
-	EmployeeID string  "json:\"employee_id\" binding:\"required\""
-	Date       string  "json:\"date\" binding:\"required\""
-	Amount     float64 "json:\"amount\""
-	Month      int     "json:\"month\" binding:\"required\""
-	Year       int     "json:\"year\" binding:\"required\""
-	Remarks    string  "json:\"remarks\""
+	CompanyID  string  `json:"company_id" binding:"required"`
+	EmployeeID string  `json:"employee_id" binding:"required"`
+	Date       string  `json:"date" binding:"required"`
+	Amount     float64 `json:"amount"`
+	Month      int     `json:"month" binding:"required"`
+	Year       int     `json:"year" binding:"required"`
+	Remarks    string  `json:"remarks"`
 }
 
 // ListTiffinBills godoc
@@ -91,6 +91,7 @@ func (h *TiffinBillHandler) Create(c *gin.Context) {
 		return
 	}
 
+	uid := c.GetString("user_id")
 	item := &models.TiffinBill{
 		CompanyID:  req.CompanyID,
 		EmployeeID: req.EmployeeID,
@@ -100,7 +101,7 @@ func (h *TiffinBillHandler) Create(c *gin.Context) {
 		Year:       req.Year,
 		Status:     "pending",
 		Remarks:    req.Remarks,
-		CreatedBy:  c.GetString("user_id"),
+		CreatedBy:  &uid,
 	}
 
 	if err := h.tiffinBillRepo.Create(item); err != nil {

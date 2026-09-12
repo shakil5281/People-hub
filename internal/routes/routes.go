@@ -343,6 +343,7 @@ func Setup(
 		attendance.GET("/custom", attendanceHandler.CustomAttendance)
 		attendance.GET("/absent", attendanceHandler.AbsentAttendance)
 		attendance.GET("/absent/export/excel", attendanceHandler.ExportAbsentExcel)
+		attendance.GET("/continuous-absent/export/excel", attendanceHandler.ExportContinuousAbsentExcel)
 		attendance.GET("/missing/export/excel", attendanceHandler.ExportMissingAttendanceExcel)
 
 		// Night Bill
