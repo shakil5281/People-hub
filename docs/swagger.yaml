@@ -964,7 +964,7 @@ info:
     name: MIT
     url: https://opensource.org/licenses/MIT
   title: PeopleHub API
-  version: "1.1"
+  version: "1.4.0"
 paths:
   /attendance:
     get:
