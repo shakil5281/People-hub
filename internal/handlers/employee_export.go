@@ -38,9 +38,10 @@ func colName(n int) string {
 //	@Param        floor_id query string false "Filter by floor"
 //	@Param        status query string false "Filter by status"
 //	@Param        employee_id query string false "Search by employee ID"
-//	@Param        gender query string false "Filter by gender"
-//	@Param        blood_group query string false "Filter by blood group"
-//	@Param        min_salary query string false "Minimum gross salary"
+// @Param        gender query string false "Filter by gender"
+// @Param        blood_group query string false "Filter by blood group"
+// @Param        religion query string false "Filter by religion"
+// @Param        min_salary query string false "Minimum gross salary"
 //	@Param        max_salary query string false "Maximum gross salary"
 //	@Success      200  {file}  binary
 //	@Router       /employees/export/excel [get]
@@ -99,6 +100,9 @@ func (h *EmployeeHandler) ExportExcel(c *gin.Context) {
 	}
 	if v := c.Query("blood_group"); v != "" {
 		query = query.Where("blood_group = ?", v)
+	}
+	if v := c.Query("religion"); v != "" {
+		query = query.Where("religion = ?", v)
 	}
 	if v := c.Query("employee_type"); v != "" {
 		query = query.Where("employee_type = ?", v)

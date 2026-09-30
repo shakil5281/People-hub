@@ -85,9 +85,10 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 
 	const (
 		employeesPerPage = 6
-		frontW           = 54.0
+		frontW           = 53.0
 		backW            = 44.0
-		cardH            = 84.0
+		cardH            = 83.0
+		frontH           = 83.0
 		startX           = 2.0
 		startY           = 5.0
 		gapPairX         = 6.0
@@ -112,12 +113,12 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 			row := idx / 2
 			colInRow := idx % 2
 
-			pairW := frontW + backW // 90.0 mm total pair width
+			pairW := frontW + backW // 97.0 mm total pair width
 			frontX := startX + float64(colInRow)*(pairW+gapPairX)
-			backX := frontX + frontW // ZERO center gap between Front (52mm) and Back (38mm)!
+			backX := frontX + frontW // ZERO center gap between Front (53mm) and Back (44mm)!
 			cardY := startY + float64(row)*(cardH+gapY)
 
-			drawCardFront(pdf, frontX, cardY, frontW, cardH, emp, font, isBn)
+			drawCardFront(pdf, frontX, cardY, frontW, frontH, emp, font, isBn)
 			drawCardBack(pdf, backX, cardY, backW, cardH, emp, font, isBn)
 		}
 	}
@@ -476,11 +477,11 @@ func drawCardFront(pdf *gofpdf.Fpdf, x, y, w, h float64, emp models.Employee, fo
 	leftX := x + 3.0
 	rightX := x + w - lineWidth - 3.0
 
-	// Draw Signature Images above lines if available
+	// Draw Signature Images above lines if available — holder signature 8.0mm height with width/height fit
 	if emp.SignatureURL != "" {
 		sigPath := resolveImagePath(emp.SignatureURL)
 		if _, err := os.Stat(sigPath); err == nil {
-			pdf.ImageOptions(sigPath, rightX+1.0, sigY-5.5, lineWidth-2.0, 5.0, false, gofpdf.ImageOptions{ReadDpi: true}, 0, "")
+			pdf.ImageOptions(sigPath, rightX+1.0, sigY-8.5, lineWidth-2.0, 8.0, false, gofpdf.ImageOptions{ReadDpi: true}, 0, "")
 			if !pdf.Ok() {
 				pdf.SetError(nil)
 			}

@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetFooter, SheetClose } from "@/components/ui/sheet"
-import { statusOptionsEmployee, genderOptions, bloodGroupOptions } from "@/components/data/employee-data"
+import { statusOptionsEmployee, genderOptions, bloodGroupOptions, religionOptions } from "@/components/data/employee-data"
 import {
   employeeApi,
   companyApi,
@@ -618,6 +618,22 @@ export default function EmployeesPage() {
           {bloodGroupOptions.map((b) => (
             <option key={b.value} value={b.value}>
               {b.label}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <label className="text-xs font-medium text-muted-foreground">Religion</label>
+        <select
+          value={filters.religion || ""}
+          onChange={(e) => setFilter("religion", e.target.value)}
+          className={selectClass}
+        >
+          <option value="">— All —</option>
+          {religionOptions.map((r) => (
+            <option key={r.value} value={r.value}>
+              {r.label}
             </option>
           ))}
         </select>

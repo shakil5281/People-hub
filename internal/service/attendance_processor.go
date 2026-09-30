@@ -178,6 +178,17 @@ func (p *AttendanceProcessor) ProcessDateRange(startDate, endDate, companyID str
 		for _, emp := range eligible {
 			shift := p.resolveShiftFromContext(&emp, date, ctx)
 			window := attendanceWindowFor(attendanceDate, shift)
+			// Rule: if next day has Temporary Shift, the general day before uses 21h window (24h-3h)
+			// Temporary shift itself stays 24h; only the general day before temp is shortened
+			nextDateStr := attendanceDate.AddDate(0, 0, 1).Format("2006-01-02")
+			if _, hasNextTemp := ctx.tempShiftByKey[emp.EmployeeID+"|"+nextDateStr]; hasNextTemp {
+				// check current day is general (no temp/roster on this date)
+				if _, hasCurrTemp := ctx.tempShiftByKey[emp.EmployeeID+"|"+date]; !hasCurrTemp {
+					if _, hasCurrRoster := ctx.rosterByKey[emp.EmployeeID+"|"+date]; !hasCurrRoster {
+						window.End = window.Start.Add(21*time.Hour - time.Second)
+					}
+				}
+			}
 			punches := ctx.punchByBadge[emp.PunchNumber]
 			windowed := filterPunchesInWindow(punches, window)
 			dayLogCount += len(windowed)
@@ -194,6 +205,15 @@ func (p *AttendanceProcessor) ProcessDateRange(startDate, endDate, companyID str
 
 			shift := p.resolveShiftFromContext(emp, date, ctx)
 			window := attendanceWindowFor(attendanceDate, shift)
+			// Rule: if next day has Temporary Shift, the general day before uses 21h window (24h-3h)
+			nextDateStr := attendanceDate.AddDate(0, 0, 1).Format("2006-01-02")
+			if _, hasNextTemp := ctx.tempShiftByKey[emp.EmployeeID+"|"+nextDateStr]; hasNextTemp {
+				if _, hasCurrTemp := ctx.tempShiftByKey[emp.EmployeeID+"|"+date]; !hasCurrTemp {
+					if _, hasCurrRoster := ctx.rosterByKey[emp.EmployeeID+"|"+date]; !hasCurrRoster {
+						window.End = window.Start.Add(21*time.Hour - time.Second)
+					}
+				}
+			}
 			allPunches := ctx.punchByBadge[emp.PunchNumber]
 			windowedPunches := filterPunchesInWindow(allPunches, window)
 
@@ -530,8 +550,12 @@ func (p *AttendanceProcessor) buildContext(dates []string, startDate, endDate, c
 		ctx.missingByKey[key] = &cp
 	}
 
-	// 7. Temporary shifts — single range query
-	allTempShifts, err := p.tempShiftRepo.ListByCompanyAndDateRange(companyID, startDate, endDate)
+	// 7. Temporary shifts — range query extended by 1 day for before-temp 21h window lookahead
+	lookaheadEnd := endDate
+	if t, err2 := time.Parse("2006-01-02", endDate); err2 == nil {
+		lookaheadEnd = t.AddDate(0, 0, 1).Format("2006-01-02")
+	}
+	allTempShifts, err := p.tempShiftRepo.ListByCompanyAndDateRange(companyID, startDate, lookaheadEnd)
 	if err != nil {
 		return nil, fmt.Errorf("load temp shifts: %w", err)
 	}
@@ -845,7 +869,11 @@ func otHoursOnSpecialDay(totalHours *string) int {
 		return 0
 	}
 	if m, ok := utils.ParseHHMMToMinutes(*totalHours); ok && m > 0 {
-		return m / 60
+		hours := m / 60
+		if m%60 >= 50 {
+			hours++
+		}
+		return hours
 	}
 	return 0
 }

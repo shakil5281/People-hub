@@ -398,6 +398,7 @@ func validateAccount(accountType, accountNumber string) string {
 // @Param        employee_id     query string false "Filter by employee ID (partial match)"
 // @Param        gender          query string false "Filter by gender"
 // @Param        blood_group     query string false "Filter by blood group"
+// @Param        religion        query string false "Filter by religion"
 // @Param        employee_type   query string false "Filter by employee type"
 // @Param        min_salary      query string false "Minimum gross salary"
 // @Param        max_salary      query string false "Maximum gross salary"
@@ -448,6 +449,9 @@ func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 	}
 	if v := c.Query("blood_group"); v != "" {
 		query = query.Where("blood_group = ?", v)
+	}
+	if v := c.Query("religion"); v != "" {
+		query = query.Where("religion = ?", v)
 	}
 	if v := c.Query("employee_type"); v != "" {
 		query = query.Where("employee_type = ?", v)
