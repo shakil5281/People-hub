@@ -602,6 +602,7 @@ export const temporaryShiftApi = {
   bulkCreate: (data: Record<string, unknown>) => api.post("/temporary-shifts/bulk", data),
   update: (id: string, data: Record<string, unknown>) => api.put(`/temporary-shifts/${id}`, data),
   delete: (id: string) => api.delete(`/temporary-shifts/${id}`),
+  bulkDelete: (ids: string[]) => api.post("/temporary-shifts/bulk-delete", { ids }),
 }
 
 export const rosterApi = {

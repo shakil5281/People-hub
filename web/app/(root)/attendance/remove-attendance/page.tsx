@@ -99,6 +99,7 @@ export default function RemoveAttendancePage() {
       if (f?.group_id || filters.group_id) params.group_id = f?.group_id || filters.group_id
       if (f?.shift_id || filters.shift_id) params.shift_id = f?.shift_id || filters.shift_id
       if (f?.status || filters.status) params.status = f?.status || filters.status
+      if (f?.employee_id || filters.employee_id) params.employee_id = f?.employee_id || filters.employee_id
       const { data: res } = await attendanceApi.list(params)
       setData(Array.isArray(res.data) ? res.data : [])
       setTotal(res.total ?? 0)
@@ -201,7 +202,15 @@ export default function RemoveAttendancePage() {
       header: "Designation",
       cell: ({ row }) => row.original.designation || "-",
     },
-    { accessorKey: "date", header: "Date", cell: ({ row }) => row.original.date?.split("-").reverse().join("-") },
+    {
+      accessorKey: "date",
+      header: "Date",
+      cell: ({ row }) => {
+        if (!row.original.date) return "-"
+        const d = new Date(row.original.date)
+        return isNaN(d.getTime()) ? row.original.date : format(d, "dd-MM-yyyy")
+      },
+    },
     { accessorKey: "check_in", header: "In", cell: ({ row }) => formatCheck(row.original.check_in) },
     { accessorKey: "check_out", header: "Out", cell: ({ row }) => formatCheck(row.original.check_out) },
     {
@@ -224,6 +233,7 @@ export default function RemoveAttendancePage() {
     { key: "line_id", label: "Line", type: "select", options: lines.map((l) => ({ value: l.id, label: l.name })) },
     { key: "group_id", label: "Group", type: "select", options: groups.map((g) => ({ value: g.id, label: g.name })) },
     { key: "shift_id", label: "Shift", type: "select", options: shifts.map((s) => ({ value: s.id, label: s.name })) },
+    { key: "employee_id", label: "Employee ID", type: "text", placeholder: "Enter employee code..." },
     {
       key: "status", label: "Status", type: "select", options: [
         { value: "present", label: "Present" },

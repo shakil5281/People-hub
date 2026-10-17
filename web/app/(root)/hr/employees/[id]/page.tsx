@@ -33,7 +33,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { employeeApi } from "@/lib/api"
-import { cn, resolveUploadUrl } from "@/lib/utils"
+import { cn, resolveUploadUrl, formatDate } from "@/lib/utils"
 import { toast } from "sonner"
 
 interface AddressItem {
@@ -1005,7 +1005,7 @@ export default function EmployeeProfilePage() {
                     <InfoRow label="Punch Number" value={employee.punch_number} icon={Fingerprint} />
                     <InfoRow label="Employee Type" value={employee.employee_type} icon={BriefcaseIcon} />
                     <InfoRow label="Grade" value={employee.grade} icon={BadgePercent} />
-                    <InfoRow label="Joining Date" value={employee.joining_date?.split("T")[0]} icon={CalendarDays} />
+                    <InfoRow label="Joining Date" value={formatDate(employee.joining_date)} icon={CalendarDays} />
                     <InfoRow label="Company" value={employee.company?.company_name_en} icon={Building2} />
                     <InfoRow label="Department" value={employee.department?.name} icon={Building2} />
                     <InfoRow label="Section" value={employee.section_ref?.name} icon={Building2} />
@@ -1098,7 +1098,7 @@ export default function EmployeeProfilePage() {
                 <span className="text-xs text-muted-foreground font-medium">Joining Date</span>
                 <span className="text-base font-bold text-foreground mt-1 flex items-center gap-1.5">
                   <CalendarDays className="h-4 w-4 text-primary" />
-                  {employee.joining_date?.split("T")[0] || "—"}
+                  {formatDate(employee.joining_date)}
                 </span>
                 <span className="text-[10px] text-muted-foreground mt-0.5">Start of tenure</span>
               </Card>

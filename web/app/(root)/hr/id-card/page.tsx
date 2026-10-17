@@ -75,12 +75,21 @@ export default function IdCardPage() {
   const [generating, setGenerating] = React.useState(false)
   const [previewing, setPreviewing] = React.useState(false)
   const [selectedRows, setSelectedRows] = React.useState<EmployeeRow[]>([])
+  const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({})
   const [error, setError] = React.useState("")
   const [filters, setFilters] = React.useState<Record<string, string>>({ employee_type: "Regular", status: "active" })
   const [mobileFilterOpen, setMobileFilterOpen] = React.useState(false)
   const [lang, setLang] = React.useState<"en" | "bn">("en")
   const [previewOpen, setPreviewOpen] = React.useState(false)
   const [previewPdfUrl, setPreviewPdfUrl] = React.useState("")
+
+  const parseEmployeeIDs = (val?: string) => {
+    if (!val) return []
+    return val
+      .split(/[\s,;\n\t]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+  }
 
   const [companies, setCompanies] = React.useState<Company[]>([])
   const [departments, setDepartments] = React.useState<Department[]>([])
@@ -173,18 +182,44 @@ export default function IdCardPage() {
 
   const handleApply = async () => {
     setPage(1)
+    setRowSelection({})
     const active = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""))
-    await fetchEmployees(active, 1)
+    const parsedIDs = parseEmployeeIDs(filters.employee_id)
+    let fetchLimit = limit
+    if (parsedIDs.length > limit) {
+      fetchLimit = Math.min(parsedIDs.length + 10, 500)
+      setLimit(fetchLimit)
+    }
+    await fetchEmployees(active, 1, fetchLimit)
   }
 
   const handleReset = async () => {
     setPage(1)
     setLimit(20)
+    setRowSelection({})
     setFilters({ employee_type: "Regular", status: "active" })
     setSections([])
     setDesignations([])
     setLines([])
     await fetchEmployees({ status: "active", employee_type: "Regular" }, 1, 20)
+  }
+
+  const isAllVisibleSelected = data.length > 0 && data.every((r) => !!rowSelection[r.id])
+
+  const handleSelectAllVisible = () => {
+    if (isAllVisibleSelected) {
+      setRowSelection({})
+    } else {
+      const next: Record<string, boolean> = { ...rowSelection }
+      data.forEach((r) => {
+        next[r.id] = true
+      })
+      setRowSelection(next)
+    }
+  }
+
+  const handleClearSelection = () => {
+    setRowSelection({})
   }
 
   const setFilter = (key: string, value: string) => {
@@ -398,8 +433,21 @@ export default function IdCardPage() {
                     </select>
                   </div>
                   <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
-                    <input type="text" value={filters.employee_id || ""} onChange={(e) => setFilter("employee_id", e.target.value)} placeholder="Search by code..." className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
+                      {parseEmployeeIDs(filters.employee_id).length > 1 && (
+                        <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                          {parseEmployeeIDs(filters.employee_id).length} IDs
+                        </span>
+                      )}
+                    </div>
+                    <input
+                      type="text"
+                      value={filters.employee_id || ""}
+                      onChange={(e) => setFilter("employee_id", e.target.value)}
+                      placeholder="e.g. 101, 102, 103"
+                      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs font-medium text-muted-foreground">Gender</label>
@@ -517,8 +565,21 @@ export default function IdCardPage() {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
-              <input type="text" value={filters.employee_id || ""} onChange={(e) => setFilter("employee_id", e.target.value)} placeholder="Search by code..." className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring" />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
+                {parseEmployeeIDs(filters.employee_id).length > 1 && (
+                  <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+                    {parseEmployeeIDs(filters.employee_id).length} IDs
+                  </span>
+                )}
+              </div>
+              <input
+                type="text"
+                value={filters.employee_id || ""}
+                onChange={(e) => setFilter("employee_id", e.target.value)}
+                placeholder="e.g. 101, 102, 103"
+                className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
             </div>
 
             <div className="flex flex-col gap-1.5">
@@ -545,10 +606,89 @@ export default function IdCardPage() {
         </div>
       </div>
 
+      {/* Selection & Quick Download Bar */}
+      {data.length > 0 && (
+        <div className="px-4 lg:px-6">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-muted/40 rounded-lg border">
+            <div className="flex flex-wrap items-center gap-2.5">
+              <span className="text-sm font-medium">
+                {selectedRows.length > 0 ? (
+                  <span className="inline-flex items-center gap-1.5 text-primary font-semibold">
+                    <span className="flex h-2 w-2 rounded-full bg-primary" />
+                    {selectedRows.length} employee{selectedRows.length > 1 ? "s" : ""} selected
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    0 selected — check boxes or click &ldquo;Select All Visible&rdquo;
+                  </span>
+                )}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs font-medium"
+                  onClick={handleSelectAllVisible}
+                >
+                  {isAllVisibleSelected ? "Deselect All Visible" : `Select All Visible (${data.length})`}
+                </Button>
+                {selectedRows.length > 0 && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={handleClearSelection}
+                  >
+                    Clear Selection
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                className="h-8 text-xs font-semibold"
+                disabled={generating || selectedRows.length === 0}
+                onClick={() => handleGenerate("en")}
+              >
+                {generating && lang === "en" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <DownloadIcon className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Download [EN] ({selectedRows.length})
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs font-semibold"
+                disabled={generating || selectedRows.length === 0}
+                onClick={() => handleGenerate("bn")}
+              >
+                {generating && lang === "bn" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <DownloadIcon className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Download [BN] ({selectedRows.length})
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <DataTable
         data={data}
         columns={columns}
+        enableDnd={false}
         enableSelection={true}
+        rowSelection={rowSelection}
+        onRowSelectionChange={setRowSelection}
         onSelectionChange={setSelectedRows}
         serverSide={true}
         page={page}

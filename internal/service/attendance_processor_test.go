@@ -211,3 +211,41 @@ func TestOtHoursOnSpecialDay(t *testing.T) {
 		t.Errorf("otHoursOnSpecialDay(nil): want 0, got %d", got)
 	}
 }
+
+// ─── Wrong-day manual timestamp snap ────────────────────────────────────────
+// Regression test: manual in-time stamped with the entry day (e.g. 2026-10-08
+// 07:55) instead of the attendance date (2026-10-07) made late explode to 1435
+// and total_hours "-". The snap must move wall-clock time onto the date.
+
+func TestSnapManualTimeToDate_Nil(t *testing.T) {
+	if got := snapManualTimeToDate(nil, "2026-10-07"); got != nil {
+		t.Errorf("want nil, got %v", got)
+	}
+}
+
+func TestSnapManualTimeToDate_SameDay_Unchanged(t *testing.T) {
+	in, _ := time.Parse("2006-01-02 15:04:05", "2026-10-07 07:55:00")
+	got := snapManualTimeToDate(&in, "2026-10-07")
+	if got.Format("2006-01-02 15:04:05") != "2026-10-07 07:55:00" {
+		t.Errorf("same-day time must be unchanged, got %v", got)
+	}
+}
+
+func TestSnapManualTimeToDate_NextDay_Snapped(t *testing.T) {
+	in, _ := time.Parse("2006-01-02 15:04:05", "2026-10-08 07:55:00")
+	got := snapManualTimeToDate(&in, "2026-10-07")
+	if got == nil {
+		t.Fatal("want snapped time, got nil")
+	}
+	if got.Format("2006-01-02 15:04:05") != "2026-10-07 07:55:00" {
+		t.Errorf("want 2026-10-07 07:55:00, got %v", got)
+	}
+}
+
+func TestSnapManualTimeToDate_InvalidDate_Unchanged(t *testing.T) {
+	in, _ := time.Parse("2006-01-02 15:04:05", "2026-10-08 07:55:00")
+	got := snapManualTimeToDate(&in, "not-a-date")
+	if got.Format("2006-01-02 15:04:05") != "2026-10-08 07:55:00" {
+		t.Errorf("invalid date must leave time unchanged, got %v", got)
+	}
+}

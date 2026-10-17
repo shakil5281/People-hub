@@ -8,6 +8,8 @@ import { DataTable } from "@/components/table/data-table"
 import type { ColumnDef } from "@tanstack/react-table"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { resolveUploadUrl, formatDate } from "@/lib/utils"
 import { useRouter, useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -79,6 +81,7 @@ interface EmployeeRow {
   floor: string
   joining_date: string
   gross_salary: number
+  image_url?: string
   status: string
   employee_type: string
   gender: string
@@ -93,6 +96,16 @@ interface EmployeeRow {
 }
 
 const columns: ColumnDef<EmployeeRow>[] = [
+  {
+    accessorKey: "photo",
+    header: "Photo",
+    cell: ({ row }) => (
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={resolveUploadUrl(row.original.image_url)} alt={row.original.name_en} />
+        <AvatarFallback>{row.original.name_en?.charAt(0) || "?"}</AvatarFallback>
+      </Avatar>
+    ),
+  },
   { accessorKey: "employee_id", header: "Emp. ID" },
   {
     accessorKey: "name_en",
@@ -118,12 +131,11 @@ const columns: ColumnDef<EmployeeRow>[] = [
     const v = row.original.section as unknown
     return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-"
   }},
-  { accessorKey: "punch_number", header: "Punch No" },
   { accessorKey: "phone", header: "Phone" },
   {
     accessorKey: "joining_date",
     header: "Joining Date",
-    cell: ({ row }) => row.original.joining_date || "-",
+    cell: ({ row }) => formatDate(row.original.joining_date),
   },
   {
     accessorKey: "gross_salary",
@@ -187,9 +199,12 @@ export default function EmployeesPage() {
         try {
           const { data: emp } = await employeeApi.getByCode(params["employee_id"])
           if (emp && (emp as unknown as { employee_id?: string }).employee_id) {
-            const single = emp as unknown as EmployeeRow
-            // map single employee to row shape if needed
-            setData([single as unknown as EmployeeRow])
+            const rawEmp = emp as Record<string, unknown>
+            const single: EmployeeRow = {
+              ...(rawEmp as unknown as EmployeeRow),
+              joining_date: formatDate(rawEmp.joining_date as string),
+            }
+            setData([single])
             setTotal(1)
             setTotalPages(1)
             setError("")

@@ -48,6 +48,14 @@ type UpdateTemporaryShiftRequest struct {
 	Status  string `json:"status"`
 }
 
+type BulkDeleteTemporaryShiftRequest struct {
+	IDs []string `json:"ids" binding:"required"`
+}
+
+// fallbackNote explains shift resolution after a temporary shift is removed:
+// roster shift applies first, otherwise the employee's default shift.
+const tempShiftFallbackNote = "Employees revert to roster shift, otherwise default shift"
+
 func (h *TemporaryShiftHandler) Create(c *gin.Context) {
 	var req CreateTemporaryShiftRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -211,6 +219,17 @@ func (h *TemporaryShiftHandler) BulkCreate(c *gin.Context) {
 // @Security     BearerAuth
 // @Produce      json
 // @Param        company_id query string false "Filter by company"
+// @Param        employee_id query string false "Filter by employee code"
+// @Param        shift_id query string false "Filter by shift"
+// @Param        department_id query string false "Filter by department"
+// @Param        section_id query string false "Filter by section"
+// @Param        designation_id query string false "Filter by designation"
+// @Param        line_id query string false "Filter by line"
+// @Param        group_id query string false "Filter by group"
+// @Param        status query string false "Filter by status"
+// @Param        from_date query string false "From date YYYY-MM-DD"
+// @Param        to_date query string false "To date YYYY-MM-DD"
+// @Param        search query string false "Search employee code or reason"
 // @Param        page       query int    false "Page number (default: 1)"
 // @Param        limit      query int    false "Page size (default: 20, max: 100)"
 // @Success      200  {object}  utils.PaginatedResponse
@@ -218,7 +237,20 @@ func (h *TemporaryShiftHandler) BulkCreate(c *gin.Context) {
 func (h *TemporaryShiftHandler) List(c *gin.Context) {
 	companyID := c.Query("company_id")
 	p := utils.ParsePagination(c)
-	list, total, err := h.repo.List(companyID, p.Page, p.Limit)
+	filters := map[string]string{
+		"employee_id":    c.Query("employee_id"),
+		"shift_id":       c.Query("shift_id"),
+		"department_id":  c.Query("department_id"),
+		"section_id":     c.Query("section_id"),
+		"designation_id": c.Query("designation_id"),
+		"line_id":        c.Query("line_id"),
+		"group_id":       c.Query("group_id"),
+		"status":         c.Query("status"),
+		"from_date":      c.Query("from_date"),
+		"to_date":        c.Query("to_date"),
+		"search":         c.Query("search"),
+	}
+	list, total, err := h.repo.List(companyID, p.Page, p.Limit, filters)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -275,5 +307,31 @@ func (h *TemporaryShiftHandler) Delete(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Temporary shift deleted successfully"})
+	c.JSON(http.StatusOK, gin.H{"message": "Temporary shift deleted successfully", "fallback": tempShiftFallbackNote})
+}
+
+// BulkDelete godoc
+//
+// @Summary      Bulk delete temporary shifts
+// @Description  Delete multiple temporary shifts. Affected employees automatically revert to roster shift, otherwise default shift.
+// @Tags         Temporary Shifts
+// @Security     BearerAuth
+// @Accept       json
+// @Produce      json
+// @Param        request body BulkDeleteTemporaryShiftRequest true "IDs to delete"
+// @Success      200  {object}  map[string]interface{}
+// @Failure      400  {object}  map[string]string
+// @Failure      500  {object}  map[string]string
+// @Router       /temporary-shifts/bulk-delete [post]
+func (h *TemporaryShiftHandler) BulkDelete(c *gin.Context) {
+	var req BulkDeleteTemporaryShiftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.repo.BulkDelete(req.IDs); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Temporary shifts deleted successfully", "count": len(req.IDs), "fallback": tempShiftFallbackNote})
 }

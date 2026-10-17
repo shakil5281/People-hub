@@ -377,36 +377,36 @@ func (h *SalaryAccountImportHandler) ExportSalaryAccountExcel(c *gin.Context) {
 	}
 
 	// Title block
-	f.MergeCell(sheet, "A1", "K1")
+	f.MergeCell(sheet, "A1", "L1")
 	f.SetCellValue(sheet, "A1", companyName)
 	titleStyle, _ := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 15, Color: "#1E3A8A"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	f.SetCellStyle(sheet, "A1", "K1", titleStyle)
+	f.SetCellStyle(sheet, "A1", "L1", titleStyle)
 	f.SetRowHeight(sheet, 1, 28)
 
-	f.MergeCell(sheet, "A2", "K2")
+	f.MergeCell(sheet, "A2", "L2")
 	f.SetCellValue(sheet, "A2", "Employee Salary Account Statement")
 	subTitleStyle, _ := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Bold: true, Size: 11, Color: "#4B5563"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	f.SetCellStyle(sheet, "A2", "K2", subTitleStyle)
+	f.SetCellStyle(sheet, "A2", "L2", subTitleStyle)
 	f.SetRowHeight(sheet, 2, 20)
 
-	f.MergeCell(sheet, "A3", "K3")
+	f.MergeCell(sheet, "A3", "L3")
 	f.SetCellValue(sheet, "A3", fmt.Sprintf("Report Generated: %s | Total Records: %d", time.Now().Format("02-Jan-2006 03:04 PM"), len(employees)))
 	dateStyle, _ := f.NewStyle(&excelize.Style{
 		Font:      &excelize.Font{Italic: true, Size: 9, Color: "#6B7280"},
 		Alignment: &excelize.Alignment{Horizontal: "center", Vertical: "center"},
 	})
-	f.SetCellStyle(sheet, "A3", "K3", dateStyle)
+	f.SetCellStyle(sheet, "A3", "L3", dateStyle)
 	f.SetRowHeight(sheet, 3, 18)
 
 	// Header row at row 5
 	headers := []string{
-		"Sl No", "Employee ID", "Punch No", "Employee Name", "Designation",
+		"Sl No", "Employee ID", "Punch No", "Employee Name", "Mobile No", "Designation",
 		"Department", "Section", "Gross Salary", "Account Type", "Account Number", "Status",
 	}
 
@@ -488,19 +488,22 @@ func (h *SalaryAccountImportHandler) ExportSalaryAccountExcel(c *gin.Context) {
 		f.SetCellValue(sheet, fmt.Sprintf("B%d", rowNum), emp.EmployeeID)
 		f.SetCellValue(sheet, fmt.Sprintf("C%d", rowNum), emp.PunchNumber)
 		f.SetCellValue(sheet, fmt.Sprintf("D%d", rowNum), emp.NameEn)
-		f.SetCellValue(sheet, fmt.Sprintf("E%d", rowNum), desig)
-		f.SetCellValue(sheet, fmt.Sprintf("F%d", rowNum), dept)
-		f.SetCellValue(sheet, fmt.Sprintf("G%d", rowNum), sec)
-		f.SetCellValue(sheet, fmt.Sprintf("H%d", rowNum), emp.GrossSalary)
-		f.SetCellValue(sheet, fmt.Sprintf("I%d", rowNum), accType)
-		f.SetCellValue(sheet, fmt.Sprintf("J%d", rowNum), emp.AccountNumber)
-		f.SetCellValue(sheet, fmt.Sprintf("K%d", rowNum), emp.Status)
+		f.SetCellValue(sheet, fmt.Sprintf("E%d", rowNum), emp.Phone)
+		f.SetCellValue(sheet, fmt.Sprintf("F%d", rowNum), desig)
+		f.SetCellValue(sheet, fmt.Sprintf("G%d", rowNum), dept)
+		f.SetCellValue(sheet, fmt.Sprintf("H%d", rowNum), sec)
+		f.SetCellValue(sheet, fmt.Sprintf("I%d", rowNum), emp.GrossSalary)
+		f.SetCellValue(sheet, fmt.Sprintf("J%d", rowNum), accType)
+		f.SetCellValue(sheet, fmt.Sprintf("K%d", rowNum), emp.AccountNumber)
+		f.SetCellValue(sheet, fmt.Sprintf("L%d", rowNum), emp.Status)
 
 		f.SetCellStyle(sheet, fmt.Sprintf("A%d", rowNum), fmt.Sprintf("A%d", rowNum), centerStyle)
 		f.SetCellStyle(sheet, fmt.Sprintf("B%d", rowNum), fmt.Sprintf("C%d", rowNum), centerStyle)
-		f.SetCellStyle(sheet, fmt.Sprintf("D%d", rowNum), fmt.Sprintf("G%d", rowNum), rowStyle)
-		f.SetCellStyle(sheet, fmt.Sprintf("H%d", rowNum), fmt.Sprintf("H%d", rowNum), rightStyle)
-		f.SetCellStyle(sheet, fmt.Sprintf("I%d", rowNum), fmt.Sprintf("K%d", rowNum), centerStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("D%d", rowNum), fmt.Sprintf("D%d", rowNum), rowStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("E%d", rowNum), fmt.Sprintf("E%d", rowNum), centerStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("F%d", rowNum), fmt.Sprintf("H%d", rowNum), rowStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("I%d", rowNum), fmt.Sprintf("I%d", rowNum), rightStyle)
+		f.SetCellStyle(sheet, fmt.Sprintf("J%d", rowNum), fmt.Sprintf("L%d", rowNum), centerStyle)
 
 		f.SetRowHeight(sheet, rowNum, 20)
 	}
@@ -509,13 +512,14 @@ func (h *SalaryAccountImportHandler) ExportSalaryAccountExcel(c *gin.Context) {
 	f.SetColWidth(sheet, "B", "B", 14)
 	f.SetColWidth(sheet, "C", "C", 14)
 	f.SetColWidth(sheet, "D", "D", 26)
-	f.SetColWidth(sheet, "E", "E", 20)
-	f.SetColWidth(sheet, "F", "F", 18)
+	f.SetColWidth(sheet, "E", "E", 16)
+	f.SetColWidth(sheet, "F", "F", 20)
 	f.SetColWidth(sheet, "G", "G", 18)
-	f.SetColWidth(sheet, "H", "H", 14)
+	f.SetColWidth(sheet, "H", "H", 18)
 	f.SetColWidth(sheet, "I", "I", 14)
-	f.SetColWidth(sheet, "J", "J", 22)
-	f.SetColWidth(sheet, "K", "K", 12)
+	f.SetColWidth(sheet, "J", "J", 14)
+	f.SetColWidth(sheet, "K", "K", 22)
+	f.SetColWidth(sheet, "L", "L", 12)
 
 	buf, err := f.WriteToBuffer()
 	if err != nil {

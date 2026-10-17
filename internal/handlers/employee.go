@@ -441,8 +441,29 @@ func (h *EmployeeHandler) GetEmployees(c *gin.Context) {
 	if v := c.Query("status"); v != "" {
 		query = query.Where("status = ?", v)
 	}
-	if v := c.Query("employee_id"); v != "" {
-		query = query.Where("employee_id = ?", v)
+	empIDParam := c.Query("employee_id")
+	if empIDParam == "" {
+		empIDParam = c.Query("employee_ids")
+	}
+	if empIDParam != "" {
+		parts := strings.FieldsFunc(empIDParam, func(r rune) bool {
+			return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n' || r == '\r'
+		})
+		var cleanIDs []string
+		var lowerIDs []string
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				cleanIDs = append(cleanIDs, trimmed)
+				lowerIDs = append(lowerIDs, strings.ToLower(trimmed))
+			}
+		}
+		if len(cleanIDs) > 1 {
+			query = query.Where("employee_id IN ? OR punch_number IN ? OR LOWER(employee_id) IN ? OR LOWER(punch_number) IN ?", cleanIDs, cleanIDs, lowerIDs, lowerIDs)
+		} else if len(cleanIDs) == 1 {
+			id := cleanIDs[0]
+			query = query.Where("employee_id = ? OR punch_number = ? OR employee_id ILIKE ? OR punch_number ILIKE ?", id, id, "%"+id+"%", "%"+id+"%")
+		}
 	}
 	if v := c.Query("gender"); v != "" {
 		query = query.Where("gender = ?", v)

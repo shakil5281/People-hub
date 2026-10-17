@@ -494,6 +494,7 @@ export default function SalaryAccountPage() {
                   <th className="px-4 py-3 font-medium text-muted-foreground">Emp. ID</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Punch No</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground">Employee Name</th>
+                  <th className="px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Mobile No</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Designation</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground hidden lg:table-cell">Department / Section</th>
                   <th className="px-4 py-3 font-medium text-muted-foreground text-right hidden sm:table-cell">Gross Salary</th>
@@ -506,13 +507,13 @@ export default function SalaryAccountPage() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-12 text-center">
+                    <td colSpan={11} className="px-4 py-12 text-center">
                       <Loader2 className="h-6 w-6 animate-spin text-muted-foreground mx-auto" />
                     </td>
                   </tr>
                 ) : data.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={11} className="px-4 py-10 text-center text-muted-foreground">
                       No employee salary account records found.
                     </td>
                   </tr>
@@ -528,6 +529,10 @@ export default function SalaryAccountPage() {
                       <td className="px-4 py-3">
                         <div className="font-medium text-foreground">{row.name_en}</div>
                         {row.name_bn && <div className="text-xs text-muted-foreground">{row.name_bn}</div>}
+                        {row.phone && <div className="text-xs text-muted-foreground font-mono md:hidden">{row.phone}</div>}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground hidden md:table-cell">
+                        {row.phone || "-"}
                       </td>
                       <td className="px-4 py-3 text-muted-foreground hidden md:table-cell">
                         {(() => { const v = row.designation as unknown; return (typeof v === "object" && v !== null ? (v as { name?: string }).name : v as string) || "-" })()}
@@ -636,6 +641,12 @@ export default function SalaryAccountPage() {
                   <span className="text-muted-foreground">Employee ID:</span>
                   <span className="font-mono">{selectedEmp.employee_id}</span>
                 </div>
+                {selectedEmp.phone && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Mobile No:</span>
+                    <span className="font-mono">{selectedEmp.phone}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Designation:</span>
                   <span>{selectedEmp.designation || "-"}</span>

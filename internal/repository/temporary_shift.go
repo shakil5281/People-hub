@@ -33,10 +33,44 @@ func (r *TemporaryShiftRepository) FindByID(id string) (*models.TemporaryShift, 
 	return &ts, nil
 }
 
-func (r *TemporaryShiftRepository) List(companyID string, page, limit int) ([]models.TemporaryShift, int64, error) {
+func (r *TemporaryShiftRepository) List(companyID string, page, limit int, filters map[string]string) ([]models.TemporaryShift, int64, error) {
 	base := r.db.Model(&models.TemporaryShift{}).Order("created_at DESC")
 	if companyID != "" {
-		base = base.Where("company_id = ?", companyID)
+		base = base.Where("temporary_shifts.company_id = ?", companyID)
+	}
+	if v := filters["employee_id"]; v != "" {
+		base = base.Where("temporary_shifts.employee_id = ?", v)
+	}
+	if v := filters["shift_id"]; v != "" {
+		base = base.Where("temporary_shifts.shift_id = ?", v)
+	}
+	if v := filters["status"]; v != "" {
+		base = base.Where("temporary_shifts.status = ?", v)
+	}
+	if v := filters["from_date"]; v != "" {
+		base = base.Where("temporary_shifts.date >= ?", v)
+	}
+	if v := filters["to_date"]; v != "" {
+		base = base.Where("temporary_shifts.date <= ?", v)
+	}
+	if v := filters["search"]; v != "" {
+		like := "%" + v + "%"
+		base = base.Where("temporary_shifts.employee_id ILIKE ? OR temporary_shifts.reason ILIKE ?", like, like)
+	}
+	if v := filters["department_id"]; v != "" {
+		base = base.Where("temporary_shifts.employee_id IN (SELECT employee_id FROM employees WHERE department_id = ? AND deleted_at IS NULL)", v)
+	}
+	if v := filters["section_id"]; v != "" {
+		base = base.Where("temporary_shifts.employee_id IN (SELECT employee_id FROM employees WHERE section_id = ? AND deleted_at IS NULL)", v)
+	}
+	if v := filters["designation_id"]; v != "" {
+		base = base.Where("temporary_shifts.employee_id IN (SELECT employee_id FROM employees WHERE designation_id = ? AND deleted_at IS NULL)", v)
+	}
+	if v := filters["line_id"]; v != "" {
+		base = base.Where("temporary_shifts.employee_id IN (SELECT employee_id FROM employees WHERE line_id = ? AND deleted_at IS NULL)", v)
+	}
+	if v := filters["group_id"]; v != "" {
+		base = base.Where("temporary_shifts.employee_id IN (SELECT employee_id FROM employees WHERE group_id = ? AND deleted_at IS NULL)", v)
 	}
 	var total int64
 	if err := base.Count(&total).Error; err != nil {
@@ -78,4 +112,11 @@ func (r *TemporaryShiftRepository) ListByCompanyAndDateRange(companyID, startDat
 
 func (r *TemporaryShiftRepository) Delete(id string) error {
 	return r.db.Where("id = ?", id).Delete(&models.TemporaryShift{}).Error
+}
+
+func (r *TemporaryShiftRepository) BulkDelete(ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	return r.db.Where("id IN ?", ids).Delete(&models.TemporaryShift{}).Error
 }

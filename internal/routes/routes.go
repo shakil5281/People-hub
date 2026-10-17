@@ -296,6 +296,7 @@ func Setup(
 		tempShift.GET("/:id", tempShiftHandler.GetByID)
 		tempShift.POST("", tempShiftHandler.Create)
 		tempShift.POST("/bulk", tempShiftHandler.BulkCreate)
+		tempShift.POST("/bulk-delete", tempShiftHandler.BulkDelete)
 		tempShift.PUT("/:id", tempShiftHandler.Update)
 		tempShift.DELETE("/:id", tempShiftHandler.Delete)
 	}

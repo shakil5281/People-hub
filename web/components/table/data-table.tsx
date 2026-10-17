@@ -108,6 +108,8 @@ interface DataTableProps<TData extends { id: number | string }> {
   enableDnd?: boolean
   enableSelection?: boolean
   onSelectionChange?: (rows: TData[]) => void
+  rowSelection?: Record<string, boolean>
+  onRowSelectionChange?: React.Dispatch<React.SetStateAction<Record<string, boolean>>> | ((updater: any) => void)
   onEdit?: (row: TData) => void
   onDelete?: (row: TData) => void
   // Server-side pagination props
@@ -128,6 +130,8 @@ export function DataTable<TData extends { id: number | string }>({
   enableDnd = true,
   enableSelection = true,
   onSelectionChange,
+  rowSelection: propRowSelection,
+  onRowSelectionChange: propOnRowSelectionChange,
   onEdit,
   onDelete,
   serverSide = false,
@@ -141,7 +145,9 @@ export function DataTable<TData extends { id: number | string }>({
 }: DataTableProps<TData>) {
   const [data, setData] = React.useState(() => initialData)
   React.useEffect(() => { setData(initialData) }, [initialData])
-  const [rowSelection, setRowSelection] = React.useState({})
+  const [internalRowSelection, setInternalRowSelection] = React.useState<Record<string, boolean>>({})
+  const rowSelection = propRowSelection !== undefined ? propRowSelection : internalRowSelection
+  const setRowSelection = propOnRowSelectionChange !== undefined ? propOnRowSelectionChange : setInternalRowSelection
   const [sorting, setSorting] = React.useState<SortingState>([])
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: (externalPage ?? 1) - 1,
@@ -289,7 +295,7 @@ export function DataTable<TData extends { id: number | string }>({
       onSelectionChange(selected)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rowSelection])
+  }, [rowSelection, data])
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event

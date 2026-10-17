@@ -49,6 +49,18 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 
 	isBn := strings.ToLower(req.Lang) == "bn" || strings.ToLower(req.Lang) == "bangla"
 
+	var cleanIDs []string
+	for _, id := range req.EmployeeIDs {
+		trimmed := strings.TrimSpace(id)
+		if trimmed != "" {
+			cleanIDs = append(cleanIDs, trimmed)
+		}
+	}
+	if len(cleanIDs) == 0 {
+		c.JSON(400, gin.H{"error": "at least one valid employee ID is required"})
+		return
+	}
+
 	var employees []models.Employee
 	if err := database.DB.
 		Preload("Company").
@@ -59,7 +71,7 @@ func (h *IdCardHandler) Generate(c *gin.Context) {
 		Preload("GroupRef").
 		Preload("PermanentDistrict").
 		Preload("PermanentUpazila").
-		Where("employee_id IN ? AND deleted_at IS NULL", req.EmployeeIDs).
+		Where("(employee_id IN ? OR punch_number IN ?) AND deleted_at IS NULL", cleanIDs, cleanIDs).
 		Order("LENGTH(employee_id) ASC, employee_id ASC").
 		Find(&employees).Error; err != nil {
 		c.JSON(500, gin.H{"error": err.Error()})

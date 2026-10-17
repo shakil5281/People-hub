@@ -56,3 +56,9 @@ export async function bulkCreateTempShift(data: Record<string, unknown>): Promis
   const res = await temporaryShiftApi.bulkCreate(data)
   return res.status === 200
 }
+
+export async function bulkDeleteTempShifts(ids: string[]): Promise<{ ok: boolean; count: number; fallback: string }> {
+  const res = await temporaryShiftApi.bulkDelete(ids)
+  const payload = res.data as unknown as { count?: number; fallback?: string }
+  return { ok: res.status === 200, count: payload?.count ?? ids.length, fallback: payload?.fallback ?? "" }
+}

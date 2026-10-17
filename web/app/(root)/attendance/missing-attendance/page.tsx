@@ -288,9 +288,12 @@ export default function MissingAttendancePage() {
     let outTimeVal = ""
 
     if (!dbIn && dbOut) {
-      // In Time missing, Out Time present: use Out Time only for the date,
-      // keep In Time empty, show the actual Out Time value.
-      inTimeVal = extractDate(dbOut) || rowDate
+      // In Time missing, Out Time present: a NEW in-time belongs to the
+      // attendance record date — never inherit the out punch's date, because
+      // an out punch past midnight carries the NEXT day (e.g. record 07 Oct
+      // with out punch 08 Oct 00:05). Inheriting it stamped manual in-times
+      // with the wrong day, which broke late/total in daily process.
+      inTimeVal = rowDate
       outTimeVal = dbOut
     } else if (dbIn && !dbOut) {
       // Out Time missing, In Time present: show the actual In Time value,

@@ -223,22 +223,38 @@ func (p *AttendanceProcessor) ProcessDateRange(startDate, endDate, companyID str
 			}
 			bioIn, bioOut := resolveInOut(windowedPunches, shiftEndDT)
 
-			checkIn := bioIn
-			checkOut := bioOut
-			if ma != nil {
-				if ma.CheckIn != nil {
-					checkIn = ma.CheckIn
-				}
-				if ma.CheckOut != nil {
-					checkOut = ma.CheckOut
-				}
+		checkIn := bioIn
+		checkOut := bioOut
+		inFromPunch := bioIn != nil
+		outFromPunch := bioOut != nil
+		if ma != nil {
+			if ma.CheckIn != nil {
+				checkIn = ma.CheckIn
+				inFromPunch = false
 			}
-			if checkIn == nil && exists && existing.CheckIn != nil {
-				checkIn = existing.CheckIn
+			if ma.CheckOut != nil {
+				checkOut = ma.CheckOut
+				outFromPunch = false
 			}
-			if checkOut == nil && exists && existing.CheckOut != nil {
-				checkOut = existing.CheckOut
-			}
+		}
+		if checkIn == nil && exists && existing.CheckIn != nil {
+			checkIn = existing.CheckIn
+		}
+		if checkOut == nil && exists && existing.CheckOut != nil {
+			checkOut = existing.CheckOut
+		}
+		// Guard: manual/missing timestamps stamped with the wrong calendar day
+		// (e.g. typed with "today" instead of the attendance date) corrupt
+		// late/total math (late explodes to ~1435, total becomes "-").
+		// Snap manually-sourced wall-clock times back onto the attendance date.
+		// Device punches are never touched. A check-out on a later day is kept
+		// as-is because overnight shifts legitimately end after midnight.
+		if !inFromPunch && checkIn != nil {
+			checkIn = snapManualTimeToDate(checkIn, date)
+		}
+		if !outFromPunch && checkOut != nil && checkOut.Format("2006-01-02") < date {
+			checkOut = snapManualTimeToDate(checkOut, date)
+		}
 
 			att := p.computeAttendance(emp, date, attendanceDate, shift, checkIn, checkOut, onLeaveSet, hf.isGovHoliday, hf.isCompWeekend, hf.isGenDuty)
 			if ma != nil && ma.Status != "" {
@@ -454,12 +470,13 @@ func (p *AttendanceProcessor) buildContext(dates []string, startDate, endDate, c
 			return nil, fmt.Errorf("load existing attendances: %w", err)
 		}
 		for i := range existing {
-			key := existing[i].EmployeeID + "|" + existing[i].Date
-			// normalize date to YYYY-MM-DD (handle timestamp)
+			// normalize date to YYYY-MM-DD (handle timestamp) BEFORE keying —
+			// the key must use the normalized date or lookups always miss.
 			norm := utils.NormalizeDate(existing[i].Date)
 			if norm != existing[i].Date {
 				existing[i].Date = norm
 			}
+			key := existing[i].EmployeeID + "|" + existing[i].Date
 			cp := existing[i]
 			ctx.existingByKey[key] = &cp
 		}
@@ -665,7 +682,29 @@ func attendanceWindowFor(attendanceDate time.Time, shift *models.Shift) utils.At
 	}
 }
 
+// snapManualTimeToDate moves a manually-entered timestamp's calendar day onto
+// the attendance date while preserving its wall-clock time. Manual entries
+// stamped with the wrong day (e.g. entered with "today" for a past attendance
+// date) otherwise corrupt derived fields: late explodes (~1435 min) and total
+// becomes "-". Timestamps already on the right day are returned unchanged.
+func snapManualTimeToDate(t *time.Time, date string) *time.Time {
+	if t == nil {
+		return nil
+	}
+	if t.Format("2006-01-02") == date {
+		return t
+	}
+	day, err := time.Parse("2006-01-02", date)
+	if err != nil {
+		return t
+	}
+	snapped := time.Date(day.Year(), day.Month(), day.Day(),
+		t.Hour(), t.Minute(), t.Second(), t.Nanosecond(), t.Location())
+	return &snapped
+}
+
 func (p *AttendanceProcessor) resolveShiftFromContext(emp *models.Employee, date string, ctx *dailyProcessContext) *models.Shift {
+
 	key := emp.EmployeeID + "|" + date
 	if r, ok := ctx.rosterByKey[key]; ok && r.ShiftID != "" {
 		if s, ok := ctx.shiftByID[r.ShiftID]; ok {

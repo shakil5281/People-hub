@@ -21,11 +21,12 @@ interface EmployeeRow {
   id: string
   employee_id: string
   name_en: string
-  departmentRef?: { name: string }
-  sectionRef?: { name: string }
-  designationRef?: { name: string }
-  lineRef?: { name: string }
-  groupRef?: { name: string }
+  department?: { name: string }
+  department_ref?: { name: string }
+  section_ref?: { name: string }
+  designation_ref?: { name: string }
+  line_ref?: { name: string }
+  group_ref?: { name: string }
   status: string
 }
 
@@ -174,11 +175,11 @@ export default function TemporaryShiftCreatePage() {
   const columns: ColumnDef<EmployeeRow>[] = [
     { accessorKey: "employee_id", header: "Code" },
     { accessorKey: "name_en", header: "Name", cell: ({ row }) => <span className="font-medium">{row.original.name_en}</span> },
-    { accessorKey: "department", header: "Department", cell: ({ row }) => row.original.departmentRef?.name || "-" },
-    { accessorKey: "section", header: "Section", cell: ({ row }) => row.original.sectionRef?.name || "-" },
-    { accessorKey: "designation", header: "Designation", cell: ({ row }) => row.original.designationRef?.name || "-" },
-    { accessorKey: "line", header: "Line", cell: ({ row }) => row.original.lineRef?.name || "-" },
-    { accessorKey: "group", header: "Group", cell: ({ row }) => row.original.groupRef?.name || "-" },
+    { accessorKey: "department", header: "Department", cell: ({ row }) => row.original.department?.name || row.original.department_ref?.name || "-" },
+    { accessorKey: "section", header: "Section", cell: ({ row }) => row.original.section_ref?.name || "-" },
+    { accessorKey: "designation", header: "Designation", cell: ({ row }) => row.original.designation_ref?.name || "-" },
+    { accessorKey: "line", header: "Line", cell: ({ row }) => row.original.line_ref?.name || "-" },
+    { accessorKey: "group", header: "Group", cell: ({ row }) => row.original.group_ref?.name || "-" },
     {
       accessorKey: "status",
       header: "Status",

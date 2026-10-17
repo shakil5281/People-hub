@@ -60,6 +60,27 @@ export function formatCheck(val: string | null | undefined): string {
   return val
 }
 
+export function formatDate(val: string | null | undefined): string {
+  if (!val) return "-"
+  const raw = String(val).trim()
+  const datePart = raw.split("T")[0]
+  if (/^\d{4}-\d{2}-\d{2}$/.test(datePart)) {
+    const [yyyy, mm, dd] = datePart.split("-")
+    return `${dd}-${mm}-${yyyy}`
+  }
+  if (/^\d{2}-\d{2}-\d{4}$/.test(raw)) {
+    return raw
+  }
+  const parsed = new Date(raw)
+  if (!isNaN(parsed.getTime())) {
+    const dd = String(parsed.getDate()).padStart(2, "0")
+    const mm = String(parsed.getMonth() + 1).padStart(2, "0")
+    const yyyy = parsed.getFullYear()
+    return `${dd}-${mm}-${yyyy}`
+  }
+  return raw || "-"
+}
+
 export function downloadExport(res: { data: Blob | any }, filename: string) {
   const blob = res.data instanceof Blob ? res.data : new Blob([res.data], { type: res.data?.type || "application/octet-stream" })
   const url = URL.createObjectURL(blob)
